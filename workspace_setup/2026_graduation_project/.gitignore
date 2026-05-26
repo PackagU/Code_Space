@@ -1,0 +1,77 @@
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ROS2 / colcon build artifacts
+build/
+install/
+log/
+src/build/
+src/install/
+src/log/
+
+# ROS2 runtime data and bags
+logs/
+*.bag
+*.db3
+*.mcap
+
+# Generated SLAM maps and backups
+*.pgm
+src/slam_pkg/maps/*.yaml
+*.yaml.bak
+
+# Gazebo / RViz local state
+.gazebo/
+.ignition/
+.rviz2/
+
+# Docker/local generated output
+.dockerenv
+generated/
+*.tar
+*.tar.gz
+*.tgz
+
+# Local Obsidian vault and personal notes
+obsidian_vault/
+
+# Non-runtime project management and submission artifacts
+.github/
+plan/
+docs/**
+!docs/
+!docs/docker_guide.md
+!docs/linux_docker_slam_setup.md
+!docs/opencr_dynamixel_wheel_test.md
+!docs/vscode_docker_slam_workflow.md
+docs/capstone/
+*.hwp
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xlsx
