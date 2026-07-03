@@ -1,0 +1,58 @@
+# PackagU Jetson Xavier NX 배포용 이미지 (aarch64 런타임: GUI/Gazebo 제외)
+#
+# 왜 별도 이미지인가:
+# - Jetson(JetPack)은 Ubuntu 20.04 기반이라 ROS2 Humble 을 직접 못 올린다 -> 컨테이너 필수.
+# - 실기에는 Gazebo/RViz 가 필요 없다. desktop-full 은 aarch64 에서 무겁고 느리다.
+# - SLAM/Nav2 는 CPU 스택이라 CUDA/L4T 베이스 없이 공식 multi-arch ros 이미지로 충분.
+#
+# 빌드 (x86 데스크톱에서 크로스 빌드):
+#   docker buildx build --platform linux/arm64 \
+#     -f docker/Dockerfile.jetson \
+#     -t ghcr.io/packagu/ros2-humble-slam:humble-jetson \
+#     --push docker/
+# 실행 (Jetson):
+#   docker compose -f docker/compose/docker-compose.jetson.yml up -d
+FROM ros:humble-ros-base
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+LABEL org.opencontainers.image.source="https://github.com/PackagU/Code_Space"
+LABEL org.opencontainers.image.description="PackagU ROS2 Humble runtime image for Jetson Xavier NX (no GUI)"
+LABEL org.opencontainers.image.licenses="MIT"
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    iputils-ping \
+    nano \
+    net-tools \
+    python3-colcon-common-extensions \
+    python3-pip \
+    python3-rosdep \
+    ros-humble-nav2-bringup \
+    ros-humble-nav2-map-server \
+    ros-humble-robot-state-publisher \
+    ros-humble-rplidar-ros \
+    ros-humble-slam-toolbox \
+    ros-humble-teleop-twist-keyboard \
+    ros-humble-tf2-tools \
+    ros-humble-xacro \
+    util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rosdep init 2>/dev/null || true && rosdep update
+
+RUN mkdir -p /ros2_ws/src /ros2_ws/maps
+WORKDIR /ros2_ws
+
+ENV ROS_DOMAIN_ID=0
+
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh \
+    && echo "source /opt/ros/humble/setup.bash" >> /etc/bash.bashrc \
+    && echo 'if [ -f "/ros2_ws/install/setup.bash" ]; then source /ros2_ws/install/setup.bash; fi' >> /etc/bash.bashrc
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

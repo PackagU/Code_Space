@@ -1,0 +1,92 @@
+schema_version: 1
+frame_id: map
+floors:
+  F1:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f1/kku_f1.yaml
+    initial_pose_id: elevator_exit
+    routing:
+      main_corridor_y: 0.0
+    points:
+      elevator_entry:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 180.0
+      elevator_inside:
+        type: elevator
+        x: 0.0
+        y: 0.0
+        yaw_deg: 0.0
+      elevator_exit:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 0.0
+      parcel_access:
+        type: parcel
+        x: 5.0
+        y: -0.6
+        yaw_deg: -90.0
+      parcel_pickup:
+        type: parcel
+        x: 5.0
+        y: -1.4
+        yaw_deg: -90.0
+  F2:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f2/kku_f2.yaml
+    initial_pose_id: elevator_exit
+    routing:
+      main_corridor_x: 2.0
+    points:
+      elevator_entry:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 180.0
+      elevator_inside:
+        type: elevator
+        x: 0.0
+        y: 0.0
+        yaw_deg: 0.0
+      elevator_exit:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 0.0
+      "201": {type: room, x: 1.65, y: 3.0, yaw_deg: 180.0}
+      "202": {type: room, x: 2.35, y: 3.0, yaw_deg: 0.0}
+      "203": {type: room, x: 1.65, y: 6.0, yaw_deg: 180.0}
+      "204": {type: room, x: 2.35, y: 6.0, yaw_deg: 0.0}
+      "205": {type: room, x: 1.65, y: 9.0, yaw_deg: 180.0}
+      "206": {type: room, x: 2.35, y: 9.0, yaw_deg: 0.0}
+      "207": {type: room, x: 1.65, y: 12.0, yaw_deg: 180.0}
+      "208": {type: room, x: 2.35, y: 12.0, yaw_deg: 0.0}
+  F3:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f3/kku_f3.yaml
+    initial_pose_id: elevator_exit
+    routing:
+      main_corridor_x: 2.0
+    points:
+      elevator_entry:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 180.0
+      elevator_inside:
+        type: elevator
+        x: 0.0
+        y: 0.0
+        yaw_deg: 0.0
+      elevator_exit:
+        type: elevator
+        x: 1.6
+        y: 0.0
+        yaw_deg: 0.0
+      "301": {type: room, x: 1.65, y: 3.0, yaw_deg: 180.0}
+      "302": {type: room, x: 2.35, y: 3.0, yaw_deg: 0.0}
+      "303": {type: room, x: 1.65, y: 6.0, yaw_deg: 180.0}
+      "304": {type: room, x: 2.35, y: 6.0, yaw_deg: 0.0}
+      "305": {type: room, x: 1.65, y: 9.0, yaw_deg: 180.0}
+      "306": {type: room, x: 2.35, y: 9.0, yaw_deg: 0.0}
+      "307": {type: room, x: 1.65, y: 12.0, yaw_deg: 180.0}
+      "308": {type: room, x: 2.35, y: 12.0, yaw_deg: 0.0}

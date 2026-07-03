@@ -1,0 +1,297 @@
+schema_version: 1
+map_name: kku_engineering_virtual_pre_sim
+reference_building: Konkuk University Engineering Building
+purpose: pre_simulation_slam_and_elevator_delivery
+
+coordinate_system:
+  unit: meter
+  frame_per_floor: true
+  per_floor_frame_ids:
+    F1: map_f1
+    F2: map_f2
+    F3: map_f3
+  origin:
+    description: center of the elevator interior on each floor
+    x: 0.0
+    y: 0.0
+  axes:
+    positive_x: right_corridor_direction_from_elevator
+    positive_y: back_corridor_direction_after_left_turn
+  yaw_zero: positive_x
+
+global_defaults:
+  wall_height: 2.4
+  wall_thickness: 0.12
+  corridor_width: 2.0
+  room_door_width: 0.9
+  elevator_door_width: 1.0
+  parcel_zone_door_width: 0.9
+  elevator_inner_size:
+    x: 1.6
+    y: 1.6
+  room_size:
+    width_along_corridor: 2.5
+    depth_into_wall: 3.0
+  room_door_depth_marker: 0.08
+  lidar_test_max_range: 8.0
+  recommended_map_resolution: 0.05
+
+floors:
+  - id: F1
+    label: 1F_parcel_pickup_floor
+    role: parcel_pickup_and_elevator_transfer
+    frame_id: map_f1
+    elevator:
+      center: {x: 0.0, y: 0.0}
+      inner_size: {x: 1.6, y: 1.6}
+      door:
+        side: east
+        center: {x: 0.8, y: 0.0}
+        width: 1.0
+      staging_pose_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      exit_pose: {x: 1.6, y: 0.0, yaw_deg: 0.0}
+    corridors:
+      - id: f1_right_corridor
+        type: straight
+        centerline:
+          start: {x: 0.8, y: 0.0}
+          end: {x: 15.0, y: 0.0}
+        width: 2.0
+        closed_ends: [end]
+        notes: no_rooms_on_this_corridor_parcel_alcove_attached_south
+      - id: f1_back_corridor
+        type: straight
+        centerline:
+          start: {x: 2.0, y: 0.0}
+          end: {x: 2.0, y: 8.0}
+        width: 2.0
+        closed_ends: [end]
+        notes: form_only_no_rooms_for_slam_consistency
+    parcel_zone:
+      id: f1_parcel_zone
+      description: alcove south of right corridor, connected via 0.9m door
+      shape: alcove
+      area:
+        center: {x: 5.0, y: -1.8}
+        size: {x: 3.0, y: 1.8}
+      enclosure:
+        door:
+          side: north
+          center: {x: 5.0, y: -0.9}
+          width: 0.9
+        outer_walls: [south, east, west]
+      access_pose: {x: 5.0, y: -0.6, yaw_deg: -90.0}
+      pickup_pose: {x: 5.0, y: -1.4, yaw_deg: -90.0}
+    landmarks:
+      - id: f1_parcel_shelf_a
+        type: low_box_obstacle
+        center: {x: 4.4, y: -2.1}
+        size: {x: 0.8, y: 0.35, z: 0.6}
+      - id: f1_parcel_shelf_b
+        type: low_box_obstacle
+        center: {x: 5.6, y: -2.1}
+        size: {x: 0.8, y: 0.35, z: 0.6}
+
+  - id: F2
+    label: 2F_delivery_floor
+    role: delivery
+    frame_id: map_f2
+    elevator:
+      center: {x: 0.0, y: 0.0}
+      inner_size: {x: 1.6, y: 1.6}
+      door:
+        side: east
+        center: {x: 0.8, y: 0.0}
+        width: 1.0
+      staging_pose_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      exit_pose: {x: 1.6, y: 0.0, yaw_deg: 0.0}
+    corridors:
+      - id: f2_right_corridor
+        type: straight
+        centerline:
+          start: {x: 0.8, y: 0.0}
+          end: {x: 22.0, y: 0.0}
+        width: 2.0
+        closed_ends: [end]
+        notes: no_rooms_on_this_corridor
+      - id: f2_back_corridor
+        type: straight
+        centerline:
+          start: {x: 2.0, y: 0.0}
+          end: {x: 2.0, y: 14.0}
+        width: 2.0
+        closed_ends: [end]
+    rooms:
+      - id: "201"
+        floor: F2
+        corridor: f2_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 3.0}
+        approach_pose: {x: 1.65, y: 3.0, yaw_deg: 180.0}
+      - id: "202"
+        floor: F2
+        corridor: f2_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 3.0}
+        approach_pose: {x: 2.35, y: 3.0, yaw_deg: 0.0}
+      - id: "203"
+        floor: F2
+        corridor: f2_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 6.0}
+        approach_pose: {x: 1.65, y: 6.0, yaw_deg: 180.0}
+      - id: "204"
+        floor: F2
+        corridor: f2_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 6.0}
+        approach_pose: {x: 2.35, y: 6.0, yaw_deg: 0.0}
+      - id: "205"
+        floor: F2
+        corridor: f2_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 9.0}
+        approach_pose: {x: 1.65, y: 9.0, yaw_deg: 180.0}
+      - id: "206"
+        floor: F2
+        corridor: f2_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 9.0}
+        approach_pose: {x: 2.35, y: 9.0, yaw_deg: 0.0}
+      - id: "207"
+        floor: F2
+        corridor: f2_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 12.0}
+        approach_pose: {x: 1.65, y: 12.0, yaw_deg: 180.0}
+      - id: "208"
+        floor: F2
+        corridor: f2_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 12.0}
+        approach_pose: {x: 2.35, y: 12.0, yaw_deg: 0.0}
+
+  - id: F3
+    label: 3F_delivery_floor
+    role: delivery
+    frame_id: map_f3
+    elevator:
+      center: {x: 0.0, y: 0.0}
+      inner_size: {x: 1.6, y: 1.6}
+      door:
+        side: east
+        center: {x: 0.8, y: 0.0}
+        width: 1.0
+      staging_pose_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      exit_pose: {x: 1.6, y: 0.0, yaw_deg: 0.0}
+    corridors:
+      - id: f3_right_corridor
+        type: straight
+        centerline:
+          start: {x: 0.8, y: 0.0}
+          end: {x: 22.0, y: 0.0}
+        width: 2.0
+        closed_ends: [end]
+        notes: no_rooms_on_this_corridor
+      - id: f3_back_corridor
+        type: straight
+        centerline:
+          start: {x: 2.0, y: 0.0}
+          end: {x: 2.0, y: 14.0}
+        width: 2.0
+        closed_ends: [end]
+    rooms:
+      - id: "301"
+        floor: F3
+        corridor: f3_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 3.0}
+        approach_pose: {x: 1.65, y: 3.0, yaw_deg: 180.0}
+      - id: "302"
+        floor: F3
+        corridor: f3_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 3.0}
+        approach_pose: {x: 2.35, y: 3.0, yaw_deg: 0.0}
+      - id: "303"
+        floor: F3
+        corridor: f3_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 6.0}
+        approach_pose: {x: 1.65, y: 6.0, yaw_deg: 180.0}
+      - id: "304"
+        floor: F3
+        corridor: f3_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 6.0}
+        approach_pose: {x: 2.35, y: 6.0, yaw_deg: 0.0}
+      - id: "305"
+        floor: F3
+        corridor: f3_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 9.0}
+        approach_pose: {x: 1.65, y: 9.0, yaw_deg: 180.0}
+      - id: "306"
+        floor: F3
+        corridor: f3_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 9.0}
+        approach_pose: {x: 2.35, y: 9.0, yaw_deg: 0.0}
+      - id: "307"
+        floor: F3
+        corridor: f3_back_corridor
+        side: west_wall
+        door_center: {x: 1.0, y: 12.0}
+        approach_pose: {x: 1.65, y: 12.0, yaw_deg: 180.0}
+      - id: "308"
+        floor: F3
+        corridor: f3_back_corridor
+        side: east_wall
+        door_center: {x: 3.0, y: 12.0}
+        approach_pose: {x: 2.35, y: 12.0, yaw_deg: 0.0}
+
+elevator_transfer_model:
+  initial_implementation: logical_floor_switch
+  reason: Gazebo cannot run true multi-floor navigation cheaply in the first milestone.
+  behavior:
+    - robot_enters_elevator_at_current_floor
+    - elevator_door_closes
+    - target_floor_state_is_selected
+    - simulation_switches_world_or_respawns_robot_at_target_floor_elevator
+    - elevator_door_opens
+    - robot_exits_to_target_floor_corridor
+  later_extension:
+    - add animated elevator doors
+    - add elevator cabin model
+    - add floor indicator topic
+    - replace respawn with continuous 3D elevator if needed
+
+recommended_test_routes:
+  - id: parcel_to_201
+    steps:
+      - start: F1.elevator.exit_pose
+      - visit: F1.parcel_zone.pickup_pose
+      - visit: F1.elevator.staging_pose_inside
+      - transfer_to: F2
+      - visit: F2.room.201.approach_pose
+  - id: parcel_to_208
+    steps:
+      - start: F1.elevator.exit_pose
+      - visit: F1.parcel_zone.pickup_pose
+      - visit: F1.elevator.staging_pose_inside
+      - transfer_to: F2
+      - visit: F2.room.208.approach_pose
+  - id: parcel_to_305
+    steps:
+      - start: F1.elevator.exit_pose
+      - visit: F1.parcel_zone.pickup_pose
+      - visit: F1.elevator.staging_pose_inside
+      - transfer_to: F3
+      - visit: F3.room.305.approach_pose
+  - id: parcel_to_307
+    steps:
+      - start: F1.elevator.exit_pose
+      - visit: F1.parcel_zone.pickup_pose
+      - visit: F1.elevator.staging_pose_inside
+      - transfer_to: F3
+      - visit: F3.room.307.approach_pose

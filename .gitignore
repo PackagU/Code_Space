@@ -1,0 +1,100 @@
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# ROS2 / colcon build artifacts
+build/
+install/
+log/
+src/build/
+src/install/
+src/log/
+
+# ROS2 runtime data and bags
+logs/
+*.bag
+*.db3
+*.mcap
+
+# Generated SLAM maps and backups
+*.pgm
+src/slam_pkg/maps/*.yaml
+*.yaml.bak
+
+# Separate checkout for SLAM-specific repo
+/SLAM/
+
+# Gazebo / RViz local state
+.gazebo/
+.ignition/
+.rviz2/
+
+# Docker/local generated output
+.dockerenv
+generated/
+*.tar
+*.tar.gz
+*.tgz
+
+# Local Obsidian vault and personal notes
+obsidian_vault/
+
+# Local screen/video recordings (demo captures kept locally, not committed)
+*.webm
+*.mp4
+*.mkv
+*.mov
+
+# Local-only folders — never upload to GitHub
+# (legacy = archive, docker_env = separate image repo clone,
+#  session logs/journals are shared via Notion instead)
+/legacy/
+/docker_env/
+/.understand-anything/
+/.fablize/
+
+# Non-runtime project management and submission artifacts
+# docs/: whitelist policy — session_wiki (일지) is intentionally NOT
+# whitelisted; it stays local and is shared through Notion sync only.
+docs/**
+!docs/
+!docs/improvement_report.md
+!docs/hardware_spec.md
+!docs/opencr_dynamixel_wheel_test.md
+!docs/simulation_test/
+!docs/simulation_test/**
+!docs/deployment/
+!docs/deployment/**
+!docs/_style/
+!docs/_style/**
+!docs/.notion_sync.json
+docs/capstone/
+*.hwp
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xlsx

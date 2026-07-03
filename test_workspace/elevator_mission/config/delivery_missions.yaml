@@ -1,0 +1,22 @@
+schema_version: 1
+missions:
+  parcel_to_208:
+    start_floor: F1
+    target_floor: F2
+    pickup_point: parcel_pickup
+    elevator_entry_point: elevator_entry
+    elevator_inside_point: elevator_inside
+    elevator_exit_point: elevator_exit
+    destination_point: "208"
+    mock_load_event: parcel_loaded
+    mock_delivery_event: delivered
+  parcel_to_307:
+    start_floor: F1
+    target_floor: F3
+    pickup_point: parcel_pickup
+    elevator_entry_point: elevator_entry
+    elevator_inside_point: elevator_inside
+    elevator_exit_point: elevator_exit
+    destination_point: "307"
+    mock_load_event: parcel_loaded
+    mock_delivery_event: delivered

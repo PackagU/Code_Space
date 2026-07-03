@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>elevator_mission_pkg</name>
+  <version>0.1.0</version>
+  <description>Delivery mission behavior tree for isolated elevator PoC</description>
+  <maintainer email="inonewater@users.noreply.github.com">PackagU</maintainer>
+  <license>Apache-2.0</license>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <exec_depend>py_trees</exec_depend>
+  <exec_depend>py_trees_ros</exec_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

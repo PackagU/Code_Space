@@ -1,0 +1,508 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${ROOT:-/ros2_ws}"
+WORKSPACE="$ROOT/test_workspace/gazebo_world_swap"
+OUT="$WORKSPACE/verification/latest"
+KEEP_RUNNING="${KEEP_RUNNING:-0}"
+WITH_RVIZ="${WITH_RVIZ:-false}"
+# 동적 장애물(보행자) 회피 연습 옵션. 기본 off -> 결정적 smoke 유지.
+# WITH_PEDESTRIAN=1 이면 F1 복도를 가로질러 왕복하는 collision 보행자를 띄워
+# 로봇이 LiDAR 로 감지하고 Nav2 로 회피하게 한다(실기 동적 회피 전이용).
+WITH_PEDESTRIAN="${WITH_PEDESTRIAN:-0}"
+# 회복 동작 자동검증 옵션. 기본 off -> 결정적 smoke 유지.
+# WITH_RECOVERY=1 이면 정상 미션 끝에 '도달 불가능 goal'을 한 번 보내,
+# Nav2 가 무한 회전/무한 재시도 없이 한정된 시간 안에 ABORTED 로 안전 종료하는지 확인한다.
+WITH_RECOVERY="${WITH_RECOVERY:-0}"
+# Localization 고장주입 옵션. 기본 off -> 결정적 smoke 유지.
+# WITH_LOC_FAULT=1 이면 마지막 F2 복도 goal 직전 '0.5m 어긋난 initialpose'를 주입해,
+# AMCL + scan 매칭이 한정된 오차를 보정하고도 goal 에 도달하는지(강건성) 확인한다.
+WITH_LOC_FAULT="${WITH_LOC_FAULT:-0}"
+# 부하 프로파일 옵션. 기본 off -> 결정적 smoke 유지.
+# WITH_PROFILE=1 이면 profile_resources.sh 를 백그라운드로 띄워 CPU/메모리/런타임을
+# 샘플링한다(Jetson Xavier NX 실기 부하 대비용). 산출물은 $OUT/profile/.
+WITH_PROFILE="${WITH_PROFILE:-0}"
+# 제어 충실도 회귀 가드(선택, P0 계측). MAX_MISSED_RATE=N 이면 nav2 컨트롤러의
+# 'control loop missed its desired rate' 발생이 N 회 초과 시 smoke 를 FAIL 시킨다
+# (부하로 제어 주기가 깨지는 회귀를 차단). 기본 미설정 -> 계측만 기록, FAIL 안 함.
+MAX_MISSED_RATE="${MAX_MISSED_RATE:-}"
+# 부하 주입 robustness 검증(P2). WITH_STRESS=N 이면 미션 동안 CPU 점유 워커 N개를 띄워
+# 의도적으로 부하를 준다. P1 graceful degradation 으로 미션이 그래도 완주하는지와
+# 제어 계측(missed_rate 상승)을 함께 확인한다. 기본 0 -> 부하 없음(결정적 smoke 유지).
+WITH_STRESS="${WITH_STRESS:-0}"
+# 제어 연산 보호(P3). WITH_RT_PRIORITY=1 이면 nav2 컨테이너에 RT 우선순위(SCHED_RR)+
+# renice 를 부여해, 부하(stress/gazebo)가 제어 루프를 굶기지 못하게 한다. 기본 0.
+# 실기 Jetson 에서는 동등하게 nav2 를 RT prio/전용 코어로 구동(문서 참조).
+WITH_RT_PRIORITY="${WITH_RT_PRIORITY:-0}"
+
+# 타임스탬프 run 디렉터리(아티팩트 누적용). latest 는 back-compat 으로 유지.
+RUN_TS="$(date +%Y%m%d_%H%M%S)"
+RUN_DIR="$WORKSPACE/verification/run_$RUN_TS"
+
+mkdir -p "$OUT" "$RUN_DIR"
+rm -f "$OUT"/*.log "$OUT"/*.txt
+
+PIDS=()
+STRESS_PIDS=()
+
+log() {
+  printf '[world-swap-smoke] %s\n' "$*"
+}
+
+source_setup() {
+  set +u
+  # shellcheck disable=SC1090
+  source "$1"
+  set -u
+}
+
+kill_matching() {
+  local pattern="$1"
+  mapfile -t matches < <(pgrep -f "$pattern" || true)
+  for pid in "${matches[@]}"; do
+    if [[ "$pid" != "$$" && "$pid" != "${BASHPID:-$$}" ]]; then
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+}
+
+cleanup_started() {
+  # 미션이 실패해도 제어 계측은 남긴다(부하 실패 측정). nav 노드 kill 전에 먼저 기록.
+  write_control_metrics 2>/dev/null || true
+  # 부하 주입 워커는 KEEP_RUNNING 과 무관하게 항상 정리(미션용 부하일 뿐).
+  for pid in "${STRESS_PIDS[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  if [[ "$KEEP_RUNNING" == "1" ]]; then
+    log "KEEP_RUNNING=1, leaving launched processes alive"
+    return
+  fi
+  for pid in "${PIDS[@]}"; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  sleep 1
+  for pid in "${PIDS[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+  cleanup_stale
+}
+
+cleanup_stale() {
+  log "cleaning stale simulation processes"
+  kill_matching "ros2 launch common_pkg gazebo.launch.py"
+  kill_matching "ros2 launch slam_pkg kku_navigation.launch.py"
+  kill_matching "rviz2"
+  kill_matching "auto_floor_orchestrator.launch.py"
+  kill_matching "world_swap.launch.py"
+  kill_matching "auto_floor_orchestrator_node"
+  kill_matching "world_swap_node"
+  kill_matching "component_container_isolated"
+  kill_matching "robot_state_publisher"
+  kill_matching "spawn_entity.py"
+  kill_matching "pedestrians.py"
+  kill_matching "profile_resources.sh"
+  kill_matching "gzserver"
+  kill_matching "gzclient"
+  sleep 1
+}
+
+wait_for_topic() {
+  local topic="$1"
+  local timeout_sec="$2"
+  local end=$((SECONDS + timeout_sec))
+  until ros2 topic list >"$OUT/topics.tmp" && grep -qx "$topic" "$OUT/topics.tmp"; do
+    if (( SECONDS >= end )); then
+      log "timeout waiting for topic $topic"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+wait_for_service() {
+  local service="$1"
+  local timeout_sec="$2"
+  local end=$((SECONDS + timeout_sec))
+  until ros2 service list >"$OUT/services.tmp" && grep -qx "$service" "$OUT/services.tmp"; do
+    if (( SECONDS >= end )); then
+      log "timeout waiting for service $service"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+wait_for_action() {
+  local action="$1"
+  local timeout_sec="$2"
+  local end=$((SECONDS + timeout_sec))
+  until ros2 action list >"$OUT/actions.tmp" && grep -qx "$action" "$OUT/actions.tmp"; do
+    if (( SECONDS >= end )); then
+      log "timeout waiting for action $action"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+start_bg() {
+  local name="$1"
+  shift
+  log "starting $name"
+  "$@" >"$OUT/$name.log" 2>&1 &
+  PIDS+=("$!")
+}
+
+publish_initial_pose() {
+  local name="$1"
+  local x="$2"
+  local y="$3"
+  local yaw_z="$4"
+  local yaw_w="$5"
+  log "publishing initial pose $name"
+  ros2 topic pub --times 5 --rate 2 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \
+    "{header: {frame_id: map}, pose: {pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}, covariance: [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467]}}" \
+    >"$OUT/initialpose_$name.log" 2>&1
+}
+
+send_nav_goal() {
+  local name="$1"
+  local x="$2"
+  local y="$3"
+  local yaw_z="$4"
+  local yaw_w="$5"
+  local timeout_sec="$6"
+  log "sending navigation goal $name"
+  if ! timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+    "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
+    >"$OUT/nav2_goal_$name.log" 2>&1; then
+    cat "$OUT/nav2_goal_$name.log"
+    return 1
+  fi
+  if ! grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then
+    cat "$OUT/nav2_goal_$name.log"
+    return 1
+  fi
+  grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"
+}
+
+start_pedestrian() {
+  local ped_dir="$WORKSPACE/pedestrian"
+  log "starting pedestrians (dynamic obstacles, waypoint-driven)"
+  # 노드가 여러 보행자를 스폰하고 waypoint 경로로 이동시킨다.
+  start_bg pedestrians python3 "$ped_dir/pedestrians.py"
+}
+
+start_profiler() {
+  log "starting resource profiler (CPU/mem/runtime sampling)"
+  mkdir -p "$OUT/profile"
+  start_bg profile bash "$WORKSPACE/scripts/profile_resources.sh" \
+    --out "$OUT/profile" --interval 2 --label smoke
+}
+
+start_stress() {
+  # P2: CPU 점유 워커 N개로 의도적 부하 주입. 미션이 그래도 완주하는지(robustness) 검증용.
+  local n="$1"
+  log "injecting CPU stress: $n busy workers (P2 load test)"
+  local i
+  for ((i = 0; i < n; i++)); do
+    bash -c 'while :; do :; done' >/dev/null 2>&1 &
+    STRESS_PIDS+=("$!")
+  done
+}
+
+apply_rt_priority() {
+  # P3 compute 보호: nav2 컨테이너에 SCHED_RR(RT) + renice 부여.
+  # RT 스레드는 SCHED_OTHER(stress/gazebo)를 선점 -> 부하 중에도 제어 루프 유지.
+  local navpids p
+  mapfile -t navpids < <(pgrep -f component_container_isolated)
+  if [[ ${#navpids[@]} -eq 0 ]]; then
+    log "P3 WARN: no nav2 container (component_container_isolated) found for RT boost"
+    return
+  fi
+  for p in "${navpids[@]}"; do
+    renice -n -10 -p "$p" >/dev/null 2>&1 || true
+    chrt -a -r -p 10 "$p" 2>/dev/null || chrt -r -p 10 "$p" 2>/dev/null || true
+  done
+  log "P3: RT priority(SCHED_RR/10) + renice(-10) applied to ${#navpids[@]} nav2 process(es)"
+}
+
+inject_wrong_initialpose() {
+  # localization 고장주입: 실제보다 (dx,dy) 만큼 어긋난 initialpose 를 발행한다.
+  local name="$1"
+  local x="$2"
+  local y="$3"
+  log "INJECT wrong initialpose $name at ($x,$y) (localization fault)"
+  ros2 topic pub --times 5 --rate 2 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \
+    "{header: {frame_id: map}, pose: {pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: 0.0, w: 1.0}}, covariance: [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25]}}" \
+    >"$OUT/initialpose_fault_$name.log" 2>&1
+}
+
+expect_nav_abort() {
+  # 회복 동작 검증: '도달 불가능 goal'을 보내, Nav2 가 무한 회전/무한 재시도 없이
+  # 한정된 시간(timeout) 안에 ABORTED 로 안전 종료하는지 확인한다.
+  # PASS 조건: timeout 안에 액션이 반환되고, 그 결과가 SUCCEEDED 가 아님(ABORTED/CANCELED).
+  # FAIL 조건: timeout 으로 죽음(무한 hang) 또는 SUCCEEDED(도달 불가 goal 이 성공할 수 없음).
+  local name="$1"
+  local x="$2"
+  local y="$3"
+  local timeout_sec="$4"
+  log "RECOVERY check: sending unreachable goal $name ($x,$y), expecting bounded ABORTED"
+  if timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+    "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: 0.0, w: 1.0}}}}" \
+    >"$OUT/nav2_recovery_$name.log" 2>&1; then
+    if grep -q "status: SUCCEEDED" "$OUT/nav2_recovery_$name.log"; then
+      log "RECOVERY FAIL: unreachable goal reported SUCCEEDED"
+      cat "$OUT/nav2_recovery_$name.log"
+      return 1
+    fi
+    log "RECOVERY PASS: goal returned within ${timeout_sec}s without success (bounded safe stop)"
+    grep -E "status: (ABORTED|CANCELED)" "$OUT/nav2_recovery_$name.log" || true
+    return 0
+  fi
+  log "RECOVERY FAIL: action did not return within ${timeout_sec}s (possible infinite retry/hang)"
+  cat "$OUT/nav2_recovery_$name.log"
+  return 1
+}
+
+write_control_metrics() {
+  # P0 제어 충실도 계측: nav2 컨트롤러 로그에서 주기 깨짐/ TF 지연/진행 실패 횟수.
+  # 미션이 실패(set -e exit)해도 EXIT trap 에서 호출되어 항상 기록되게 한다(부하 실패도 측정).
+  [[ -d "$OUT" ]] || return 0
+  local navlog="$OUT/nav2_f1.log"
+  local m_missed m_tf m_prog
+  m_missed=$(grep -c "missed its desired rate" "$navlog" 2>/dev/null || true); m_missed=${m_missed:-0}
+  m_tf=$(grep -c "extrapolation into the future" "$navlog" 2>/dev/null || true); m_tf=${m_tf:-0}
+  m_prog=$(grep -c "Failed to make progress" "$navlog" 2>/dev/null || true); m_prog=${m_prog:-0}
+  {
+    echo "control_loop_missed_rate=$m_missed"
+    echo "tf_extrapolation=$m_tf"
+    echo "controller_failed_progress=$m_prog"
+  } > "$OUT/control_metrics.txt"
+}
+
+finalize_artifacts() {
+  # 로그/아티팩트 자동 수집: scenario_summary.md 작성 후 latest -> 타임스탬프 dir 로 복사.
+  local summary="$OUT/scenario_summary.md"
+  write_control_metrics
+  {
+    echo "# world-swap smoke scenario summary"
+    echo
+    echo "- run_ts: $RUN_TS"
+    echo "- WITH_PEDESTRIAN: $WITH_PEDESTRIAN"
+    echo "- WITH_RECOVERY: $WITH_RECOVERY"
+    echo "- WITH_LOC_FAULT: $WITH_LOC_FAULT"
+    echo "- WITH_PROFILE: $WITH_PROFILE"
+    echo "- WITH_STRESS: $WITH_STRESS"
+    echo "- WITH_RT_PRIORITY: $WITH_RT_PRIORITY"
+    echo
+    echo "## nav goals"
+    echo
+    echo "| goal | result |"
+    echo "|------|--------|"
+    for f in "$OUT"/nav2_goal_*.log; do
+      [[ -e "$f" ]] || continue
+      local gname res
+      gname="$(basename "$f" .log | sed 's/^nav2_goal_//')"
+      if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"; else res="NOT_SUCCEEDED"; fi
+      echo "| $gname | $res |"
+    done
+    for f in "$OUT"/nav2_recovery_*.log; do
+      [[ -e "$f" ]] || continue
+      local gname res
+      gname="$(basename "$f" .log | sed 's/^nav2_//')"
+      if grep -qE "status: (ABORTED|CANCELED)" "$f"; then res="ABORTED(expected)"; else res="UNEXPECTED"; fi
+      echo "| $gname | $res |"
+    done
+    echo
+    echo "## verify_world_swap_state"
+    echo
+    echo '```text'
+    if [[ -e "$OUT/verify_world_swap_state.log" ]]; then cat "$OUT/verify_world_swap_state.log"; fi
+    echo '```'
+    echo
+    echo "## control health (nav2 loop)"
+    echo
+    echo '```text'
+    cat "$OUT/control_metrics.txt"
+    echo '```'
+    if [[ -e "$OUT/profile/resource_summary.txt" ]]; then
+      echo
+      echo "## resource profile"
+      echo
+      echo '```text'
+      cat "$OUT/profile/resource_summary.txt"
+      echo '```'
+    fi
+  } > "$summary"
+  # 토픽/서비스/액션 스냅샷 보존.
+  ros2 topic list >"$OUT/topics_final.txt" 2>&1 || true
+  ros2 service list >"$OUT/services_final.txt" 2>&1 || true
+  cp -a "$OUT/." "$RUN_DIR/" 2>/dev/null || true
+  log "artifacts collected -> $RUN_DIR (summary: $RUN_DIR/scenario_summary.md)"
+}
+
+ensure_maps() {
+  # fresh clone 대응: pgm 은 gitignore — 없으면 생성기로 만들고 시작한다.
+  local pgm="$ROOT/src/slam_pkg/maps/kku_virtual/f2/kku_f2.pgm"
+  if [[ -f "$pgm" ]]; then
+    return 0
+  fi
+  if [[ -f "$ROOT/scripts/generate_kku_maps.py" ]]; then
+    log "maps missing -> generating worlds+maps"
+    python3 "$ROOT/scripts/generate_kku_worlds.py"
+    python3 "$ROOT/scripts/generate_kku_maps.py"
+  else
+    echo "error: $pgm 없음, $ROOT/scripts 도 없음 — host에서 scripts/bootstrap_workspace.sh 를 먼저 실행할 것" >&2
+    exit 1
+  fi
+}
+
+trap cleanup_started EXIT
+
+cd "$ROOT"
+source_setup /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+export DISPLAY="${DISPLAY:-:1}"
+
+cleanup_stale
+ensure_maps
+
+log "building root workspace"
+# --base-paths src: 루트 빌드가 /ros2_ws 재귀 탐색으로 test_workspace 패키지까지
+# 루트 install에 흡수하던 문제 차단 (패키지 삭제 시 stale ament index로
+# GazeboRosPaths 전체 순회가 죽는 사고의 근본 원인)
+colcon build --symlink-install --base-paths src >"$OUT/build_root.log" 2>&1
+
+log "building elevator_auto_map_switch"
+(
+  cd "$ROOT/test_workspace/elevator_auto_map_switch"
+  source_setup /opt/ros/humble/setup.bash
+  source_setup "$ROOT/install/setup.bash"
+  colcon build --symlink-install
+) >"$OUT/build_auto_map_switch.log" 2>&1
+
+log "building elevator_mission"
+(
+  cd "$ROOT/test_workspace/elevator_mission"
+  source_setup /opt/ros/humble/setup.bash
+  source_setup "$ROOT/install/setup.bash"
+  colcon build --symlink-install
+) >"$OUT/build_elevator_mission.log" 2>&1
+
+log "building gazebo_world_swap"
+(
+  cd "$WORKSPACE"
+  source_setup /opt/ros/humble/setup.bash
+  source_setup "$ROOT/install/setup.bash"
+  colcon build --symlink-install
+) >"$OUT/build_gazebo_world_swap.log" 2>&1
+
+source_setup "$ROOT/install/setup.bash"
+source_setup "$ROOT/test_workspace/elevator_auto_map_switch/install/setup.bash"
+source_setup "$ROOT/test_workspace/elevator_mission/install/setup.bash"
+source_setup "$WORKSPACE/install/setup.bash"
+
+start_bg gazebo_f1 ros2 launch common_pkg gazebo.launch.py floor:=F1 spawn_point:=charge_station use_sim_time:=true
+wait_for_topic /clock 30
+wait_for_service /spawn_entity 30
+wait_for_service /delete_entity 30
+wait_for_service /get_model_list 30
+
+start_bg nav2_f1 ros2 launch slam_pkg kku_navigation.launch.py floor:=F1 rviz:=$WITH_RVIZ use_sim_time:=true
+wait_for_service /map_server/load_map 90
+wait_for_action /navigate_to_pose 90
+wait_for_topic /amcl_pose 90
+
+if [[ "$WITH_RT_PRIORITY" == "1" ]]; then
+  apply_rt_priority
+fi
+
+publish_initial_pose charge_station 1.6 0.0 0.0 1.0
+
+if [[ "$WITH_PEDESTRIAN" == "1" ]]; then
+  start_pedestrian
+fi
+
+if [[ "$WITH_PROFILE" == "1" ]]; then
+  start_profiler
+fi
+
+if (( WITH_STRESS > 0 )); then
+  start_stress "$WITH_STRESS"
+fi
+
+log "running F1 pickup route from charge station"
+# 복도 확장(CORRIDOR_HALF 2.5, 5m)으로 택배 door가 y=-2.5, alcove 가 -2.5~-4.3 로 이동.
+send_nav_goal f1_parcel_corridor 5.0 0.0 0.0 1.0 150
+send_nav_goal f1_parcel_storage 5.0 -2.1 -0.7071068 0.7071068 150
+send_nav_goal f1_parcel_pickup 5.0 -3.4 -0.7071068 0.7071068 150
+
+log "returning to F1 elevator for floor transfer"
+send_nav_goal f1_parcel_exit 5.0 -2.1 0.7071068 0.7071068 150
+
+# 택배 픽업 후 출고 -> 앞쪽으로 살짝 튀어나온 footprint 적용(택배 들고 가는 형상).
+# 앞 중앙만 0.40 으로 확장, 몸통 폭(±0.26)/후방(-0.18)은 유지해 엘리베이터 문(폭 1.0m) 통과 보장.
+PARCEL_FOOTPRINT="[[0.40,0.12],[0.40,-0.12],[0.27,-0.26],[-0.18,-0.26],[-0.18,0.26],[0.27,0.26]]"
+log "parcel loaded -> extend front footprint (carrying parcel)"
+ros2 param set /local_costmap/local_costmap footprint "$PARCEL_FOOTPRINT" >"$OUT/footprint_local.log" 2>&1 || true
+ros2 param set /global_costmap/global_costmap footprint "$PARCEL_FOOTPRINT" >"$OUT/footprint_global.log" 2>&1 || true
+send_nav_goal f1_corridor_return 5.0 0.0 1.0 0.0 150
+send_nav_goal f1_elevator_entry 1.6 0.0 1.0 0.0 150
+send_nav_goal f1_elevator_inside 0.0 0.0 0.0 1.0 150
+
+start_bg orchestrator ros2 launch auto_floor_orchestrator_pkg auto_floor_orchestrator.launch.py dry_run_map_load:=false target_floor:=F2 use_sim_time:=true
+wait_for_service /floor_orchestrator/request_switch 30
+start_bg world_swap ros2 launch gazebo_world_swap_pkg world_swap.launch.py method:=model_swap initial_floor:=F1 use_sim_time:=true
+
+log "arming floor switch"
+ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch.log" 2>&1
+
+log "publishing F2 ARRIVED_OPEN elevator state"
+ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
+  "{data: '{\"current_floor\":\"F2\",\"target_floor\":\"F2\",\"door_state\":\"open\",\"state\":\"ARRIVED_OPEN\"}'}" \
+  >"$OUT/elevator_state_pub.log" 2>&1
+
+log "verifying map, world entity, status, and scan"
+if ! python3 "$WORKSPACE/scripts/verify_world_swap_state.py" --timeout-sec 90 \
+  >"$OUT/verify_world_swap_state.log" 2>&1; then
+  cat "$OUT/verify_world_swap_state.log"
+  exit 1
+fi
+
+cat "$OUT/verify_world_swap_state.log"
+
+# F2 도착 후 택배 하역 완료로 간주 -> footprint 원복(robot_radius).
+# 확장 footprint 유지 시 엘리베이터(문 1.0m)에서 빠져나오다 끼는 문제 방지.
+log "parcel delivered -> reset footprint to normal for F2"
+ros2 param set /local_costmap/local_costmap footprint "[]" >"$OUT/footprint_reset_local.log" 2>&1 || true
+ros2 param set /global_costmap/global_costmap footprint "[]" >"$OUT/footprint_reset_global.log" 2>&1 || true
+
+if [[ "$WITH_LOC_FAULT" == "1" ]]; then
+  # F2 진입점 실제 ~(0,0). 0.5m 어긋난 initialpose 주입 -> AMCL/scan 매칭 보정 후에도
+  # 아래 f2_corridor goal 이 SUCCEEDED 해야 한다(한정 오차 robustness 검증).
+  inject_wrong_initialpose f2_entry 0.5 0.0
+fi
+
+log "sending F2 corridor navigation goal near room 208"
+send_nav_goal f2_corridor 2.5 12.0 0.0 1.0 150
+
+if [[ "$WITH_RECOVERY" == "1" ]]; then
+  # 도달 불가능 goal(맵 밖) -> Nav2 가 한정된 시간 안에 ABORTED 로 안전 종료해야 한다.
+  expect_nav_abort unreachable 100.0 100.0 120
+fi
+
+finalize_artifacts
+
+# P0 제어 충실도 회귀 가드: MAX_MISSED_RATE 설정 시 임계 초과면 FAIL.
+if [[ -n "$MAX_MISSED_RATE" ]]; then
+  missed=$(grep '^control_loop_missed_rate=' "$OUT/control_metrics.txt" | cut -d= -f2)
+  log "control fidelity: missed-rate=$missed (threshold MAX_MISSED_RATE=$MAX_MISSED_RATE)"
+  if (( missed > MAX_MISSED_RATE )); then
+    log "CONTROL FIDELITY FAIL: nav2 control loop missed rate $missed > $MAX_MISSED_RATE"
+    exit 1
+  fi
+  log "control fidelity OK"
+fi
+
+log "logs written to $OUT"

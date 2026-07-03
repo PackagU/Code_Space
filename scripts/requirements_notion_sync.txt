@@ -1,0 +1,4 @@
+# Dependencies for scripts/sync_docs_to_notion.py
+# Install:  pip install -r scripts/requirements_notion_sync.txt
+requests>=2.31,<3
+markdown-it-py>=3.0,<4

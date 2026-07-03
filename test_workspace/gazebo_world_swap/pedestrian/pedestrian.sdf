@@ -1,0 +1,62 @@
+<?xml version="1.0" ?>
+<!--
+  동적 장애물(보행자) 모델 — 사람 형태(머리/몸통/팔/다리)로 구성.
+  - 이동은 pedestrians.py 가 /gazebo/set_entity_state 로 매 틱 절대좌표를 지정(위치제어).
+    로봇이 밀어도 안 밀리고, waypoint 가 맵 안이라 벽을 통과해 이탈하지 않는다.
+  - LiDAR 감지는 단일 collision 원통(높이 1.7m, z 0~1.7)이 담당 -> 스캔 평면(laser z=0.75) 통과.
+  - visual 은 사람처럼 보이도록 primitive 조합. 진행방향(yaw)은 노드가 돌린다.
+  - __SHIRT__ 는 노드가 보행자별 상의 색으로 치환한다.
+  - set_entity_state 로 움직이려면 static=false, gravity off(낙하 방지).
+-->
+<sdf version="1.6">
+  <model name="pedestrian_1">
+    <static>false</static>
+    <pose>4.0 0.0 0 0 0 0</pose>
+    <link name="base">
+      <gravity>0</gravity>
+      <inertial>
+        <mass>60.0</mass>
+        <inertia><ixx>16.0</ixx><ixy>0</ixy><ixz>0</ixz><iyy>16.0</iyy><iyz>0</iyz><izz>1.2</izz></inertia>
+      </inertial>
+      <!-- LiDAR 감지용 단일 충돌체 (사람 폭 근사) -->
+      <collision name="c">
+        <pose>0 0 0.85 0 0 0</pose>
+        <geometry><cylinder><radius>0.22</radius><length>1.7</length></cylinder></geometry>
+      </collision>
+      <!-- 다리 2 -->
+      <visual name="leg_l">
+        <pose>0 0.10 0.4 0 0 0</pose>
+        <geometry><cylinder><radius>0.07</radius><length>0.8</length></cylinder></geometry>
+        <material><ambient>0.15 0.15 0.2 1</ambient><diffuse>0.2 0.2 0.28 1</diffuse></material>
+      </visual>
+      <visual name="leg_r">
+        <pose>0 -0.10 0.4 0 0 0</pose>
+        <geometry><cylinder><radius>0.07</radius><length>0.8</length></cylinder></geometry>
+        <material><ambient>0.15 0.15 0.2 1</ambient><diffuse>0.2 0.2 0.28 1</diffuse></material>
+      </visual>
+      <!-- 몸통 (정면 +x, 어깨폭 y) -->
+      <visual name="torso">
+        <pose>0 0 1.15 0 0 0</pose>
+        <geometry><box><size>0.18 0.34 0.62</size></box></geometry>
+        <material><ambient>__SHIRT__</ambient><diffuse>__SHIRT__</diffuse></material>
+      </visual>
+      <!-- 팔 2 -->
+      <visual name="arm_l">
+        <pose>0 0.23 1.15 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.55</length></cylinder></geometry>
+        <material><ambient>__SHIRT__</ambient><diffuse>__SHIRT__</diffuse></material>
+      </visual>
+      <visual name="arm_r">
+        <pose>0 -0.23 1.15 0 0 0</pose>
+        <geometry><cylinder><radius>0.05</radius><length>0.55</length></cylinder></geometry>
+        <material><ambient>__SHIRT__</ambient><diffuse>__SHIRT__</diffuse></material>
+      </visual>
+      <!-- 머리 -->
+      <visual name="head">
+        <pose>0 0 1.58 0 0 0</pose>
+        <geometry><sphere><radius>0.12</radius></sphere></geometry>
+        <material><ambient>0.8 0.62 0.5 1</ambient><diffuse>0.92 0.72 0.6 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

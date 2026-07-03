@@ -1,0 +1,229 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="kku_f1">
+    <include><uri>model://sun</uri></include>
+    <include><uri>model://ground_plane</uri></include>
+    <physics name="default_physics" default="0" type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>true</shadows>
+    </scene>
+    <!-- 동적 장애물(보행자)을 set_entity_state 로 위치제어하기 위한 플러그인 -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros><namespace>/gazebo</namespace></ros>
+      <update_rate>50.0</update_rate>
+    </plugin>
+    <model name="kku_f1_building">
+      <static>true</static>
+      <link name="walls">
+        <collision name="f1_elev_n">
+          <pose>0 0.8 1.2 0 0 0</pose>
+          <geometry><box><size>1.6 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_elev_n_v">
+          <pose>0 0.8 1.2 0 0 0</pose>
+          <geometry><box><size>1.6 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_elev_s">
+          <pose>0 -0.8 1.2 0 0 0</pose>
+          <geometry><box><size>1.6 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_elev_s_v">
+          <pose>0 -0.8 1.2 0 0 0</pose>
+          <geometry><box><size>1.6 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_elev_w">
+          <pose>-0.8 0 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.6 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_elev_w_v">
+          <pose>-0.8 0 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.6 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_elev_e_s">
+          <pose>0.8 -0.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 0.3 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_elev_e_s_v">
+          <pose>0.8 -0.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 0.3 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_elev_e_n">
+          <pose>0.8 0.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 0.3 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_elev_e_n_v">
+          <pose>0.8 0.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 0.3 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_shoulder_n">
+          <pose>0.8 1.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.7 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_shoulder_n_v">
+          <pose>0.8 1.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.7 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_shoulder_s">
+          <pose>0.8 -1.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.7 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_shoulder_s_v">
+          <pose>0.8 -1.65 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.7 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_rc_n_w">
+          <pose>0.9 2.5 1.2 0 0 0</pose>
+          <geometry><box><size>0.2 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_rc_n_w_v">
+          <pose>0.9 2.5 1.2 0 0 0</pose>
+          <geometry><box><size>0.2 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_rc_n_e">
+          <pose>9.5 2.5 1.2 0 0 0</pose>
+          <geometry><box><size>11 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_rc_n_e_v">
+          <pose>9.5 2.5 1.2 0 0 0</pose>
+          <geometry><box><size>11 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_rc_s_w">
+          <pose>2.675 -2.5 1.2 0 0 0</pose>
+          <geometry><box><size>3.75 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_rc_s_w_v">
+          <pose>2.675 -2.5 1.2 0 0 0</pose>
+          <geometry><box><size>3.75 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_rc_s_e">
+          <pose>10.22 -2.5 1.2 0 0 0</pose>
+          <geometry><box><size>9.55 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_rc_s_e_v">
+          <pose>10.22 -2.5 1.2 0 0 0</pose>
+          <geometry><box><size>9.55 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_rc_end">
+          <pose>15 0 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_rc_end_v">
+          <pose>15 0 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_bc_w">
+          <pose>1 5.25 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5.5 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_bc_w_v">
+          <pose>1 5.25 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5.5 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_bc_e">
+          <pose>4 5.25 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5.5 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_bc_e_v">
+          <pose>4 5.25 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 5.5 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_bc_end">
+          <pose>2.5 8 1.2 0 0 0</pose>
+          <geometry><box><size>3 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_bc_end_v">
+          <pose>2.5 8 1.2 0 0 0</pose>
+          <geometry><box><size>3 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_pz_s">
+          <pose>5 -4.3 1.2 0 0 0</pose>
+          <geometry><box><size>3 0.12 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_pz_s_v">
+          <pose>5 -4.3 1.2 0 0 0</pose>
+          <geometry><box><size>3 0.12 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_pz_e">
+          <pose>6.5 -3.4 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.8 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_pz_e_v">
+          <pose>6.5 -3.4 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.8 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+        <collision name="f1_pz_w">
+          <pose>3.5 -3.4 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.8 2.4</size></box></geometry>
+        </collision>
+        <visual name="f1_pz_w_v">
+          <pose>3.5 -3.4 1.2 0 0 0</pose>
+          <geometry><box><size>0.12 1.8 2.4</size></box></geometry>
+          <material><ambient>0.7 0.7 0.7 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="obstacle_person_1">
+      <static>true</static>
+      <pose>3.5 0.8 0 0 0 0</pose>
+      <link name="body">
+        <collision name="c"><pose>0 0 0.85 0 0 0</pose><geometry><cylinder><radius>0.2</radius><length>1.7</length></cylinder></geometry></collision>
+        <visual name="v"><pose>0 0 0.85 0 0 0</pose><geometry><cylinder><radius>0.2</radius><length>1.7</length></cylinder></geometry><material><ambient>0.8 0.6 0.5 1</ambient><diffuse>0.9 0.7 0.6 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="obstacle_box_1">
+      <static>true</static>
+      <pose>6 -0.8 0 0 0 0</pose>
+      <link name="body">
+        <collision name="c"><pose>0 0 0.5 0 0 0</pose><geometry><box><size>0.4 0.4 1</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.5 0 0 0</pose><geometry><box><size>0.4 0.4 1</size></box></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.55 0.35 0.15 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="obstacle_person_2">
+      <static>true</static>
+      <pose>9 0.8 0 0 0 0</pose>
+      <link name="body">
+        <collision name="c"><pose>0 0 0.85 0 0 0</pose><geometry><cylinder><radius>0.2</radius><length>1.7</length></cylinder></geometry></collision>
+        <visual name="v"><pose>0 0 0.85 0 0 0</pose><geometry><cylinder><radius>0.2</radius><length>1.7</length></cylinder></geometry><material><ambient>0.8 0.6 0.5 1</ambient><diffuse>0.9 0.7 0.6 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="obstacle_box_2">
+      <static>true</static>
+      <pose>11.5 -0.8 0 0 0 0</pose>
+      <link name="body">
+        <collision name="c"><pose>0 0 0.55 0 0 0</pose><geometry><box><size>0.5 0.5 1.1</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.55 0 0 0</pose><geometry><box><size>0.5 0.5 1.1</size></box></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.55 0.35 0.15 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="parcel_box">
+      <static>true</static>
+      <pose>5 -3.9 0 0 0 0</pose>
+      <link name="body">
+        <collision name="c"><pose>0 0 0.15 0 0 0</pose><geometry><box><size>0.45 0.6 0.3</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.15 0 0 0</pose><geometry><box><size>0.45 0.6 0.3</size></box></geometry><material><ambient>0.6 0.45 0.2 1</ambient><diffuse>0.72 0.55 0.28 1</diffuse></material></visual>
+      </link>
+    </model>
+  </world>
+</sdf>

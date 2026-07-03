@@ -1,0 +1,26 @@
+services:
+  ros2:
+    image: ghcr.io/packagu/ros2-humble-slam:humble
+    container_name: ros2_humble
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - XAUTHORITY=/root/.Xauthority
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+      - ${PACKAGU_SRC:-../../src}:/ros2_ws/src:rw
+      - ${PACKAGU_MAPS:-../../src/slam_pkg/maps}:/ros2_ws/maps:rw
+      - ${PACKAGU_TEST_WORKSPACE:-../../test_workspace}:/ros2_ws/test_workspace:rw
+      # 월드/맵 생성기 등 저장소 스크립트를 컨테이너에서도 쓸 수 있게 마운트
+      - ${PACKAGU_SCRIPTS:-../../scripts}:/ros2_ws/scripts:ro
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    # Uncomment the matching device lines on the Linux desktop after confirming host paths.
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0   # RPLiDAR
+    #   - /dev/ttyACM0:/dev/ttyACM0   # OpenCR

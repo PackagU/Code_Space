@@ -1,0 +1,31 @@
+# Floor -> saved map + relocalization poses for the auto map switch PoC.
+#
+# map_yaml entries are PROJECT-ROOT-RELATIVE on purpose. The registry resolves
+# them in this order and uses the first file that exists:
+#   1. as-is, when the entry is already an absolute path
+#   2. <workspace_root>/<entry>             (host: ~/2026_graduation_project, container: /ros2_ws)
+#   3. ament share dir of the package named in the entry's first folder after src/
+#      e.g. src/slam_pkg/maps/... -> /ros2_ws/install/slam_pkg/share/slam_pkg/maps/...
+#
+# Pose seeds copied from legacy kku_nav_points.yaml (elevator geometry is the
+# same on every floor). elevator_inside is where the robot physically sits when
+# the map switches, so it is the default /initialpose target.
+schema_version: 1
+frame_id: map
+default_spawn_point_id: elevator_inside
+floors:
+  F1:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f1/kku_f1.yaml
+    points:
+      elevator_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      elevator_exit: {x: 1.6, y: 0.0, yaw_deg: 0.0}
+  F2:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f2/kku_f2.yaml
+    points:
+      elevator_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      elevator_exit: {x: 1.6, y: 0.0, yaw_deg: 0.0}
+  F3:
+    map_yaml: src/slam_pkg/maps/kku_virtual/f3/kku_f3.yaml
+    points:
+      elevator_inside: {x: 0.0, y: 0.0, yaw_deg: 0.0}
+      elevator_exit: {x: 1.6, y: 0.0, yaw_deg: 0.0}

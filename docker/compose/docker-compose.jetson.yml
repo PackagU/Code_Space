@@ -1,0 +1,24 @@
+# Jetson Xavier NX 배포용 compose (GUI 없음, aarch64 이미지)
+# 사용: docker compose -f docker/compose/docker-compose.jetson.yml up -d
+# 사전: GHCR 로그인 + humble-jetson 이미지 pull 권한 (docs/deployment/ 참조)
+services:
+  ros2:
+    image: ghcr.io/packagu/ros2-humble-slam:humble-jetson
+    container_name: ros2_humble
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ${PACKAGU_SRC:-../../src}:/ros2_ws/src:rw
+      - ${PACKAGU_MAPS:-../../src/slam_pkg/maps}:/ros2_ws/maps:rw
+      - ${PACKAGU_TEST_WORKSPACE:-../../test_workspace}:/ros2_ws/test_workspace:rw
+      - ${PACKAGU_SCRIPTS:-../../scripts}:/ros2_ws/scripts:ro
+    network_mode: host
+    # privileged: 시리얼 장치 접근 + nav2 SCHED_RR RT 우선순위(chrt) 부여에 필요
+    privileged: true
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    # Jetson 에서 장치 경로 확인 후 주석 해제 (ls -l /dev/ttyUSB* /dev/ttyACM*)
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0   # RPLiDAR A1m8
+    #   - /dev/ttyACM0:/dev/ttyACM0   # OpenCR 1.0

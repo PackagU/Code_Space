@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>slam_pkg</name>
+  <version>0.1.0</version>
+  <description>SLAM package using SLAM Toolbox and RPLiDAR A1m8 — Lee</description>
+  <maintainer email="JunhyungLee25@users.noreply.github.com">JunhyungLee25</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>slam_toolbox</depend>
+  <depend>rplidar_ros</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>xacro</depend>
+
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>common_pkg</exec_depend>
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
