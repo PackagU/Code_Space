@@ -83,10 +83,10 @@
 - 대형 오차 시 AMCL global relocalization 트리거 조건을 추가한다.
 - diff_drive odom에 노이즈 모델을 주입하는 옵션을 검토한다.
 
-### 1.6 🟢 [60%] Jetson Xavier NX 부하 프로파일
+### 1.6 🟢 [75%] Jetson Xavier NX 부하 프로파일
 
-> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-06-29
-> 진척: (a) host/container/Jetson 공용 `profile_resources.sh` 추가(CPU%/mem/load/런타임 CSV + summary, tegrastats 자동 감지). (b) `WITH_PROFILE=1` smoke 옵션으로 미션 동안 백그라운드 샘플링. (c) 남은 갭: Jetson 실기 수치 수집 — aarch64 배포 컨테이너 필요.
+> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-07-03
+> 진척: (a) host/container/Jetson 공용 `profile_resources.sh` 추가(CPU%/mem/load/런타임 CSV + summary, tegrastats 자동 감지). (b) `WITH_PROFILE=1` smoke 옵션으로 미션 동안 백그라운드 샘플링. (c) 2026-07-03: `docker/Dockerfile.jetson`(aarch64, GUI 제외) + `docker-compose.jetson.yml` + 배포/검증 절차(`docs/deployment/01_portability_policy.md`) 준비 완료. (d) 남은 갭: buildx 크로스 빌드/GHCR push + Jetson 실기 수치 수집.
 
 다음 조치:
 
@@ -118,6 +118,31 @@
 - 신공학관 실측 -> `kku_pre_simulation_map.yaml` 갱신 -> world/맵 재생성 -> smoke 재검증.
 - 좁은 복도 기준 inflation/lookahead/회전반경 재튜닝.
 
+### 1.9 🔴 ✅ 저장소 거버넌스 — 원격 부재로 로컬 유일본 위험
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: 31커밋/2만여 줄이 원격 없이 로컬에만 존재하던 상태를 해소. `PackagU/Code_Space` main(새 공개 히스토리, 일지/대용량/민감정보 제외 190파일)+dev push, CI(`check.yml`) 4/4 green, 이전 이력은 로컬 `archive/pre-github-main`·`lee/l3-cleanup` 브랜치에 보존. push 전 토큰/개인 이메일/대용량 스캔 0건 확인.
+
+### 1.10 🟡 ✅ Fresh-clone 재현성 — 새 환경에서 빌드/테스트 불가
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: (a) `robot_arm_pkg` 빈 launch/ install 가드, (b) `scripts/bootstrap_workspace.sh`(worlds+maps 생성, 멱등 확인), (c) smoke `ensure_maps` 자동 부트스트랩, (d) 검증 — GitHub fresh clone에서 bootstrap→오프라인 19/19 PASS→컨테이너 colcon build 4패키지 성공.
+
+### 1.11 🟡 ✅ 맵 기대값 하드코딩 3중화 (stale assert 위험)
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: `map_expectations.py`(맵 yaml+pgm 헤더) 단일 소스 신설, verifier `--floor/--from-floor` 인자화, 계약 테스트가 하드코딩 재유입을 차단. stale 문서값(477x299) 4곳 정정. §1.8 실측 반영 시 맵 재생성만으로 기대값 자동 추종.
+
+### 1.12 🟡 ✅ 오케스트레이터 노드명 충돌 (legacy/auto 동시 실행 위험)
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: legacy 수동 `floor_orchestrator_pkg`를 `legacy/`(로컬 아카이브)로 이동해 빌드 대상에서 제거 — 동일 노드명 동시 실행 자체가 불가능해짐. 부수 발견: 루트 colcon 빌드가 test_workspace 패키지를 흡수하던 중첩 결함을 `--base-paths src`로 수정(삭제된 패키지의 stale ament index가 Gazebo 기동을 죽이던 문제 — 회귀 가드 추가).
+
+### 1.13 🟢 ✅ F3 층 전환 미검증 (자산만 존재)
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: smoke `WITH_F3=1` 옵션 신설 — F2 검증 후 엘베 복귀 → target_floor=F3 param → request_switch → F2→F3 world swap 검증(`kku_f3_building` present/`kku_f2` absent, map ready) → F3 복도 goal SUCCEEDED. 컨테이너 전체 체인(F1→F2→F3) exit 0 확인. 주의: F3 world/맵은 실측 전까지 F2 레이아웃 복제본(§1.8 연계).
+
 ## Completed Improvements
 
-아직 없음.
+아직 없음 (완료 항목은 분기말에 이 절로 이동).

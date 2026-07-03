@@ -1,7 +1,7 @@
 # TODO — 종설_6조
 
 > Claude Code와 Codex CLI가 공유하는 **세션 단위 휘발성 메모/lock 보드**.
-> 영속 작업은 GitHub Issues 로, 큰 그림은 `plan/` 으로.
+> 영속 작업은 GitHub Issues 로, 큰 그림은 `Roadmap/` 으로.
 > 세션 시작 시 읽고, 세션 종료 시 업데이트 후 커밋.
 
 ---
@@ -14,6 +14,7 @@
 ## 🗳 다음 회의 안건 (혼자 결정 불가)
 
 ## 메모
+- 2026-07-03: **GitHub 이관 + 진단 P1~P10 실행 세션.** (1) `PackagU/Code_Space` main/dev push — 새 공개 히스토리(일지·webm·legacy 제외 190파일), 이전 31커밋은 로컬 `archive/pre-github-main`+`lee/l3-cleanup`에 보존, CI(check.yml) green. (2) `legacy/` 로컬 아카이브 신설(수동 floor_orchestrator_pkg, phase.md, 루트 nav2_params.yaml, FeedBack/, 루트 docker 사본 등 — `legacy/README.md` 목록 참조, GitHub 업로드 금지). (3) `docker/` 폴더가 컨테이너 SSOT — 개발 amd64 + `Dockerfile.jetson`(aarch64) + compose 3종, `run_kku_sim.sh` 경로 전환, publish-ghcr 워크플로우 docker/ 기준 보정. (4) 맵 기대값 단일소스화(`map_expectations.py`), verifier `--floor/--from-floor` 인자화. (5) **F2→F3 전환 검증 완료**: `WITH_F3=1` smoke — F1→F2→F3 전체 체인 PASS (F3는 실측 전까지 F2 복제 레이아웃). (6) 신규 원커맨드: `scripts/bootstrap_workspace.sh`(fresh clone 초기화), `scripts/run_offline_tests.sh`(19종 통합), `scripts/check_portability.py`(이식성 가드 R1~R4). (7) AGENTS.md 전면 정합화 + `docs/hardware_spec.md`(HW SSOT) + `docs/deployment/01_portability_policy.md` 신설, Roadmap 상태 실제 진행 반영. (8) 발견 버그 수정: 루트 colcon 빌드가 test_workspace 패키지 흡수(stale ament index로 Gazebo 기동 실패) → `--base-paths src` 한정+회귀 가드, sparse-checkout 잔재 해제. **다음 세션**: `git pull origin dev` 후 시작. Notion 동기화(`sync_docs_to_notion.py`)로 hardware_spec/deployment 신규 문서 업로드 확인 필요. 참고: `.gitignore`가 `docs/session_wiki/`를 로컬 전용화(추적 목록엔 남아있어 이 브랜치 로컬 커밋에는 무해).
 - 2026-06-29 (3차, 후속 goal): world-swap sim-to-real 후속 항목을 "복도 폭 2.0m 축소"만 제외하고 구현·검증·문서화함. 추가: `run_l3_world_swap_smoke.sh`에 gated 옵션 3종(`WITH_RECOVERY`/`WITH_LOC_FAULT`/`WITH_PROFILE`, 기본 0)과 타임스탬프 아티팩트 수집(`verification/run_<ts>/` + `scenario_summary.md`); 신규 `scripts/profile_resources.sh`(host/container/Jetson 공용 CPU/mem 샘플러); `test_smoke_scripts_contract.py` stale assert 수정(`f2_corridor 2.0`→`2.5`) + 회귀 가드(CORRIDOR_HALF=2.5/F2맵 498x348/옵션 기본값). 문서: `docs/session_wiki/.../2026-06-29_followup_goal_results.md`(검증표·시나리오 매트릭스·failure mode catalog·엘베 실측 분리·팔/리프트 계약·Jetson 명령·인계), `improvement_report.md` §1.2 갱신 + §1.4~1.8 신규. **다음 세션 3 명령(컨테이너 /ros2_ws)**: (1) `python3 test_workspace/gazebo_world_swap/scripts/test_smoke_scripts_contract.py` (2) `bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh` (3) `WITH_RECOVERY=1 WITH_PROFILE=1 bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh`. **건드리면 안 됨**: `generate_kku_worlds.py` `CORRIDOR_HALF = 2.5`(5m 테스트 복도), F2 맵 498x348/origin -2.46,-2.96, smoke 옵션 기본값 0. **needs measurement**: 복도 실측 2.0m, 엘베 캡 깊이/문턱 높이, 적재물 질량/COM.
 - 2026-06-29 (2차): Gazebo world swap full smoke를 실제 시연 흐름에 맞게 확장함. `run_l3_world_swap_smoke.sh`가 F1 `charge_station`에서 시작해 `/initialpose` 발행, F1 `parcel_storage`/`parcel_pickup` 방문, F1 `elevator_entry`/`elevator_inside` 복귀 후 F2 world swap과 F2 corridor goal을 수행함. `WITH_RVIZ=true`로 RViz 관찰 가능, `KEEP_RUNNING=1`로 종료 후 프로세스 유지 가능. Docker full smoke PASS, 오프라인 테스트 6종 PASS. AGENTS.md에 E2E 원커맨드 정책 추가. Notion 업로드는 수행하지 않음.
 - 2026-06-29: Gazebo World Swap Claude Code 재검증 결과를 `docs/session_wiki/2026-06-25_gazebo_world_swap/2026-06-29_world_swap_test/`에 정리함. 포함 문서: `README.md`, `claude_review_result.md`, `test_procedure_atoz.md`. Claude 검토 판정은 PoC 기준 merge 가능, 요구사항 충족. 후속 하드닝: Gazebo delete/spawn 응답 대기 단계 timeout 추가, swap 실패 후 같은 floor 재시도 가능 구조로 개선. Notion 업로드는 수행하지 않음.
@@ -91,11 +92,10 @@ PR 마다 자동으로 코드 리뷰 코멘트를 다는 도구가 있음. 도�
       {`auto_floor_orchestrator_pkg` 구현 완료. L0/L1/L2/L4(오프라인) host+container PASS, colcon build PASS, legacy 회귀 5종 PASS. 판단 기록은 `FeedBack/` 폴더. 핵심: 노드명은 legacy SwitchFloor가 하드코딩한 `floor_orchestrator_node` 유지 — legacy 수동 orchestrator와 동시 실행 금지}
 - [ ] **[NEXT]** 엘리베이터 층 이동 상태머신 초안 + Nav2 waypoint 변환 — 보고서 §2.2
       {py_trees_ros 기반 BT, World swap + robot respawn, 신규 `test_workspace/elevator_mission/` 에 PoC}
-- [ ] GitHub 개선
+- [x] GitHub 레포 초기 push (2026-07-03) — `PackagU/Code_Space` main+dev, CI green. 브랜치 전략은 AGENTS.md §GitHub 워크플로우.
+- [ ] GitHub 개선 — 팀원 초대 확인, main 브랜치 보호 설정, Issue 라벨 세팅 (회의 안건과 연동)
 - [ ] VcXsrv + Docker GUI 연결 확인 (RViz2 또는 Gazebo 실행)
       {컨테이너 안에서 rviz2 실행 → GUI 창이 Windows에 뜨면 성공}
-- [ ] GitHub 레포 초기 push (`git init` + remote 연결)
-      {git init && git remote add origin https://github.com/PackagU/<repo명>}
 
 ## 🟡 진행 예정
 

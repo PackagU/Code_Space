@@ -34,6 +34,10 @@ WITH_STRESS="${WITH_STRESS:-0}"
 # renice 를 부여해, 부하(stress/gazebo)가 제어 루프를 굶기지 못하게 한다. 기본 0.
 # 실기 Jetson 에서는 동등하게 nav2 를 RT prio/전용 코어로 구동(문서 참조).
 WITH_RT_PRIORITY="${WITH_RT_PRIORITY:-0}"
+# WITH_F3=1 이면 F2 검증 후 두 번째 층 전환(F2->F3)까지 수행한다:
+# 엘베 복귀 -> target_floor=F3 param set(레거시 SwitchFloor 와 동일 계약) ->
+# request_switch -> ARRIVED_OPEN -> F3 world/map 검증 -> F3 복도 goal. 기본 0.
+WITH_F3="${WITH_F3:-0}"
 
 # 타임스탬프 run 디렉터리(아티팩트 누적용). latest 는 back-compat 으로 유지.
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
@@ -490,6 +494,32 @@ send_nav_goal f2_corridor 2.5 12.0 0.0 1.0 150
 if [[ "$WITH_RECOVERY" == "1" ]]; then
   # 도달 불가능 goal(맵 밖) -> Nav2 가 한정된 시간 안에 ABORTED 로 안전 종료해야 한다.
   expect_nav_abort unreachable 100.0 100.0 120
+fi
+
+if [[ "$WITH_F3" == "1" ]]; then
+  # 두 번째 층 전환: F2 -> F3 (F3 world/맵은 현재 F2 레이아웃과 동일 — 실측 후 교체 예정).
+  log "returning to F2 elevator for F3 transfer"
+  send_nav_goal f2_elevator_inside 0.0 0.0 0.0 1.0 150
+
+  log "arming F3 floor switch (target_floor param -> F3)"
+  ros2 param set /floor_orchestrator_node target_floor F3 >"$OUT/param_target_f3.log" 2>&1
+  ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f3.log" 2>&1
+
+  log "publishing F3 ARRIVED_OPEN elevator state"
+  ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
+    "{data: '{\"current_floor\":\"F3\",\"target_floor\":\"F3\",\"door_state\":\"open\",\"state\":\"ARRIVED_OPEN\"}'}" \
+    >"$OUT/elevator_state_pub_f3.log" 2>&1
+
+  log "verifying F2 -> F3 map, world entity, status, and scan"
+  if ! python3 "$WORKSPACE/scripts/verify_world_swap_state.py" --timeout-sec 90 \
+    --floor F3 --from-floor F2 >"$OUT/verify_world_swap_state_f3.log" 2>&1; then
+    cat "$OUT/verify_world_swap_state_f3.log"
+    exit 1
+  fi
+  cat "$OUT/verify_world_swap_state_f3.log"
+
+  log "sending F3 corridor navigation goal"
+  send_nav_goal f3_corridor 2.5 12.0 0.0 1.0 150
 fi
 
 finalize_artifacts
