@@ -38,6 +38,15 @@ WITH_RT_PRIORITY="${WITH_RT_PRIORITY:-0}"
 # 엘베 복귀 -> target_floor=F3 param set(레거시 SwitchFloor 와 동일 계약) ->
 # request_switch -> ARRIVED_OPEN -> F3 world/map 검증 -> F3 복도 goal. 기본 0.
 WITH_F3="${WITH_F3:-0}"
+# nav goal 재시도 횟수. 보행자 런 기본 2(조우로 인한 일시 ABORTED 흡수),
+# 결정적 smoke 기본 0(회귀를 재시도로 가리지 않기). 명시 설정이 우선.
+if [[ -z "${NAV_GOAL_RETRIES:-}" ]]; then
+  if [[ "${WITH_PEDESTRIAN}" == "1" ]]; then
+    NAV_GOAL_RETRIES=2
+  else
+    NAV_GOAL_RETRIES=0
+  fi
+fi
 
 # 타임스탬프 run 디렉터리(아티팩트 누적용). latest 는 back-compat 으로 유지.
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
@@ -149,6 +158,24 @@ wait_for_action() {
   done
 }
 
+wait_for_lifecycle_active() {
+  # action 이 목록에 떠도(configured) lifecycle 이 active 전이면 goal 이 거부된다
+  # (시작 레이스로 첫 goal "Goal was rejected" 재현, 2026-07-03). active 를 명시 대기.
+  local node="$1"
+  local timeout_sec="$2"
+  local end=$((SECONDS + timeout_sec))
+  # ros2 lifecycle get 은 component container 노드에서 node graph 검증에 걸려
+  # 실패할 수 있어 get_state 서비스를 직접 호출한다.
+  until timeout 10 ros2 service call "${node}/get_state" lifecycle_msgs/srv/GetState 2>/dev/null \
+      | grep -q "label='active'"; do
+    if (( SECONDS >= end )); then
+      log "timeout waiting for lifecycle active: $node"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 start_bg() {
   local name="$1"
   shift
@@ -164,9 +191,21 @@ publish_initial_pose() {
   local yaw_z="$4"
   local yaw_w="$5"
   log "publishing initial pose $name"
-  ros2 topic pub --times 5 --rate 2 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \
-    "{header: {frame_id: map}, pose: {pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}, covariance: [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467]}}" \
-    >"$OUT/initialpose_$name.log" 2>&1
+  # AMCL 구독자가 아직 준비 전이면 발행분이 전부 유실될 수 있다(재현: 2026-07-03,
+  # "AMCL cannot publish a pose ... set the initial pose" 반복 -> nav2 activation 데드락).
+  # 발행 후 /amcl_pose 실제 수신(적용 증거)까지 확인하고, 미적용이면 재발행한다.
+  local try
+  for try in 1 2 3 4 5 6; do
+    ros2 topic pub --times 5 --rate 2 /initialpose geometry_msgs/msg/PoseWithCovarianceStamped \
+      "{header: {frame_id: map}, pose: {pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}, covariance: [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467]}}" \
+      >"$OUT/initialpose_$name.log" 2>&1
+    if timeout 15 ros2 topic echo --once /amcl_pose >>"$OUT/initialpose_$name.log" 2>&1; then
+      return 0
+    fi
+    log "initial pose not applied by AMCL yet (try $try/6) -> republishing"
+  done
+  log "AMCL did not accept initial pose $name"
+  return 1
 }
 
 send_nav_goal() {
@@ -176,18 +215,45 @@ send_nav_goal() {
   local yaw_z="$4"
   local yaw_w="$5"
   local timeout_sec="$6"
-  log "sending navigation goal $name"
-  if ! timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
-    "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
-    >"$OUT/nav2_goal_$name.log" 2>&1; then
-    cat "$OUT/nav2_goal_$name.log"
-    return 1
-  fi
-  if ! grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then
-    cat "$OUT/nav2_goal_$name.log"
-    return 1
-  fi
-  grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"
+  # 보행자 런에서는 좁은 복도 조우로 controller patience 가 초과돼 ABORTED 될 수 있다
+  # (동적 장애물은 수 초면 지나감). 실기 배달 로봇과 동일하게 goal 재요청으로 흡수한다.
+  # 결정적 smoke(보행자 0)는 재시도 0 회 -> 회귀를 가리지 않는다.
+  local retries="${NAV_GOAL_RETRIES:-0}"
+  local attempt
+  for attempt in $(seq 0 "$retries"); do
+    if (( attempt > 0 )); then
+      log "goal $name failed (attempt $attempt/$retries) -> retrying in 10s (waiting for dynamic obstacle to clear)"
+      sleep 10
+    fi
+    log "sending navigation goal $name"
+    if timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+      "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
+      >"$OUT/nav2_goal_$name.log" 2>&1 \
+      && grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then
+      grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"
+      return 0
+    fi
+  done
+  cat "$OUT/nav2_goal_$name.log"
+  return 1
+}
+
+set_costmap_footprint() {
+  # local/global costmap 의 footprint(string param)를 polygon 문자열로 교체.
+  # 주의: "[]" 는 ros2 param set 이 bool_array 로 파싱해 type error 로 무음 실패했던
+  # 이력이 있다(F2 엘베 갇힘 원인). 반드시 좌표 polygon 문자열만 넘길 것.
+  local tag="$1"
+  local polygon="$2"
+  local scope
+  for scope in local global; do
+    local logf="$OUT/footprint_${tag}_${scope}.log"
+    ros2 param set "/${scope}_costmap/${scope}_costmap" footprint "$polygon" >"$logf" 2>&1 || true
+    if ! grep -q "Set parameter successful" "$logf"; then
+      log "FOOTPRINT SET FAILED: tag=$tag scope=${scope}_costmap"
+      cat "$logf"
+      exit 1
+    fi
+  done
 }
 
 start_pedestrian() {
@@ -424,6 +490,11 @@ fi
 
 publish_initial_pose charge_station 1.6 0.0 0.0 1.0
 
+# bt_navigator 는 initialpose -> AMCL map->odom TF -> costmap activate 이후에야
+# active 가 된다. 그 전에 goal 을 보내면 "Goal was rejected" (시작 레이스, 2026-07-03).
+# 반드시 initialpose 발행 뒤에 대기할 것 — 앞에 두면 데드락.
+wait_for_lifecycle_active /bt_navigator 90
+
 if [[ "$WITH_PEDESTRIAN" == "1" ]]; then
   start_pedestrian
 fi
@@ -448,9 +519,11 @@ send_nav_goal f1_parcel_exit 5.0 -2.1 0.7071068 0.7071068 150
 # 택배 픽업 후 출고 -> 앞쪽으로 살짝 튀어나온 footprint 적용(택배 들고 가는 형상).
 # 앞 중앙만 0.40 으로 확장, 몸통 폭(±0.26)/후방(-0.18)은 유지해 엘리베이터 문(폭 1.0m) 통과 보장.
 PARCEL_FOOTPRINT="[[0.40,0.12],[0.40,-0.12],[0.27,-0.26],[-0.18,-0.26],[-0.18,0.26],[0.27,0.26]]"
+# 원복용 몸통 polygon (전방 확장 제거). robot_radius 0.28 원 대신 실제 몸통 사각형 —
+# "[]" 로 radius 복귀를 시도하면 type error 로 무음 실패한다(2026-07-03 엘베 갇힘).
+NORMAL_FOOTPRINT="[[0.27,0.26],[0.27,-0.26],[-0.18,-0.26],[-0.18,0.26]]"
 log "parcel loaded -> extend front footprint (carrying parcel)"
-ros2 param set /local_costmap/local_costmap footprint "$PARCEL_FOOTPRINT" >"$OUT/footprint_local.log" 2>&1 || true
-ros2 param set /global_costmap/global_costmap footprint "$PARCEL_FOOTPRINT" >"$OUT/footprint_global.log" 2>&1 || true
+set_costmap_footprint parcel "$PARCEL_FOOTPRINT"
 send_nav_goal f1_corridor_return 5.0 0.0 1.0 0.0 150
 send_nav_goal f1_elevator_entry 1.6 0.0 1.0 0.0 150
 send_nav_goal f1_elevator_inside 0.0 0.0 0.0 1.0 150
@@ -476,11 +549,10 @@ fi
 
 cat "$OUT/verify_world_swap_state.log"
 
-# F2 도착 후 택배 하역 완료로 간주 -> footprint 원복(robot_radius).
+# F2 도착 후 택배 하역 완료로 간주 -> footprint 몸통 원복.
 # 확장 footprint 유지 시 엘리베이터(문 1.0m)에서 빠져나오다 끼는 문제 방지.
 log "parcel delivered -> reset footprint to normal for F2"
-ros2 param set /local_costmap/local_costmap footprint "[]" >"$OUT/footprint_reset_local.log" 2>&1 || true
-ros2 param set /global_costmap/global_costmap footprint "[]" >"$OUT/footprint_reset_global.log" 2>&1 || true
+set_costmap_footprint reset "$NORMAL_FOOTPRINT"
 
 if [[ "$WITH_LOC_FAULT" == "1" ]]; then
   # F2 진입점 실제 ~(0,0). 0.5m 어긋난 initialpose 주입 -> AMCL/scan 매칭 보정 후에도

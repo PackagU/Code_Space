@@ -13,6 +13,7 @@ from gazebo_world_swap_pkg.swap_trigger import WorldSwapTrigger
 from gazebo_world_swap_pkg.world_model import (
     building_model_name,
     extract_building_spawn_xml,
+    extract_world_model_names,
     normalize_floor,
     world_path_for_floor,
 )
@@ -129,10 +130,19 @@ if ROS_AVAILABLE:
         def _start_model_swap(self, request):
             try:
                 source_model = building_model_name(request.source_floor)
-                target_world = world_path_for_floor(request.target_floor, self.world_dir)
-                target_xml = extract_building_spawn_xml(
-                    target_world, request.target_model
+                source_world = world_path_for_floor(
+                    request.source_floor, self.world_dir
                 )
+                target_world = world_path_for_floor(request.target_floor, self.world_dir)
+                # 건물뿐 아니라 층 전용 소품(parcel_box, obstacle_* 등)도 함께
+                # 지우고/생성한다 — 건물만 갈아끼우면 소품이 다른 층에 잔류한다.
+                delete_names = extract_world_model_names(source_world)
+                if source_model not in delete_names:
+                    delete_names.insert(0, source_model)
+                spawn_items = [
+                    (name, extract_building_spawn_xml(target_world, name))
+                    for name in extract_world_model_names(target_world)
+                ]
             except Exception as exc:
                 self._publish("failed", request, exc)
                 return
@@ -142,13 +152,16 @@ if ROS_AVAILABLE:
                 "step": "delete_wait_service",
                 "request": request,
                 "source_model": source_model,
-                "target_xml": target_xml,
+                "delete_names": delete_names,
+                "current_delete": "",
+                "spawn_items": spawn_items,
+                "current_spawn": "",
                 "deadline": time.monotonic() + timeout,
             }
             self._publish(
                 "deleting_source",
                 request,
-                f"delete {source_model}, then spawn {request.target_model}",
+                f"delete {', '.join(delete_names)}, then spawn {request.target_model}",
             )
 
         def _advance_effect(self):
@@ -160,9 +173,13 @@ if ROS_AVAILABLE:
             request = effect["request"]
 
             if step == "delete_wait_service":
+                if not effect["delete_names"]:
+                    self._start_spawn(effect)
+                    return
                 if self.delete_client.service_is_ready():
                     req = DeleteEntity.Request()
-                    req.name = effect["source_model"]
+                    req.name = effect["delete_names"].pop(0)
+                    effect["current_delete"] = req.name
                     effect.update(
                         step="delete_wait_response",
                         future=self.delete_client.call_async(req),
@@ -175,20 +192,40 @@ if ROS_AVAILABLE:
                 future = effect["future"]
                 if future.done():
                     result = future.result()
-                    if result is not None and result.success:
-                        self._start_spawn(effect)
-                    else:
+                    if result is None or not result.success:
                         detail = "delete_entity failed"
                         if result is not None:
                             detail = f"{detail}: {result.status_message}"
-                        self._fail_effect(detail)
+                        # 건물 삭제 실패는 치명(전환 불가). 소품은 이미 없을 수
+                        # 있으므로(수동 삭제 등) 경고만 남기고 계속 진행.
+                        if effect["current_delete"] == effect["source_model"]:
+                            self._fail_effect(detail)
+                            return
+                        self.get_logger().warning(
+                            f"prop {effect['current_delete']}: {detail}"
+                        )
+                    if effect["delete_names"]:
+                        timeout = float(
+                            self.get_parameter("service_wait_timeout_sec").value
+                        )
+                        effect.update(
+                            step="delete_wait_service",
+                            deadline=time.monotonic() + timeout,
+                        )
+                    else:
+                        self._start_spawn(effect)
                 return
 
             if step == "spawn_wait_service":
+                if not effect["spawn_items"]:
+                    self._finish_swap(effect)
+                    return
                 if self.spawn_client.service_is_ready():
+                    name, xml = effect["spawn_items"].pop(0)
+                    effect["current_spawn"] = name
                     req = SpawnEntity.Request()
-                    req.name = request.target_model
-                    req.xml = effect["target_xml"]
+                    req.name = name
+                    req.xml = xml
                     req.robot_namespace = ""
                     req.initial_pose = Pose()
                     req.reference_frame = "world"
@@ -204,18 +241,27 @@ if ROS_AVAILABLE:
                 future = effect["future"]
                 if future.done():
                     result = future.result()
-                    if result is not None and result.success:
-                        self._effect = None
-                        self._publish(
-                            "swapped",
-                            request,
-                            f"spawned {request.target_model}",
-                        )
-                    else:
+                    if result is None or not result.success:
                         detail = "spawn_entity failed"
                         if result is not None:
                             detail = f"{detail}: {result.status_message}"
-                        self._fail_effect(detail)
+                        # 건물 스폰 실패는 치명. 소품은 경고 후 계속.
+                        if effect["current_spawn"] == request.target_model:
+                            self._fail_effect(detail)
+                            return
+                        self.get_logger().warning(
+                            f"prop {effect['current_spawn']}: {detail}"
+                        )
+                    if effect["spawn_items"]:
+                        timeout = float(
+                            self.get_parameter("service_wait_timeout_sec").value
+                        )
+                        effect.update(
+                            step="spawn_wait_service",
+                            deadline=time.monotonic() + timeout,
+                        )
+                    else:
+                        self._finish_swap(effect)
 
         def _start_spawn(self, effect):
             timeout = float(self.get_parameter("service_wait_timeout_sec").value)
@@ -224,10 +270,20 @@ if ROS_AVAILABLE:
                 deadline=time.monotonic() + timeout,
                 future=None,
             )
+            names = ", ".join(name for name, _ in effect["spawn_items"])
             self._publish(
                 "spawning_target",
                 effect["request"],
-                f"spawn {effect['request'].target_model}",
+                f"spawn {names or effect['request'].target_model}",
+            )
+
+        def _finish_swap(self, effect):
+            request = effect["request"]
+            self._effect = None
+            self._publish(
+                "swapped",
+                request,
+                f"spawned {request.target_model}",
             )
 
         def _fail_effect(self, detail):

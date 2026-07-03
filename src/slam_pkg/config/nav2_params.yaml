@@ -117,7 +117,10 @@ controller_server:
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     # P1 graceful degradation: 부하로 제어가 잠깐 막혀도 바로 실패하지 않게 여유 확대.
-    failure_tolerance: 1.0
+    # 2026-07-03: 1.0 -> 45.0. 좁은 문(엘베 1.0m/택배 0.9m) 앞을 보행자가 지나는 동안
+    # RPP 가 collision ahead 예외를 던지는데 1초 만에 "patience exceeded" ABORTED 됐다.
+    # 보행자 순찰 주기(최대 ~34s)를 기다릴 수 있게 확대 — 사람 공존 환경 전제 튜닝.
+    failure_tolerance: 45.0
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
     controller_plugins: ["FollowPath"]
@@ -127,7 +130,9 @@ controller_server:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.5
       # P1: 부하 지터로 잠깐 느려져도 recovery spin 으로 안 빠지게 진행 판정 시간 확대.
-      movement_time_allowance: 30.0
+      # 2026-07-03: 30 -> 60. failure_tolerance 45s 대기 중 progress checker 가
+      # 먼저 발동해 recovery 로 빠지지 않게 대기 상한보다 길게 둔다.
+      movement_time_allowance: 60.0
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"

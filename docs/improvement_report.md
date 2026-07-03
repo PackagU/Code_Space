@@ -143,6 +143,11 @@
 > 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
 > 조치: smoke `WITH_F3=1` 옵션 신설 — F2 검증 후 엘베 복귀 → target_floor=F3 param → request_switch → F2→F3 world swap 검증(`kku_f3_building` present/`kku_f2` absent, map ready) → F3 복도 goal SUCCEEDED. 컨테이너 전체 체인(F1→F2→F3) exit 0 확인. 주의: F3 world/맵은 실측 전까지 F2 레이아웃 복제본(§1.8 연계).
 
+### 1.14 🟡 ✅ Smoke footprint 원복 무음 실패 — F2 엘베 갇힘
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: 원인 — F2 도착 후 footprint 원복 `ros2 param set ... footprint "[]"` 가 `[]` 를 bool_array 로 파싱해 type error 로 실패했는데 `|| true` 가 마스킹(초기 커밋부터 존재). 확장 footprint(전방 0.40m)가 유지된 채 엘베(문 1.0m)를 나오다 collision ahead → spin 회복 실패 → no valid path 로 갇힘(`WITH_PEDESTRIAN=1 WITH_F3=1` 런에서 발현 — 보행자 7명 set_entity_state 부하로 planner 20Hz→1Hz 저하가 방아쇠). 수정 — `set_costmap_footprint` 헬퍼 신설: 원복을 몸통 polygon 문자열로 교체하고 local/global 모두 "Set parameter successful" 확인, 실패 시 즉시 exit 1(무음 실패 차단). 후속 발견(같은 세션): (a) 보행자 7명×10Hz set_entity_state 부하로 엘베 정차가 벽에 붙어 탈출 불능 → pedestrians.py 5Hz 로 완화, (b) initialpose 유실 시 nav2 activation 데드락 → /amcl_pose 수신 확인 + 재발행, (c) bt_navigator active 前 goal 거부(시작 레이스) → lifecycle active 게이트(initialpose 뒤 배치 필수), (d) 좁은 문 앞 보행자 통과 대기 불가(failure_tolerance 1s) → 45s/움직임 판정 60s + 보행자 런 goal 재시도 2회. 검증 — `WITH_PEDESTRIAN=1 WITH_F3=1` 전체 체인(F1 픽업 7 goal + F1→F2→F3) exit 0, 전 goal SUCCEEDED(재시도 0회 소요), control_loop_missed_rate 20→4.
+
 ## Completed Improvements
 
 아직 없음 (완료 항목은 분기말에 이 절로 이동).
