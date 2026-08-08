@@ -87,6 +87,8 @@ docs/**
 !docs/simulation_test/**
 !docs/deployment/
 !docs/deployment/**
+!docs/superpowers/
+!docs/superpowers/**
 !docs/_style/
 !docs/_style/**
 !docs/.notion_sync.json
