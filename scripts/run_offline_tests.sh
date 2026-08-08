@@ -22,6 +22,7 @@ PY_TESTS=(
   scripts/test_opencr_protocol.py
   scripts/test_diff_drive_odometry.py
   scripts/test_opencr_bridge_dryrun.py
+  scripts/test_field_mapping_launch.py
   scripts/test_kku_navigation_launch.py
   scripts/check_portability.py
   test_workspace/elevator_mission/scripts/test_behaviors_dryrun.py
