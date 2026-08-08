@@ -1,24 +1,30 @@
 # Jetson Xavier NX 배포용 compose (GUI 없음, aarch64 이미지)
 # 사용: docker compose -f docker/compose/docker-compose.jetson.yml up -d
-# 사전: GHCR 로그인 + humble-jetson 이미지 pull 권한 (docs/deployment/ 참조)
+# 사전: (1) GHCR 로그인(read-only PAT) (2) sudo bash scripts/udev/install_udev_rules.sh
 services:
   ros2:
     image: ghcr.io/packagu/ros2-humble-slam:humble-jetson
     container_name: ros2_humble
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
     volumes:
       - ${PACKAGU_SRC:-../../src}:/ros2_ws/src:rw
       - ${PACKAGU_MAPS:-../../src/slam_pkg/maps}:/ros2_ws/maps:rw
       - ${PACKAGU_TEST_WORKSPACE:-../../test_workspace}:/ros2_ws/test_workspace:rw
       - ${PACKAGU_SCRIPTS:-../../scripts}:/ros2_ws/scripts:ro
+      - ${PACKAGU_LOGS:-../../logs}:/ros2_ws/logs:rw   # rosbag 영속화 (스펙 §6.3)
     network_mode: host
-    # privileged: 시리얼 장치 접근 + nav2 SCHED_RR RT 우선순위(chrt) 부여에 필요
-    privileged: true
+    # privileged 대신 최소 권한: 시리얼은 devices로, RT(chrt/SCHED_RR)는 SYS_NICE로.
+    # udev 별칭이 컨테이너에서 안 보이면 B-1 체크리스트의 'ls -l /dev/rplidar' 절차 참조.
+    # (문제 지속 시 임시 복구: privileged: true 재활성 — 사유를 세션 일지에 기록)
+    devices:
+      - /dev/rplidar:/dev/rplidar     # RPLiDAR A1m8
+      - /dev/opencr:/dev/opencr       # OpenCR 1.0
+      # - /dev/arm_servo:/dev/arm_servo   # R1A 벤치에서 udev 확정 후 해제
+      # - /dev/motor_nano:/dev/motor_nano
+    cap_add:
+      - SYS_NICE
     stdin_open: true
     tty: true
     restart: unless-stopped
-    # Jetson 에서 장치 경로 확인 후 주석 해제 (ls -l /dev/ttyUSB* /dev/ttyACM*)
-    # devices:
-    #   - /dev/ttyUSB0:/dev/ttyUSB0   # RPLiDAR A1m8
-    #   - /dev/ttyACM0:/dev/ttyACM0   # OpenCR 1.0
