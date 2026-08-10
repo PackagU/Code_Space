@@ -203,6 +203,9 @@
 - (b) **리프트 구동력 여유 없음**: URDF `lift_joint` effort=50N < 캐리어 0.5kg+적재 5kg=54N — 시뮬에서도 정격 하중을 못 들어올리는 값. 실물 모터도 54N+마찰 기준으로 산정할 것 (웜기어 자기유지로 정지 유지력은 무관).
 - (c) **적재물 상승 시 LiDAR 간섭**: 스캔면 z≈0.77m, 캐리어 최상단 z≈0.62m — **높이 15cm 넘는 적재물을 최고점까지 올리면 스캔면을 가려 SLAM/costmap 오염**. 적재물 높이 상한 규정 또는 "리프트 상승 중 주행 금지" 인터락(§1.7 상호배제와 동일 메커니즘)으로 처리.
 
-## Completed Improvements
+### 1.19 🟡 [80%] Code_Space GHCR publish 403 — 패키지가 옛 repo에만 연결
+
+> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-08-10
+> 진척: (a) 원인 확정 ✅ — GHCR 패키지 `ros2-humble-slam`이 `ros2-humble-slam-docker` repo에만 연결되어 Code_Space 워크플로우 GITHUB_TOKEN push가 403 (repo 이관 후 Code_Space publish-ghcr는 한 번도 성공한 적 없음, run 31289125731에서 최초 발현) / (b) 인터림 우회 ✅ — 옛 publish repo에 jetson 잡 동기화 후 그쪽 CI로 publish (Dockerfile 헤더에 명시된 기존 동기화 절차) / (c) 정식 해결 미착수 — **패키지 설정 Manage Actions access에 `PackagU/Code_Space`(Write) 추가** 후 Code_Space publish-ghcr 재검증, 이후 publish 경로 일원화 결정(회의).
 
 아직 없음 (완료 항목은 분기말에 이 절로 이동).
