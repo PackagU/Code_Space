@@ -244,16 +244,21 @@
        ============================================================ -->
 
   <!-- 바퀴 마찰 (없으면 헛바퀴) -->
-  <!-- ★SIM maxVel 0: 접촉 보정속도 주입 차단(무명령 활주 §1.22), mu 100: 슬립 방지 -->
+  <!-- ★SIM maxVel 0: 접촉 보정속도 주입 차단(무명령 활주 §1.22).
+       mu1 100 / mu2 1.0 방향 분리(2026-08-18, §1.25g): 활주는 구름 방향(mu1)이
+       지배해 100 유지 — mu 30 균일로 낮추자 활주 0.55m/90s 재발 실측.
+       전복은 횡방향 그립(mu2)이 지배 — 벽 접촉 회복기동에서 mu 100 그립 토크가
+       로봇을 90° 옆으로 뒤집는 사례 2회 실측(분산 run2). mu2=1.0 은 횡력 상한을
+       체중 1배로 캡해 전복 임계(~1.8배) 미달 → 물리적으로 side-flip 불가. -->
   <gazebo reference="left_wheel">
-    <mu1>100.0</mu1><mu2>100.0</mu2>
+    <mu1>100.0</mu1><mu2>1.0</mu2>
     <kp>1000000.0</kp><kd>100.0</kd>
     <minDepth>0.001</minDepth><maxVel>0.0</maxVel>
     <fdir1>1 0 0</fdir1>
     <material>Gazebo/Black</material>
   </gazebo>
   <gazebo reference="right_wheel">
-    <mu1>100.0</mu1><mu2>100.0</mu2>
+    <mu1>100.0</mu1><mu2>1.0</mu2>
     <kp>1000000.0</kp><kd>100.0</kd>
     <minDepth>0.001</minDepth><maxVel>0.0</maxVel>
     <fdir1>1 0 0</fdir1>
