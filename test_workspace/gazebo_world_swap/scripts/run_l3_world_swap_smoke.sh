@@ -322,6 +322,28 @@ set_orchestrator_target_floor() {
   return 1
 }
 
+request_floor_switch() {
+  # request_switch 호출 + half-hang 흡수(§1.23e): 응답 유실 시(서버는 armed 완료,
+  # rmw 'failed to send response' — 2026-08-17 데스크톱 반복 런 run_02 실측)
+  # orchestrator 로그의 armed 증거로 성공을 판정한다. 증거도 없으면 1회 재호출.
+  local floor="$1"
+  local logf="$OUT/request_switch_$(echo "$floor" | tr 'A-Z' 'a-z').log"
+  local attempt
+  for attempt in 1 2; do
+    if timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$logf" 2>&1; then
+      return 0
+    fi
+    if grep -q "auto floor switch armed: target=$floor" "$OUT/orchestrator.log" 2>/dev/null; then
+      log "request_switch($floor) response lost but server armed — continuing (§1.23e half-hang absorbed)"
+      return 0
+    fi
+    log "request_switch($floor) attempt $attempt/2 failed without armed evidence -> retry"
+  done
+  log "request_switch call failed/timed out: $floor"
+  cat "$logf"
+  return 1
+}
+
 align_robot_to_spawn() {
   # 층 전환 직후 로봇 실위치를 스폰(=orchestrator initialpose) 좌표 (0,0)으로 정렬.
   # elevator_inside goal 이 tolerance 한계(~0.5m 오프셋)로 성공한 채 전환되면 belief
@@ -640,11 +662,7 @@ start_bg world_swap ros2 launch gazebo_world_swap_pkg world_swap.launch.py metho
 
 log "arming floor switch"
 # timeout 없이는 CLI가 discovery 실패 시 무한 대기 (fastdds unicast peers 함정 — improvement_report §1.23)
-if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch.log" 2>&1; then
-  log "request_switch call failed/timed out"
-  cat "$OUT/request_switch.log"
-  exit 1
-fi
+request_floor_switch F2 || exit 1
 
 log "publishing F2 ARRIVED_OPEN elevator state"
 ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
@@ -692,11 +710,7 @@ if [[ "$WITH_F3" == "1" ]]; then
 
   log "arming F3 floor switch (target_floor param -> F3)"
   set_orchestrator_target_floor F3 || exit 1
-  if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f3.log" 2>&1; then
-    log "F3 request_switch call failed/timed out"
-    cat "$OUT/request_switch_f3.log"
-    exit 1
-  fi
+  request_floor_switch F3 || exit 1
 
   log "publishing F3 ARRIVED_OPEN elevator state"
   ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
@@ -729,11 +743,7 @@ if [[ "$WITH_RETURN" == "1" ]]; then
 
   log "arming F1 floor switch (target_floor param -> F1)"
   set_orchestrator_target_floor F1 || exit 1
-  if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f1.log" 2>&1; then
-    log "F1 request_switch call failed/timed out"
-    cat "$OUT/request_switch_f1.log"
-    exit 1
-  fi
+  request_floor_switch F1 || exit 1
 
   log "publishing F1 ARRIVED_OPEN elevator state"
   ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \

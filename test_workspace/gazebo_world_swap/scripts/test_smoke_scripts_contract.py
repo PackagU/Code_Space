@@ -72,6 +72,10 @@ def main():
     assert "verify_arm_sequence F1" in runner_text, "arm sequence F1 verification missing"
     assert "WITH_RETURN=1 과 WITH_F3=1" in runner_text, "WITH_RETURN/WITH_F3 mutual exclusion missing"
     assert "set_orchestrator_target_floor F1" in runner_text, "F1 target_floor helper call missing"
+    for floor in ("F1", "F2", "F3"):
+        assert f"request_floor_switch {floor}" in runner_text, (
+            f"{floor} request_switch must use half-hang-absorbing helper (§1.23e)"
+        )
     assert "set_orchestrator_target_floor F3" in runner_text, (
         "F3 target_floor must use timeout helper (bare 'ros2 param set' half-hang, §1.23e)"
     )
