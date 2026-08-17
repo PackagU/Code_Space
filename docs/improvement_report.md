@@ -224,14 +224,14 @@
 - (b) **결정**: gazebo11 소스 빌드(수 시간·고위험)는 손절. Jetson 포함 시뮬 검증은 **분산 구성** — 데스크톱 Gazebo(`scripts/run_sim_host.sh`) + Jetson 실전 스택(smoke `GAZEBO_REMOTE=1`). 절차: portability policy §4.5. 부수 효과: Jetson 부하 측정에서 Gazebo 오버헤드 제거(더 정확).
 - (c) **장기**: 신형 Gazebo(gz-sim)는 arm64 지원 — 시뮬 스택 이관은 별도 대형 과제로 회의 안건 (world/plugin/launch 전면 포팅 필요, 당장 불필요).
 
-### 1.22 🟡 시뮬 로봇 무명령 드리프트 — 대기 중 0.73cm/s 전진 미끄러짐
+### 1.22 🟡 ✅ 시뮬 로봇 무명령 드리프트 — 대기 중 0.3~0.7cm/s 전진 미끄러짐
 
-> 상태: 신규 · 담당: Lee(시뮬)/Han(URDF 물리) · 업데이트: 2026-08-17
+> 상태: ✅ done (URDF 물리 수정 + 실측 검증) · 담당: Lee · 완료: 2026-08-17
 
-- (a) **실측**: cmd_vel 발행자 0, RTF 0.99 상태에서 5초간 +3.7cm 전진 (분산 구성과 무관 — 명령 없이 바퀴 접촉 물리만으로 미끄러짐). 예전엔 기동 즉시 미션 시작이라 관찰된 적 없던 잠복 결함.
-- (b) **영향**: 미션 중엔 Nav2 능동 제어 + AMCL 보정으로 무해. **대기 시간이 길면** initialpose(charge_station)와 실위치가 어긋남 — 운용 수칙: Gazebo 기동/리셋 후 즉시 smoke 시작 (1분 내 오차 ≤0.5m — WITH_LOC_FAULT 검증 범위).
-- (c) **수리 방향**: URDF 바퀴/캐스터 접촉 파라미터(kp/kd·마찰·관성) 점검 — §1.15 실물 접지 문제와 같은 뿌리. Han의 Fusion 반영 시 함께 정리.
-- (d) **실기 시사점**: 좀비 노드 잔류 속도로 로봇이 계속 주행한 사례도 이번에 재현됨 — 시뮬 diff_drive엔 cmd_vel timeout이 없음. 실기 OpenCR 브리지의 0.5s watchdog 정책이 옳았다는 방증, Gazebo 쪽도 diff_drive `cmd_vel_timeout` 설정 검토.
+- (a) **실측**: cmd_vel 발행자 0, RTF 0.99 상태에서 0.3~0.7cm/s 지속 활주 (분산 구성과 무관 — 명령 없이 접촉 물리만으로 미끄러짐).
+- (b) **영향 (최초 판단 정정)**: "미션 중엔 무해"는 **오판**이었다. goal 사이 정지 구간마다 몸체가 미끄러지는데 **바퀴가 안 구르는 활주라 odom이 정지로 인식** → AMCL 갱신 트리거(odom 이동량) 자체가 없어 belief 동결 → 실위치·belief 간극이 누적 → 스캔의 실제 벽이 belief 좌표계에서 로봇 발밑에 그려짐 → `Starting point in lethal space` + 회복행동 전부 `Collision Ahead` → **미션 ABORT** (F1 pickup에서 2회 재현, 1.2m 간극 실측).
+- (c) **수정 (검증 완료)**: `delivery_robot.urdf.xacro` — 바퀴 조인트 `dynamics damping 0.05/friction 0.3` (수동 활주 제동, max_wheel_torque 40 대비 무시 가능) + 바퀴/캐스터 접촉 `maxVel 1.0→0.0` (솔버 보정속도 주입 차단) + 바퀴 `mu 1.0→100` (슬립 방지). **A/B 실측: 30초당 8.6cm → 90초당 2.4mm (약 1/100).**
+- (d) **실기 시사점**: 좀비 노드 잔류 속도로 로봇이 계속 주행한 사례도 재현됨 — 시뮬 diff_drive엔 cmd_vel timeout이 없음. 실기 OpenCR 브리지의 0.5s watchdog 정책이 옳았다는 방증, Gazebo 쪽도 diff_drive `cmd_vel_timeout` 설정 검토(잔여 과제). 실물 바퀴/접지 검토는 §1.15에서 Han과 계속.
 
 ### 1.23 🟡 ✅ Fast DDS unicast peers 함정 — 같은 호스트 late-participant 상호 발견 불가
 
