@@ -49,8 +49,10 @@ def main():
 
     # --- 회귀 보호: 새 gated 옵션이 유지되고 기본값이 결정적인지 확인 ---
     for opt in ("WITH_PEDESTRIAN", "WITH_RECOVERY", "WITH_LOC_FAULT", "WITH_PROFILE",
-                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3"):
+                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3", "WITH_ARM"):
         assert f'{opt}="${{{opt}:-0}}"' in runner_text, f"{opt} default must be 0 (deterministic)"
+    assert "verify_arm_sequence F2" in runner_text, "arm sequence F2 verification missing"
+    assert "verify_arm_sequence F3" in runner_text, "arm sequence F3 verification missing"
     assert "--floor F3 --from-floor F2" in runner_text, "F3 hop verification missing"
     assert "expect_nav_abort unreachable" in runner_text, "recovery check missing"
     assert "inject_wrong_initialpose" in runner_text, "localization fault hook missing"

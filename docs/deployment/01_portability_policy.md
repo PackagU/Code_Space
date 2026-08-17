@@ -30,12 +30,13 @@
 |------|------|--------|------|
 | `ghcr.io/packagu/ros2-humble-slam:humble` | 개발 (amd64) | `osrf/ros:humble-desktop-full` | Gazebo, RViz, Nav2, SLAM Toolbox |
 | `ghcr.io/packagu/ros2-humble-slam:humble-jetson` | 실기 (aarch64) | `ros:humble-ros-base` | Nav2, SLAM Toolbox, rplidar (GUI 제외) |
+| `...:humble-jetson-sim` (로컬 전용) | Jetson 시뮬 부하테스트 | `humble-jetson` | + gzserver (§4.5, publish 금지) |
 
 원칙:
 
 - 정의는 `docker/`가 SSOT. 두 Dockerfile의 공통 패키지 목록이 어긋나지 않게 함께 수정한다.
 - SLAM/Nav2는 CPU 스택이므로 CUDA/L4T 베이스가 필요 없다. GPU가 필요해지는 시점(예: 카메라 추론)에 별도 태그로 분리한다.
-- 시뮬 전용 의존(Gazebo)은 Jetson 이미지에 절대 넣지 않는다.
+- 시뮬 전용 의존(Gazebo)은 실기 이미지(`humble-jetson`)에 절대 넣지 않는다. Jetson 위 시뮬 검증이 필요하면 별도 태그 `humble-jetson-sim`(로컬 빌드 전용, §4.5)을 쓰고, 검증 후 이미지를 삭제해 실기 환경을 원상 복구한다.
 
 ## 4. Jetson 배포 절차 (원커맨드 지향)
 
@@ -88,6 +89,33 @@ bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh   # 컨
 ```
 
 CI(`.github/workflows/check.yml`)는 이 중 오프라인 검사를 PR마다 자동 실행한다.
+
+### 4.5 Jetson 단독 시뮬 부하테스트 (테스트 전용)
+
+Gazebo 미션(world swap + 층 전환 + 로봇팔 시퀀스)을 Jetson 위에서 그대로 돌려 부하를 재는 절차.
+측정값은 Gazebo 오버헤드가 포함된 보수(worst-case) 값으로 해석한다. 실전 전환 시 Gazebo 자리는
+실센서(rplidar, 오도메트리)가 대체하며 Nav2/오케스트레이터/미션/팔 스택은 무수정.
+
+```bash
+# Jetson에서 (1회) 시뮬 이미지 로컬 빌드 — GHCR publish 금지
+docker build -f docker/Dockerfile.jetson-sim -t ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim docker/
+
+# 시뮬 이미지로 컨테이너 기동
+docker compose -f docker/compose/docker-compose.jetson.yml down
+PACKAGU_JETSON_IMAGE=ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim \
+  docker compose -f docker/compose/docker-compose.jetson.yml up -d
+
+# 컨테이너 안: 미션 + 로봇팔 + 부하 프로파일 원커맨드
+WITH_ARM=1 WITH_PROFILE=1 WITH_F3=1 bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh
+# 실서보 연결 시(udev 확정 후): ARM_SERIAL_PORT=/dev/arm_servo 추가
+
+# 검증 후 원상 복구 (Gazebo 완전 삭제)
+docker compose -f docker/compose/docker-compose.jetson.yml down
+docker compose -f docker/compose/docker-compose.jetson.yml up -d
+docker rmi ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim
+```
+
+통과 기준은 §4.3과 동일 + `WITH_ARM` 검증(층 전환마다 팔 시퀀스 시작·완료 로그).
 
 ## 5. 새 코드 작성 시 체크리스트
 

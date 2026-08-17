@@ -38,6 +38,13 @@ WITH_RT_PRIORITY="${WITH_RT_PRIORITY:-0}"
 # 엘베 복귀 -> target_floor=F3 param set(레거시 SwitchFloor 와 동일 계약) ->
 # request_switch -> ARRIVED_OPEN -> F3 world/map 검증 -> F3 복도 goal. 기본 0.
 WITH_F3="${WITH_F3:-0}"
+# 로봇팔 통합 옵션. 기본 off -> 결정적 smoke 유지.
+# WITH_ARM=1 이면 robot_arm_pkg arm_sequence 노드를 띄워, 층 전환 완료(phase=ready)마다
+# 하드코딩 버튼 시퀀스(50Hz JointState)가 시작·완료되는지 로그로 검증한다
+# (Jetson 시뮬 부하테스트 + 실서보 통합용). ARM_SERIAL_PORT 지정 시 실서보로도 전송
+# (예: /dev/arm_servo, 기본 빈 값=토픽 전용).
+WITH_ARM="${WITH_ARM:-0}"
+ARM_SERIAL_PORT="${ARM_SERIAL_PORT:-}"
 # nav goal 재시도 횟수. 보행자 런 기본 2(조우로 인한 일시 ABORTED 흡수),
 # 결정적 smoke 기본 0(회귀를 재시도로 가리지 않기). 명시 설정이 우선.
 if [[ -z "${NAV_GOAL_RETRIES:-}" ]]; then
@@ -182,6 +189,27 @@ start_bg() {
   log "starting $name"
   "$@" >"$OUT/$name.log" 2>&1 &
   PIDS+=("$!")
+}
+
+verify_arm_sequence() {
+  # 층 전환 후 팔 버튼 시퀀스가 시작(해당 층 트리거)·완료됐는지 노드 로그로 확인한다.
+  local floor="$1"
+  local timeout_sec="$2"
+  local min_complete="${3:-1}"
+  local end=$((SECONDS + timeout_sec))
+  while true; do
+    if grep -q "버튼 시퀀스 시작 ($floor)" "$OUT/arm_sequence.log" 2>/dev/null \
+      && [[ "$(grep -c "버튼 시퀀스 완료" "$OUT/arm_sequence.log" 2>/dev/null)" -ge "$min_complete" ]]; then
+      log "ARM PASS: $floor 버튼 시퀀스 시작+완료 확인"
+      return 0
+    fi
+    if (( SECONDS >= end )); then
+      log "ARM FAIL: $floor 버튼 시퀀스 로그 미확인 (${timeout_sec}s)"
+      cat "$OUT/arm_sequence.log" 2>/dev/null || true
+      return 1
+    fi
+    sleep 2
+  done
 }
 
 publish_initial_pose() {
@@ -528,6 +556,12 @@ send_nav_goal f1_corridor_return 5.0 0.0 1.0 0.0 150
 send_nav_goal f1_elevator_entry 1.6 0.0 1.0 0.0 150
 send_nav_goal f1_elevator_inside 0.0 0.0 0.0 1.0 150
 
+if [[ "$WITH_ARM" == "1" ]]; then
+  # 층 전환 신호를 놓치지 않도록 orchestrator 보다 먼저 구독을 시작한다.
+  start_bg arm_sequence ros2 run robot_arm_pkg arm_sequence --ros-args \
+    -p use_sim_time:=true -p serial_port:="$ARM_SERIAL_PORT"
+fi
+
 start_bg orchestrator ros2 launch auto_floor_orchestrator_pkg auto_floor_orchestrator.launch.py dry_run_map_load:=false target_floor:=F2 use_sim_time:=true
 wait_for_service /floor_orchestrator/request_switch 30
 start_bg world_swap ros2 launch gazebo_world_swap_pkg world_swap.launch.py method:=model_swap initial_floor:=F1 use_sim_time:=true
@@ -548,6 +582,11 @@ if ! python3 "$WORKSPACE/scripts/verify_world_swap_state.py" --timeout-sec 90 \
 fi
 
 cat "$OUT/verify_world_swap_state.log"
+
+if [[ "$WITH_ARM" == "1" ]]; then
+  # 시퀀스 13s(sim time) + Jetson RTF 저하 여유 -> 90s wall clock.
+  verify_arm_sequence F2 90 1 || exit 1
+fi
 
 # F2 도착 후 택배 하역 완료로 간주 -> footprint 몸통 원복.
 # 확장 footprint 유지 시 엘리베이터(문 1.0m)에서 빠져나오다 끼는 문제 방지.
@@ -589,6 +628,10 @@ if [[ "$WITH_F3" == "1" ]]; then
     exit 1
   fi
   cat "$OUT/verify_world_swap_state_f3.log"
+
+  if [[ "$WITH_ARM" == "1" ]]; then
+    verify_arm_sequence F3 90 2 || exit 1
+  fi
 
   log "sending F3 corridor navigation goal"
   send_nav_goal f3_corridor 2.5 12.0 0.0 1.0 150

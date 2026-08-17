@@ -1,0 +1,30 @@
+# PackagU Jetson 시뮬 부하테스트 전용 이미지 (humble-jetson + gzserver)
+#
+# 목적: Gazebo 시뮬 미션(world swap + 엘베 층 전환 + 로봇팔 시퀀스)을 Jetson 위에서
+#       단독 실행하며 부하를 측정하기 위한 **테스트 전용** 변형.
+#
+# 정책 주의 (docs/deployment/01_portability_policy.md §3):
+# - 프로덕션 이미지(humble-jetson)에는 Gazebo 를 넣지 않는다 — 이 파일은 별도 태그 전용.
+# - GHCR publish 금지: Jetson 에서 로컬 빌드해서만 쓴다.
+# - 이 이미지로 측정한 부하는 Gazebo 오버헤드가 포함된 보수(worst-case) 측정으로 해석한다.
+#
+# 빌드 (Jetson 에서 네이티브, repo 루트 기준):
+#   docker build -f docker/Dockerfile.jetson-sim \
+#     -t ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim docker/
+# 실행 (Jetson):
+#   PACKAGU_JETSON_IMAGE=ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim \
+#     docker compose -f docker/compose/docker-compose.jetson.yml up -d
+# 정리 (시뮬 검증 끝난 뒤 프로덕션 복귀):
+#   docker compose -f docker/compose/docker-compose.jetson.yml down
+#   docker compose -f docker/compose/docker-compose.jetson.yml up -d   # 기본 이미지로 복귀
+#   docker rmi ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim     # Gazebo 완전 삭제
+ARG BASE_IMAGE=ghcr.io/packagu/ros2-humble-slam:humble-jetson
+FROM ${BASE_IMAGE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+LABEL org.opencontainers.image.description="PackagU Jetson sim-load-test image (humble-jetson + gzserver, test-only, do not publish)"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-gazebo-ros-pkgs \
+    && rm -rf /var/lib/apt/lists/*
