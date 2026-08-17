@@ -115,22 +115,27 @@ docker restart ros2_humble
 GAZEBO_GUI=true bash scripts/run_sim_host.sh F1
 
 # [2] Jetson smoke 원커맨드 (호스트에서 실행 — nohup 이라 SSH 끊겨도 계속 돈다)
-docker exec ros2_humble bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml && ros2 daemon stop >/dev/null 2>&1; cd /ros2_ws && GAZEBO_REMOTE=1 WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo WITH_PROFILE=1 WITH_F3=1 NAV_GOAL_RETRIES=1 nohup bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh > /ros2_ws/logs/smoke_run.log 2>&1 & sleep 3; tail -3 /ros2_ws/logs/smoke_run.log"
+#     왕복 배달 체인(현행 표준): WITH_RETURN=1. 실물 팔 장착 시 ARM_SERIAL_PORT=/dev/arm_servo 추가.
+docker exec ros2_humble bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml && ros2 daemon stop >/dev/null 2>&1; cd /ros2_ws && GAZEBO_REMOTE=1 WITH_RETURN=1 WITH_PEDESTRIAN=1 WITH_ARM=1 WITH_PROFILE=1 NAV_GOAL_RETRIES=2 nohup bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh > /ros2_ws/logs/smoke_run.log 2>&1 & sleep 3; tail -3 /ros2_ws/logs/smoke_run.log"
 
 # [3] 진행 관찰 (Jetson)
 docker exec ros2_humble tail -f /ros2_ws/logs/smoke_run.log
 ```
 
-`NAV_GOAL_RETRIES=1` 은 분산 구성 권장값 — 일시적 discovery/보행자 실패 1회를 흡수한다
-(데스크톱 단독 결정적 회귀 검증에서는 기본 0 유지).
+`NAV_GOAL_RETRIES=2` 는 분산+보행자 구성 권장값 — 데스크톱 10회 연속 검증과 동일 조건
+(2026-08-18 확정: retries=1 은 보행자 조우 2연속이면 즉사). 재시도 시 스모크가
+costmap 클리어 + belief 드리프트 재정위(>0.3m, 시뮬 오라클)를 자동 수행한다.
+데스크톱 단독 결정적 회귀 검증에서는 기본 0 유지.
 
-성공 판정 (2026-08-17 실측 기대값):
+성공 판정 (2026-08-18 왕복 체인 실측 기대값):
 
-- F1 7 goal SUCCEEDED → `ARM PASS: F2` → f2_corridor SUCCEEDED → `ARM PASS: F3` → f3_corridor SUCCEEDED
-- `PASS world swap smoke` (F3: kku_f3_building present / kku_f2_building absent / scan finite)
+- F1 7 goal SUCCEEDED → `ARM PASS: F2` → f2_corridor SUCCEEDED → f2_elevator_inside →
+  F2→F1 역전환 `PASS world swap smoke` → `ARM PASS: F1`(완료 누계 2) → f1_charge_station SUCCEEDED
 - 아티팩트: `verification/run_<ts>/` — `profile/resource_summary.txt`(기준: cpu_pct_peak < 600%),
   `control_metrics.txt`(missed/TF 외삽 횟수 기록 — 임계는 실기 기준 수립 후 `MAX_MISSED_RATE` 로 게이트)
-- 기준 실측치: cpu_peak 77.6% / avg 19% / mem 2.5GB (여유 큼)
+- 기준 실측치(왕복): cpu_peak 67~78% / mem 2.4~2.5GB (여유 큼)
+- 데스크톱 단독 반복 기준: `REPEAT_N=10 bash .../run_roundtrip_repeat.sh` — 10/10 연속 PASS
+  (2026-08-17 실증, repeat_summary.md 자동 집계)
 
 주의사항 (실측으로 확정):
 
