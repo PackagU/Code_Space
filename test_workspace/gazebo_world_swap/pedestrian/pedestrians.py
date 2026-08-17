@@ -89,7 +89,9 @@ class Pedestrians(Node):
         self.state_cli = self.create_client(SetEntityState, "/gazebo/set_entity_state")
         # set_entity_state 실패 누적 감지: call_async 결과가 조용히 실패하면 보행자가
         # 통로 한가운데 프리즈된 채 정지 장애물이 된다(2026-08-17 run_05 유력 가설, §1.25).
+        # 응답이 아예 안 오는(콜백 미발화) 모드도 잡기 위해 마지막 성공 시각을 추적한다.
         self._set_fail = 0
+        self._last_ok = self.get_clock().now()
         self.get_logger().info("waiting for /spawn_entity, /gazebo/set_entity_state...")
         self.spawn_cli.wait_for_service()
         self.state_cli.wait_for_service()
@@ -179,6 +181,7 @@ class Pedestrians(Node):
             ok = False
         if ok:
             self._set_fail = 0
+            self._last_ok = self.get_clock().now()
             return
         self._set_fail += 1
         if self._set_fail % 25 == 1:
@@ -210,6 +213,15 @@ class Pedestrians(Node):
             x = clamp(x, *ped["xr"])
             y = clamp(y, *ped["yr"])
             self._set_state(ped["name"], x, y, yaw)
+        # 무응답 프리즈 감지: walking 보행자가 있는데 5초 이상 성공 응답이 없으면
+        # Gazebo 쪽 정체 — 보행자가 마지막 위치에 정지 장애물로 굳는다(§1.25).
+        if any(p["state"] == "walking" for p in self.peds):
+            stale_s = (self.get_clock().now() - self._last_ok).nanoseconds / 1e9
+            if stale_s > 5.0:
+                self.get_logger().error(
+                    f"set_entity_state 성공 응답 {stale_s:.1f}s 부재 — 보행자 프리즈 의심(§1.25)",
+                    throttle_duration_sec=5.0,
+                )
 
 
 def main():

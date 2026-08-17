@@ -261,5 +261,7 @@
 - (b) **가설 2개 (사후 로그로 판별 불가)**: ① 보행자 `set_entity_state` call_async 결과 미확인 → 조용한 실패 누적 시 보행자가 통로에 프리즈(450s+ 정지 장애물과 정합) ② 떠난 장애물의 stale lethal 마크 잔존.
 - (c) **완화 (적용)**: send_nav_goal 재시도 전 양쪽 costmap 클리어(② 대응) + pedestrians.py에 set_entity_state 실패 누적 감지 ERROR 로그(① 재현 시 즉시 판별).
 - (d) **후속**: 반복 런에서 재발 시 pedestrians 로그의 실패 누적 여부로 가설 확정 → ①이면 동기 재시도/큐 제한, ②면 costmap 파라미터(observation persistence) 튜닝.
+- (e) **2차 재현 (3차 반복 런 run_08, F1 alcove 출구)**: f1_parcel_pickup 재시도 후 f1_parcel_exit 376s 연속 collision-ahead. 프리즈 감지 로그 침묵 + costmap 클리어 무효 → 유력 가설 재편: **좁은 alcove 재시도/회복기동으로 AMCL belief 오프셋 → 잘못된 좌표계에 스캔 벽이 문 위에 재마킹되는 자기강화 봉쇄**(클리어해도 즉시 재마킹 — 관측 정합). 단, 기존 감지기는 무응답(콜백 미발화) 모드를 못 잡는 맹점 확인.
+- (f) **완화 2차 (적용)**: ① 픽업 도킹 재정위 — pickup 성공 직후 알려진 도킹 좌표로 initialpose 재발행(실기 도킹 재정위와 동일 패턴) ② 실패 시 `dump_world_state` 스냅샷(전 모델 참값 pose + AMCL belief) — 다음 재현에서 가설 확정 가능 ③ 프리즈 감지 v2(무응답 timeout 기반).
 
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

@@ -268,6 +268,7 @@ send_nav_goal() {
   for attempt in $(seq 0 "$retries"); do
     if (( attempt > 0 )); then
       log "goal $name failed (attempt $attempt/$retries) -> clearing costmaps + retrying in 10s (waiting for dynamic obstacle to clear)"
+      dump_world_state "${name}_a${attempt}"
       # 떠난 장애물의 stale lethal 마크가 통로를 계속 봉쇄하는 사례 대응
       # (2026-08-17 반복 런 run_05: F2 엘베 출구 450s collision-ahead — §1.25).
       local clear_svc
@@ -285,6 +286,7 @@ send_nav_goal() {
       return 0
     fi
   done
+  dump_world_state "${name}_final"
   cat "$OUT/nav2_goal_$name.log"
   return 1
 }
@@ -311,6 +313,26 @@ set_costmap_footprint() {
       exit 1
     fi
   done
+}
+
+dump_world_state() {
+  # 실패 시점 시뮬 참값 스냅샷(§1.25 산발 봉쇄 원인 판별): 전체 모델 pose + AMCL belief.
+  local tag="$1"
+  local logf="$OUT/world_state_${tag}.log"
+  {
+    echo "== world state snapshot: $tag =="
+    local models m
+    models=$(timeout 15 ros2 service call /get_model_list gazebo_msgs/srv/GetModelList "{}" 2>/dev/null \
+      | grep -oP "model_names=\[\K[^]]*" | tr -d "' " | tr ',' ' ') || true
+    for m in $models; do
+      printf '%s ' "$m"
+      timeout 10 ros2 service call /gazebo/get_entity_state gazebo_msgs/srv/GetEntityState "{name: '$m'}" 2>/dev/null \
+        | grep -oP "position=geometry_msgs\.msg\.Point\(\K x?=?[-0-9.e]+, y=[-0-9.e]+" | head -1 || echo "?"
+    done
+    echo "-- amcl belief --"
+    timeout 10 bash -c "ros2 topic echo --once /amcl_pose | head -20" 2>/dev/null || echo "amcl_pose unavailable"
+  } >"$logf" 2>&1 || true
+  log "world state snapshot saved: world_state_${tag}.log"
 }
 
 set_orchestrator_target_floor() {
@@ -635,6 +657,12 @@ log "running F1 pickup route from charge station"
 send_nav_goal f1_parcel_corridor 5.0 0.0 0.0 1.0 150
 send_nav_goal f1_parcel_storage 5.0 -2.1 -0.7071068 0.7071068 150
 send_nav_goal f1_parcel_pickup 5.0 -3.4 -0.7071068 0.7071068 150
+
+# 도킹 재정위: 좁은 alcove에서 재시도/회복기동을 거치면 AMCL belief가 틀어질 수 있고,
+# 그 상태로 출구를 향하면 스캔 벽이 문 위에 마킹돼 자기강화 봉쇄가 된다(§1.25 run_08,
+# 376s collision-ahead). 픽업 지점은 좌표가 알려진 도킹 지점이므로 실기와 동일하게
+# 여기서 initialpose 를 재발행해 belief 를 재정박한다.
+publish_initial_pose parcel_dock 5.0 -3.4 -0.7071068 0.7071068
 
 log "returning to F1 elevator for floor transfer"
 send_nav_goal f1_parcel_exit 5.0 -2.1 0.7071068 0.7071068 150
