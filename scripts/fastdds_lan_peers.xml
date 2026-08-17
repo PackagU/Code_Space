@@ -3,12 +3,23 @@
      Wi-Fi AP가 멀티캐스트 discovery를 막을 때 양쪽 머신에서
      FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml 로 지정.
      자기 자신 IP가 목록에 있어도 무해하므로 한 파일을 양쪽에서 공용한다.
-     IP 변경 시 두 항목만 갱신 (데스크톱 192.168.0.4 / Jetson 192.168.0.6). -->
+     주 경로: 유선 직결 10.42.0.1(데스크톱)/10.42.0.250(Jetson) — NM jetson-link 공유 모드.
+     예비: Wi-Fi 192.168.0.4/192.168.0.6 (Jetson Wi-Fi는 DDS 부하 시 불안정 — §1.22 참조). -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <participant profile_name="packagu_lan_peers" is_default_profile="true">
     <rtps>
       <builtin>
         <initialPeersList>
+          <locator>
+            <udpv4>
+              <address>10.42.0.1</address>
+            </udpv4>
+          </locator>
+          <locator>
+            <udpv4>
+              <address>10.42.0.250</address>
+            </udpv4>
+          </locator>
           <locator>
             <udpv4>
               <address>192.168.0.4</address>
