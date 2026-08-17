@@ -53,6 +53,14 @@ WITH_F3="${WITH_F3:-0}"
 # (예: /dev/arm_servo, 기본 빈 값=토픽 전용).
 WITH_ARM="${WITH_ARM:-0}"
 ARM_SERIAL_PORT="${ARM_SERIAL_PORT:-}"
+# 왕복 배달 옵션. WITH_RETURN=1 이면 F2 배달(f2_corridor) 후 엘베로 복귀해
+# F2->F1 역전환 -> F1 충전소 복귀까지 수행한다(한 층 왕복 완성 체인).
+# 기본 0 -> 기존 결정적 smoke 유지. WITH_F3 와 동시 사용 금지(왕복은 F1<->F2 전용).
+WITH_RETURN="${WITH_RETURN:-0}"
+if [[ "$WITH_RETURN" == "1" && "$WITH_F3" == "1" ]]; then
+  echo "error: WITH_RETURN=1 과 WITH_F3=1 은 동시 사용 불가 (왕복은 F1<->F2 전용)" >&2
+  exit 1
+fi
 # nav goal 재시도 횟수. 보행자 런 기본 2(조우로 인한 일시 ABORTED 흡수),
 # 결정적 smoke 기본 0(회귀를 재시도로 가리지 않기). 명시 설정이 우선.
 if [[ -z "${NAV_GOAL_RETRIES:-}" ]]; then
@@ -128,6 +136,7 @@ cleanup_stale() {
   kill_matching "robot_state_publisher"
   kill_matching "spawn_entity.py"
   kill_matching "pedestrians.py"
+  kill_matching "arm_sequence"
   kill_matching "profile_resources.sh"
   kill_matching "gzserver"
   kill_matching "gzclient"
@@ -298,6 +307,21 @@ set_costmap_footprint() {
   done
 }
 
+set_orchestrator_target_floor() {
+  # target_floor param set 을 timeout+재시도로 감싼다 (로컬 CLI half-hang 흡수 — §1.23e).
+  local floor="$1"
+  local logf="$OUT/param_target_$(echo "$floor" | tr 'A-Z' 'a-z').log"
+  local attempt
+  for attempt in 1 2 3; do
+    timeout 30 ros2 param set /floor_orchestrator_node target_floor "$floor" >"$logf" 2>&1 || true
+    if grep -q "Set parameter successful" "$logf"; then return 0; fi
+    log "target_floor set retry: floor=$floor attempt=$attempt/3"
+  done
+  log "TARGET FLOOR SET FAILED: $floor"
+  cat "$logf"
+  return 1
+}
+
 align_robot_to_spawn() {
   # 층 전환 직후 로봇 실위치를 스폰(=orchestrator initialpose) 좌표 (0,0)으로 정렬.
   # elevator_inside goal 이 tolerance 한계(~0.5m 오프셋)로 성공한 채 전환되면 belief
@@ -427,6 +451,7 @@ finalize_artifacts() {
     echo "- WITH_PROFILE: $WITH_PROFILE"
     echo "- WITH_STRESS: $WITH_STRESS"
     echo "- WITH_RT_PRIORITY: $WITH_RT_PRIORITY"
+    echo "- WITH_RETURN: $WITH_RETURN"
     echo
     echo "## nav goals"
     echo
@@ -657,7 +682,7 @@ if [[ "$WITH_F3" == "1" ]]; then
   send_nav_goal f2_elevator_inside 0.0 0.0 0.0 1.0 150
 
   log "arming F3 floor switch (target_floor param -> F3)"
-  ros2 param set /floor_orchestrator_node target_floor F3 >"$OUT/param_target_f3.log" 2>&1
+  set_orchestrator_target_floor F3 || exit 1
   if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f3.log" 2>&1; then
     log "F3 request_switch call failed/timed out"
     cat "$OUT/request_switch_f3.log"
@@ -684,6 +709,44 @@ if [[ "$WITH_F3" == "1" ]]; then
   align_robot_to_spawn F3
   log "sending F3 corridor navigation goal"
   send_nav_goal f3_corridor 2.5 12.0 0.0 1.0 150
+fi
+
+if [[ "$WITH_RETURN" == "1" ]]; then
+  # 왕복 복귀: F2 배달 완료 -> 엘베 -> F2->F1 역전환 -> 로비 -> 충전소 대기.
+  # 역방향 전환은 orchestrator/world-swap 이 방향 무관이라 기존 경로 그대로 재사용
+  # (swap_trigger: current_floor != last_floor 이면 스왑, floor_maps.yaml F1 시딩 존재).
+  log "returning to F2 elevator for F1 transfer (roundtrip)"
+  send_nav_goal f2_elevator_inside 0.0 0.0 0.0 1.0 150
+
+  log "arming F1 floor switch (target_floor param -> F1)"
+  set_orchestrator_target_floor F1 || exit 1
+  if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f1.log" 2>&1; then
+    log "F1 request_switch call failed/timed out"
+    cat "$OUT/request_switch_f1.log"
+    exit 1
+  fi
+
+  log "publishing F1 ARRIVED_OPEN elevator state"
+  ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
+    "{data: '{\"current_floor\":\"F1\",\"target_floor\":\"F1\",\"door_state\":\"open\",\"state\":\"ARRIVED_OPEN\"}'}" \
+    >"$OUT/elevator_state_pub_f1.log" 2>&1
+
+  log "verifying F2 -> F1 map, world entity, status, and scan"
+  if ! python3 "$WORKSPACE/scripts/verify_world_swap_state.py" --timeout-sec 90 \
+    --floor F1 --from-floor F2 >"$OUT/verify_world_swap_state_f1.log" 2>&1; then
+    cat "$OUT/verify_world_swap_state_f1.log"
+    exit 1
+  fi
+  cat "$OUT/verify_world_swap_state_f1.log"
+
+  if [[ "$WITH_ARM" == "1" ]]; then
+    # 왕복 팔 완료 누계: F2 전환 1회 + F1 복귀 1회 = 2회.
+    verify_arm_sequence F1 90 2 || exit 1
+  fi
+
+  align_robot_to_spawn F1
+  log "sending F1 charge station return goal (roundtrip complete)"
+  send_nav_goal f1_charge_station 1.6 0.0 0.0 1.0 150
 fi
 
 finalize_artifacts

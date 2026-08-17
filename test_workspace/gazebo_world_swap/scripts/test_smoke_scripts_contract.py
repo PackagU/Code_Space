@@ -49,7 +49,7 @@ def main():
 
     # --- 회귀 보호: 새 gated 옵션이 유지되고 기본값이 결정적인지 확인 ---
     for opt in ("WITH_PEDESTRIAN", "WITH_RECOVERY", "WITH_LOC_FAULT", "WITH_PROFILE",
-                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3", "WITH_ARM"):
+                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3", "WITH_ARM", "WITH_RETURN"):
         assert f'{opt}="${{{opt}:-0}}"' in runner_text, f"{opt} default must be 0 (deterministic)"
     assert "verify_arm_sequence F2" in runner_text, "arm sequence F2 verification missing"
     assert "verify_arm_sequence F3" in runner_text, "arm sequence F3 verification missing"
@@ -65,6 +65,25 @@ def main():
     assert "colcon build --symlink-install --base-paths src" in runner_text, (
         "root build must not absorb test_workspace packages (stale ament index risk)"
     )
+
+    # --- 회귀 보호: 왕복(F1<->F2) 체인 (WITH_RETURN) ---
+    assert "--floor F1 --from-floor F2" in runner_text, "F2->F1 reverse verification missing"
+    assert "send_nav_goal f1_charge_station 1.6 0.0" in runner_text, "charge station return goal missing"
+    assert "verify_arm_sequence F1" in runner_text, "arm sequence F1 verification missing"
+    assert "WITH_RETURN=1 과 WITH_F3=1" in runner_text, "WITH_RETURN/WITH_F3 mutual exclusion missing"
+    assert "set_orchestrator_target_floor F1" in runner_text, "F1 target_floor helper call missing"
+    assert "set_orchestrator_target_floor F3" in runner_text, (
+        "F3 target_floor must use timeout helper (bare 'ros2 param set' half-hang, §1.23e)"
+    )
+
+    # --- 회귀 보호: 왕복 반복 러너 (Roadmap 06 반복 안정성) ---
+    repeat_runner = scripts / "run_roundtrip_repeat.sh"
+    assert repeat_runner.exists(), "run_roundtrip_repeat.sh missing"
+    assert os.access(repeat_runner, os.X_OK), "repeat runner is not executable"
+    repeat_text = repeat_runner.read_text(encoding="utf-8")
+    assert 'REPEAT_N="${REPEAT_N:-10}"' in repeat_text, "repeat default must be 10"
+    assert "oom" in repeat_text.lower(), "OOM guard missing"
+    assert "repeat_summary.md" in repeat_text, "aggregate summary missing"
 
     # --- 회귀 보호: 복도 폭 축소가 실수로 들어가지 않았는지 (CORRIDOR_HALF=2.5 고정) ---
     worlds_gen = repo_root / "scripts" / "generate_kku_worlds.py"
