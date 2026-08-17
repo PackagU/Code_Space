@@ -1,8 +1,0 @@
-[roundtrip-repeat] run_01/10 starting
-[roundtrip-repeat] run_01 PASS (263s, cpu 7.4%, mem 8693MB, missed 2)
-[roundtrip-repeat] run_02/10 starting
-[roundtrip-repeat] run_02 PASS (445s, cpu 7.4%, mem 8693MB, missed 2)
-[roundtrip-repeat] run_03/10 starting
-[roundtrip-repeat] run_03 PASS (374s, cpu 7.4%, mem 8693MB, missed 6)
-[roundtrip-repeat] run_04/10 starting
-[roundtrip-repeat] run_04 FAILED (rc=1) — stopping (연속 성공 조건 위반)

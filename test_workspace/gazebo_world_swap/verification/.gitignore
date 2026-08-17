@@ -1,2 +1,4 @@
 latest/
 run_*/
+repeat_*/
+*.log
