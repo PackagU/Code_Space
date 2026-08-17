@@ -87,6 +87,9 @@ class Pedestrians(Node):
 
         self.spawn_cli = self.create_client(SpawnEntity, "/spawn_entity")
         self.state_cli = self.create_client(SetEntityState, "/gazebo/set_entity_state")
+        # set_entity_state 실패 누적 감지: call_async 결과가 조용히 실패하면 보행자가
+        # 통로 한가운데 프리즈된 채 정지 장애물이 된다(2026-08-17 run_05 유력 가설, §1.25).
+        self._set_fail = 0
         self.get_logger().info("waiting for /spawn_entity, /gazebo/set_entity_state...")
         self.spawn_cli.wait_for_service()
         self.state_cli.wait_for_service()
@@ -165,7 +168,24 @@ class Pedestrians(Node):
         req.state.pose.orientation.z = math.sin(yaw / 2.0)
         req.state.pose.orientation.w = math.cos(yaw / 2.0)
         req.state.reference_frame = "world"
-        self.state_cli.call_async(req)
+        fut = self.state_cli.call_async(req)
+        fut.add_done_callback(lambda f, n=name: self._check_set_result(f, n))
+
+    def _check_set_result(self, fut, name):
+        try:
+            res = fut.result()
+            ok = bool(res and res.success)
+        except Exception:
+            ok = False
+        if ok:
+            self._set_fail = 0
+            return
+        self._set_fail += 1
+        if self._set_fail % 25 == 1:
+            self.get_logger().error(
+                f"set_entity_state 실패 누적 {self._set_fail}회 ({name}) — "
+                "보행자 위치 갱신 정체(프리즈 장애물화) 위험"
+            )
 
     def _tick(self):
         for ped in self.peds:

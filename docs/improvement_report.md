@@ -253,4 +253,13 @@
 - (c) **수정 (완주로 검증)**: smoke 에 `align_robot_to_spawn` — 전환 검증 후 `set_entity_state` 로 로봇을 스폰 (0,0) 에 정렬 + 양쪽 costmap 클리어. 실물 엘리베이터는 물리적 연속이라 없는 문제 — 시뮬 world-swap 전용 부기.
 - (d) **후속 후보**: 정렬을 smoke 가 아닌 `gazebo_world_swap_pkg`(world_swap 노드) 책임으로 이동하면 smoke 외 사용처에서도 안전 — 회의 안건.
 
+### 1.25 🟡 [60%] 보행자 런 산발 F2 출구 봉쇄 — 450s 연속 collision-ahead
+
+> 상태: 🔄 in-progress (완화 적용, 근본 원인 관찰 대기) · 담당: Lee · 업데이트: 2026-08-17
+
+- (a) **증상**: 왕복 반복 런 run_05(1/7 빈도) — F2 전환 직후 f2_corridor 3회 시도 전부 실패. nav2 로그에 collision-ahead 약 450초 연속 + spin/backup 회복 전부 봉쇄(사방 lethal). align 텔레포트 success=True·costmap 클리어 정상이라 §1.24(belief 오프셋)와 다른 결함.
+- (b) **가설 2개 (사후 로그로 판별 불가)**: ① 보행자 `set_entity_state` call_async 결과 미확인 → 조용한 실패 누적 시 보행자가 통로에 프리즈(450s+ 정지 장애물과 정합) ② 떠난 장애물의 stale lethal 마크 잔존.
+- (c) **완화 (적용)**: send_nav_goal 재시도 전 양쪽 costmap 클리어(② 대응) + pedestrians.py에 set_entity_state 실패 누적 감지 ERROR 로그(① 재현 시 즉시 판별).
+- (d) **후속**: 반복 런에서 재발 시 pedestrians 로그의 실패 누적 여부로 가설 확정 → ①이면 동기 재시도/큐 제한, ②면 costmap 파라미터(observation persistence) 튜닝.
+
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

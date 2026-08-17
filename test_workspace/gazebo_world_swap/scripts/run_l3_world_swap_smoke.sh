@@ -267,7 +267,13 @@ send_nav_goal() {
   local attempt
   for attempt in $(seq 0 "$retries"); do
     if (( attempt > 0 )); then
-      log "goal $name failed (attempt $attempt/$retries) -> retrying in 10s (waiting for dynamic obstacle to clear)"
+      log "goal $name failed (attempt $attempt/$retries) -> clearing costmaps + retrying in 10s (waiting for dynamic obstacle to clear)"
+      # 떠난 장애물의 stale lethal 마크가 통로를 계속 봉쇄하는 사례 대응
+      # (2026-08-17 반복 런 run_05: F2 엘베 출구 450s collision-ahead — §1.25).
+      local clear_svc
+      for clear_svc in "/global_costmap/clear_entirely_global_costmap" "/local_costmap/clear_entirely_local_costmap"; do
+        timeout 20 ros2 service call "$clear_svc" nav2_msgs/srv/ClearEntireCostmap "{}" >/dev/null 2>&1 || true
+      done
       sleep 10
     fi
     log "sending navigation goal $name"
