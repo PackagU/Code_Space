@@ -3,6 +3,10 @@
 # 목적: Gazebo 시뮬 미션(world swap + 엘베 층 전환 + 로봇팔 시퀀스)을 Jetson 위에서
 #       단독 실행하며 부하를 측정하기 위한 **테스트 전용** 변형.
 #
+# arm64 제약 (2026-08 실측): packages.ros.org 에 ros-humble-gazebo-ros / -plugins
+# 바이너리가 amd64 전용이라, gazebo11(Ubuntu universe) 위에 gazebo_ros_pkgs 를
+# 소스 빌드한다 (릴리스 태그 고정). Xavier NX 네이티브 빌드 기준 약 20~40분 소요.
+#
 # 정책 주의 (docs/deployment/01_portability_policy.md §3):
 # - 프로덕션 이미지(humble-jetson)에는 Gazebo 를 넣지 않는다 — 이 파일은 별도 태그 전용.
 # - GHCR publish 금지: Jetson 에서 로컬 빌드해서만 쓴다.
@@ -22,9 +26,36 @@ ARG BASE_IMAGE=ghcr.io/packagu/ros2-humble-slam:humble-jetson
 FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
+# humble 계열 gazebo_ros_pkgs 릴리스 태그 (재현성 고정)
+ARG GZPKGS_TAG=3.7.0
 
 LABEL org.opencontainers.image.description="PackagU Jetson sim-load-test image (humble-jetson + gzserver, test-only, do not publish)"
 
+# gazebo11 런타임/헤더 (Ubuntu universe arm64) + ROS 쪽 gazebo 개발/메시지 deb
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-humble-gazebo-ros-pkgs \
+    gazebo \
+    libgazebo-dev \
+    ros-humble-gazebo-dev \
+    ros-humble-gazebo-msgs \
     && rm -rf /var/lib/apt/lists/*
+
+# gazebo_ros / gazebo_plugins 소스 준비 + 빌드 의존 자동 해결(rosdep)
+RUN mkdir -p /opt/gzws/src \
+    && git clone --depth 1 -b ${GZPKGS_TAG} \
+       https://github.com/ros-simulation/gazebo_ros_pkgs.git /opt/gzws/src/gazebo_ros_pkgs \
+    && apt-get update \
+    && (rosdep update 2>/dev/null || true) \
+    && rosdep install --from-paths /opt/gzws/src --ignore-src -y \
+       --skip-keys "gazebo11 gazebo libgazebo-dev" \
+    && rm -rf /var/lib/apt/lists/*
+
+# 소스 빌드 — 메모리 여유(NX 8GB) 고려해 병렬 제한. 결과는 /opt/gazebo_ros_pkgs 오버레이.
+RUN cd /opt/gzws && . /opt/ros/humble/setup.sh \
+    && MAKEFLAGS=-j3 colcon build --merge-install --install-base /opt/gazebo_ros_pkgs \
+       --parallel-workers 1 --packages-select gazebo_ros gazebo_plugins \
+       --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    && rm -rf /opt/gzws
+
+# 대화형 셸 + entrypoint 양쪽에서 gazebo 오버레이 소싱
+RUN echo 'if [ -f /opt/gazebo_ros_pkgs/setup.bash ]; then source /opt/gazebo_ros_pkgs/setup.bash; fi' >> /etc/bash.bashrc \
+    && sed -i '\#^source /opt/ros/humble/setup.bash#a if [ -f /opt/gazebo_ros_pkgs/setup.bash ]; then source /opt/gazebo_ros_pkgs/setup.bash; fi' /entrypoint.sh
