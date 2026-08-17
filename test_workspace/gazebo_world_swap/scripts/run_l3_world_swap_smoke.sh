@@ -579,7 +579,12 @@ wait_for_service /floor_orchestrator/request_switch 30
 start_bg world_swap ros2 launch gazebo_world_swap_pkg world_swap.launch.py method:=model_swap initial_floor:=F1 use_sim_time:=true
 
 log "arming floor switch"
-ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch.log" 2>&1
+# timeout 없이는 CLI가 discovery 실패 시 무한 대기 (fastdds unicast peers 함정 — improvement_report §1.23)
+if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch.log" 2>&1; then
+  log "request_switch call failed/timed out"
+  cat "$OUT/request_switch.log"
+  exit 1
+fi
 
 log "publishing F2 ARRIVED_OPEN elevator state"
 ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \
@@ -626,7 +631,11 @@ if [[ "$WITH_F3" == "1" ]]; then
 
   log "arming F3 floor switch (target_floor param -> F3)"
   ros2 param set /floor_orchestrator_node target_floor F3 >"$OUT/param_target_f3.log" 2>&1
-  ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f3.log" 2>&1
+  if ! timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$OUT/request_switch_f3.log" 2>&1; then
+    log "F3 request_switch call failed/timed out"
+    cat "$OUT/request_switch_f3.log"
+    exit 1
+  fi
 
   log "publishing F3 ARRIVED_OPEN elevator state"
   ros2 topic pub --times 10 --rate 2 /elevator/state std_msgs/msg/String \

@@ -118,6 +118,8 @@ Jetson 프로파일 값이 곧 실전 스택 순수 부하다.
 
 **DDS discovery (실측 확정)**: 이 Wi-Fi 환경은 멀티캐스트 discovery 가 막혀 있어
 `scripts/fastdds_lan_peers.xml` (unicast peers, 양쪽 IP 명시) 를 **양쪽 모두** 적용해야 한다.
+XML 의 `initialPeersList` 에는 기본 멀티캐스트 locator `239.255.0.1` 이 반드시 포함되어야 한다 —
+빠지면 같은 호스트에서 늦게 뜬 노드끼리 상호 발견이 안 된다 (improvement_report §1.23).
 데스크톱은 `run_sim_host.sh` 가 자동 적용하고, Jetson 은 smoke 실행 전 같은 셸에서:
 
 ```bash

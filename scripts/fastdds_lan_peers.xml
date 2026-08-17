@@ -10,6 +10,14 @@
     <rtps>
       <builtin>
         <initialPeersList>
+          <!-- 기본 멀티캐스트 locator — initialPeersList 지정 시 기본값이 대체되므로 반드시 명시.
+               없으면 같은 호스트에서 늦게 뜬 참가자끼리(참가자 ID>=4) 상호 발견 불가
+               (unicast peer는 ID 0~3 포트만 탐색) — orchestrator↔arm/world_swap/CLI 매칭 실패 실측. -->
+          <locator>
+            <udpv4>
+              <address>239.255.0.1</address>
+            </udpv4>
+          </locator>
           <locator>
             <udpv4>
               <address>10.42.0.1</address>

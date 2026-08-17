@@ -233,4 +233,13 @@
 - (c) **수리 방향**: URDF 바퀴/캐스터 접촉 파라미터(kp/kd·마찰·관성) 점검 — §1.15 실물 접지 문제와 같은 뿌리. Han의 Fusion 반영 시 함께 정리.
 - (d) **실기 시사점**: 좀비 노드 잔류 속도로 로봇이 계속 주행한 사례도 이번에 재현됨 — 시뮬 diff_drive엔 cmd_vel timeout이 없음. 실기 OpenCR 브리지의 0.5s watchdog 정책이 옳았다는 방증, Gazebo 쪽도 diff_drive `cmd_vel_timeout` 설정 검토.
 
+### 1.23 🟡 ✅ Fast DDS unicast peers 함정 — 같은 호스트 late-participant 상호 발견 불가
+
+> 상태: ✅ done (멀티캐스트 locator 복원) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **증상**: 분산 smoke에서 F1 미션 완주 후 `request_switch` CLI 무한 대기. Nav2 맵은 F2로 전환됐지만(orchestrator↔map_server 매칭 정상) world_swap·로봇팔 노드가 status를 못 받아 월드 교체/팔 시퀀스 미발화.
+- (b) **원인**: `scripts/fastdds_lan_peers.xml`의 `initialPeersList`가 **기본 멀티캐스트 announce를 대체**해버림. unicast peer는 참가자 ID 0~3 포트만 탐색하므로 같은 호스트에서 늦게 뜬 참가자끼리(ID>=4: orchestrator↔world_swap/arm/신규 CLI)는 서로 발견할 경로가 없음. 참가자가 적은 데스크톱(낮은 ID)과의 교차 매칭만 성립 — 관측 전부(맵만 전환, 데스크톱 호출 즉시 성공)와 일치.
+- (c) **수정**: XML `initialPeersList`에 기본 멀티캐스트 locator `239.255.0.1` 복원(로컬/유선 직결 discovery 담당) + unicast 항목은 Wi-Fi 예비로 유지. smoke의 `ros2 service call` 2곳에 `timeout 45` + 실패 즉시 종료 추가. A/B 실측: 수정 전 Jetson 로컬 echo/call 블록 → 수정 후 즉시 수신.
+- (d) **교훈**: `wait_for_service`(daemon 그래프 조회)와 실제 call(신규 DDS participant 직접 discovery)은 경로가 달라 전자가 통과해도 후자가 무한 대기할 수 있음 — 스크립트의 CLI 서비스 호출엔 항상 timeout을 건다.
+
 아직 없음 (완료 항목은 분기말에 이 절로 이동).
