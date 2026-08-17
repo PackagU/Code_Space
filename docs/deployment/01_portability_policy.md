@@ -116,9 +116,17 @@ GAZEBO_REMOTE=1 WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo WITH_PROFILE=1 WITH_F3
 통과 기준은 §4.3과 동일 + `WITH_ARM` 검증(층 전환마다 팔 시퀀스 시작·완료 로그).
 Jetson 프로파일 값이 곧 실전 스택 순수 부하다.
 
-트러블슈팅: Jetson 에서 `/clock`/`/scan` 이 안 보이면 Wi-Fi 멀티캐스트 discovery 문제 —
-両머신 방화벽(ufw) 확인 후, 지속되면 Fast DDS `initialPeersList` 에 상대 IP 를 명시한
-프로파일 XML 을 `FASTRTPS_DEFAULT_PROFILES_FILE` 로 両쪽에 지정한다.
+**DDS discovery (실측 확정)**: 이 Wi-Fi 환경은 멀티캐스트 discovery 가 막혀 있어
+`scripts/fastdds_lan_peers.xml` (unicast peers, 양쪽 IP 명시) 를 **양쪽 모두** 적용해야 한다.
+데스크톱은 `run_sim_host.sh` 가 자동 적용하고, Jetson 은 smoke 실행 전 같은 셸에서:
+
+```bash
+export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml
+ros2 daemon stop   # 이전 설정으로 캐시된 daemon 제거
+```
+
+IP 가 바뀌면 XML 의 두 항목을 갱신한다. `/clock` 만 보이고 `/scan` 이 늦게 오는 것은
+엔드포인트 교환 지연 — 수 초 뒤 재확인하면 된다.
 
 ## 5. 새 코드 작성 시 체크리스트
 

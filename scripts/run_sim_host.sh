@@ -28,8 +28,11 @@ cleanup() {
 trap cleanup EXIT
 
 echo "[run_sim_host] floor=$FLOOR gui=$GAZEBO_GUI — Ctrl+C 로 종료"
+# Wi-Fi 멀티캐스트 discovery 차단 대비: unicast peers 프로파일을 항상 적용
+# (2026-08-17 실측 — peers 없이는 Jetson 이 시뮬 토픽을 발견하지 못함)
 docker exec ros2_humble bash -c \
-  "source /opt/ros/humble/setup.bash && cd /ros2_ws \
+  "export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml \
+   && source /opt/ros/humble/setup.bash && cd /ros2_ws \
    && colcon build --symlink-install --packages-select common_pkg >/dev/null \
    && source install/setup.bash \
    && ros2 launch common_pkg gazebo.launch.py floor:=${FLOOR} spawn_point:=charge_station use_sim_time:=true gui:=${GAZEBO_GUI}"

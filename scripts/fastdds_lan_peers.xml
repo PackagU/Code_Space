@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 분산 시뮬(§4.5)용 Fast DDS unicast peer 설정.
+     Wi-Fi AP가 멀티캐스트 discovery를 막을 때 양쪽 머신에서
+     FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml 로 지정.
+     자기 자신 IP가 목록에 있어도 무해하므로 한 파일을 양쪽에서 공용한다.
+     IP 변경 시 두 항목만 갱신 (데스크톱 192.168.0.4 / Jetson 192.168.0.6). -->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="packagu_lan_peers" is_default_profile="true">
+    <rtps>
+      <builtin>
+        <initialPeersList>
+          <locator>
+            <udpv4>
+              <address>192.168.0.4</address>
+            </udpv4>
+          </locator>
+          <locator>
+            <udpv4>
+              <address>192.168.0.6</address>
+            </udpv4>
+          </locator>
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>
