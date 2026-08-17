@@ -63,6 +63,7 @@ def _launch_setup(context, *args, **kwargs):
     spawn_point = LaunchConfiguration("spawn_point").perform(context)
     use_sim_time = LaunchConfiguration("use_sim_time").perform(context)
     robot_model = LaunchConfiguration("robot_model").perform(context)
+    gui = LaunchConfiguration("gui").perform(context)
 
     pkg_common = get_package_share_directory("common_pkg")
     pkg_gazebo_ros = get_package_share_directory("gazebo_ros")
@@ -84,7 +85,7 @@ def _launch_setup(context, *args, **kwargs):
             PythonLaunchDescriptionSource(
                 os.path.join(pkg_gazebo_ros, "launch", "gazebo.launch.py")
             ),
-            launch_arguments={"world": world_file}.items(),
+            launch_arguments={"world": world_file, "gui": gui}.items(),
         ),
         Node(
             package="robot_state_publisher",
@@ -132,6 +133,11 @@ def generate_launch_description():
             "use_sim_time",
             default_value="true",
             description="Use Gazebo clock (true for simulation).",
+        ),
+        DeclareLaunchArgument(
+            "gui",
+            default_value="true",
+            description="Launch gzclient GUI (false = gzserver only, headless).",
         ),
         DeclareLaunchArgument(
             "robot_model",

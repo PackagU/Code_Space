@@ -6,6 +6,9 @@ WORKSPACE="$ROOT/test_workspace/gazebo_world_swap"
 OUT="$WORKSPACE/verification/latest"
 KEEP_RUNNING="${KEEP_RUNNING:-0}"
 WITH_RVIZ="${WITH_RVIZ:-false}"
+# Gazebo GUI(gzclient) 관찰 옵션. 기본 false -> gzserver 헤드리스 (부하 측정 오염 방지,
+# GUI 없는 Jetson sim 이미지에서도 동일 동작). 데스크톱 관찰 시 GAZEBO_GUI=true.
+GAZEBO_GUI="${GAZEBO_GUI:-false}"
 # 동적 장애물(보행자) 회피 연습 옵션. 기본 off -> 결정적 smoke 유지.
 # WITH_PEDESTRIAN=1 이면 F1 복도를 가로질러 왕복하는 collision 보행자를 띄워
 # 로봇이 LiDAR 로 감지하고 Nav2 로 회피하게 한다(실기 동적 회피 전이용).
@@ -501,7 +504,7 @@ source_setup "$ROOT/test_workspace/elevator_auto_map_switch/install/setup.bash"
 source_setup "$ROOT/test_workspace/elevator_mission/install/setup.bash"
 source_setup "$WORKSPACE/install/setup.bash"
 
-start_bg gazebo_f1 ros2 launch common_pkg gazebo.launch.py floor:=F1 spawn_point:=charge_station use_sim_time:=true
+start_bg gazebo_f1 ros2 launch common_pkg gazebo.launch.py floor:=F1 spawn_point:=charge_station use_sim_time:=true gui:=$GAZEBO_GUI
 wait_for_topic /clock 30
 wait_for_service /spawn_entity 30
 wait_for_service /delete_entity 30
