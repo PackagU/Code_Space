@@ -17,6 +17,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from gazebo_msgs.srv import SetEntityState, SpawnEntity
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 # 복도 내부 안전 영역 (5m 폭, 벽 여유 포함). 보행자별 xr/yr 가 없으면 이 기본값으로 clamp.
 # x<1.5(엘리베이터 문)와 깊은 남측(택배 하강 통로)만 비워 임무/복귀를 보장한다.
@@ -92,6 +93,17 @@ class Pedestrians(Node):
         # 응답이 아예 안 오는(콜백 미발화) 모드도 잡기 위해 마지막 성공 시각을 추적한다.
         self._set_fail = 0
         self._last_ok = self.get_clock().now()
+        # 로봇 근접 시 보행자 일시정지용 belief 구독 (map≈world 프레임 — 생성 맵 원점 일치).
+        # set_entity_state 텔레포트가 로봇과 겹치면 Gazebo 가 관통을 충격량으로 해소해
+        # 로봇이 뒤집힌 사례 실측 (2026-08-18 분산 run2: 로봇 참값 z=0.23m — §1.25g).
+        self._robot_xy = None
+        self.create_subscription(
+            PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, 10
+        )
+
+    def _on_amcl(self, msg):
+        p = msg.pose.pose.position
+        self._robot_xy = (p.x, p.y)
         self.get_logger().info("waiting for /spawn_entity, /gazebo/set_entity_state...")
         self.spawn_cli.wait_for_service()
         self.state_cli.wait_for_service()
@@ -147,9 +159,11 @@ class Pedestrians(Node):
         self.get_logger().info(f"spawn {name} at {pos}")
 
     def _pose_at(self, ped):
+        return self._pose_at_s(ped, ped["s"])
+
+    def _pose_at_s(self, ped, s):
         # 현재 진행 방향 route 의 호 길이 s 위치의 (x,y,yaw)
         segs = ped["segs_fwd"] if ped["forward"] else ped["segs_rev"]
-        s = ped["s"]
         for (a, b, d) in segs:
             if s <= d:
                 t = s / d
@@ -201,6 +215,12 @@ class Pedestrians(Node):
                     ped["state"] = "walking"
                     ped["s"] = 0.0
                 continue
+            # 로봇 근접 시 일시정지: 사람이 로봇을 뚫고 걷지 않도록 0.7m 이내 위치
+            # 갱신은 보류한다(로봇 통과 후 재개). 관통-충격량 캐터펄트 원천 차단(§1.25g).
+            if self._robot_xy is not None:
+                nx, ny, _ = self._pose_at_s(ped, ped["s"] + ped["speed"] * self.dt)
+                if math.hypot(nx - self._robot_xy[0], ny - self._robot_xy[1]) < 0.7:
+                    continue
             ped["s"] += ped["speed"] * self.dt
             if ped["s"] >= ped["total"]:
                 # 목적지 도착 -> 퇴장. 다음 등장은 반대 방향(반대편에서 오는 사람 효과).
