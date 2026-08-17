@@ -103,20 +103,45 @@ Gazebo Classic(11)은 arm64 공식 바이너리가 없어(§1.21) Jetson 위에�
 
 전제: 두 머신 같은 서브넷, `ROS_DOMAIN_ID` 동일(기본 0), 두 compose 모두 `network_mode: host` (기본값).
 
+실행 순서는 반드시 지킨다 (2026-08-17 완주 실증 절차 — 순서 위반이 실패 2회를 유발했다):
+
 ```bash
-# [데스크톱] Gazebo 호스트 원커맨드 (Ctrl+C 종료, GAZEBO_GUI=true 로 관찰 가능)
-bash scripts/run_sim_host.sh F1
+# [0] Jetson 정리 — 이전 런의 노드/스크립트 잔류 제거
+docker restart ros2_humble
 
-# [Jetson] 연결 확인 — 데스크톱의 시뮬 토픽이 보여야 한다
-docker exec -it ros2_humble bash -c "source /opt/ros/humble/setup.bash && timeout 10 ros2 topic list | grep -E '/clock|/scan'"
+# [1] 데스크톱 Gazebo 리셋 + 기동 — 매 런 전 필수 (월드 상태 오염 방지).
+#     "Successfully spawned entity [elevator_robot_f1]" 확인 후 다음 단계로.
+docker restart ros2_humble
+GAZEBO_GUI=true bash scripts/run_sim_host.sh F1
 
-# [Jetson] 미션 + 로봇팔 + 부하 프로파일 원커맨드 (컨테이너 안)
-GAZEBO_REMOTE=1 WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo WITH_PROFILE=1 WITH_F3=1 \
-  bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh
+# [2] Jetson smoke 원커맨드 (호스트에서 실행 — nohup 이라 SSH 끊겨도 계속 돈다)
+docker exec ros2_humble bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && export FASTRTPS_DEFAULT_PROFILES_FILE=/ros2_ws/scripts/fastdds_lan_peers.xml && ros2 daemon stop >/dev/null 2>&1; cd /ros2_ws && GAZEBO_REMOTE=1 WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo WITH_PROFILE=1 WITH_F3=1 NAV_GOAL_RETRIES=1 nohup bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh > /ros2_ws/logs/smoke_run.log 2>&1 & sleep 3; tail -3 /ros2_ws/logs/smoke_run.log"
+
+# [3] 진행 관찰 (Jetson)
+docker exec ros2_humble tail -f /ros2_ws/logs/smoke_run.log
 ```
 
-통과 기준은 §4.3과 동일 + `WITH_ARM` 검증(층 전환마다 팔 시퀀스 시작·완료 로그).
-Jetson 프로파일 값이 곧 실전 스택 순수 부하다.
+`NAV_GOAL_RETRIES=1` 은 분산 구성 권장값 — 일시적 discovery/보행자 실패 1회를 흡수한다
+(데스크톱 단독 결정적 회귀 검증에서는 기본 0 유지).
+
+성공 판정 (2026-08-17 실측 기대값):
+
+- F1 7 goal SUCCEEDED → `ARM PASS: F2` → f2_corridor SUCCEEDED → `ARM PASS: F3` → f3_corridor SUCCEEDED
+- `PASS world swap smoke` (F3: kku_f3_building present / kku_f2_building absent / scan finite)
+- 아티팩트: `verification/run_<ts>/` — `profile/resource_summary.txt`(기준: cpu_pct_peak < 600%),
+  `control_metrics.txt`(missed/TF 외삽 횟수 기록 — 임계는 실기 기준 수립 후 `MAX_MISSED_RATE` 로 게이트)
+- 기준 실측치: cpu_peak 77.6% / avg 19% / mem 2.5GB (여유 큼)
+
+주의사항 (실측으로 확정):
+
+- **Jetson 이미지에 `ros-humble-gazebo-msgs` 필요** — Dockerfile.jetson 에 반영됨. 이미지 재빌드
+  전의 기존 컨테이너에는 `apt-get update && apt-get install -y ros-humble-gazebo-msgs` 1회 주입
+  (docker restart 에는 유지되고, 컨테이너 recreate 시에만 재설치).
+- 두 머신 모두 컨테이너 이름이 `ros2_humble` — 반드시 자기 머신 터미널에서 실행할 것.
+  (참고: Jetson hostname 이 `hsm-desktop` 로 되어 있어 프롬프트로 머신을 구분하면 안 된다.)
+- Jetson 저장소는 bundle 기반 — 데스크톱에서 bundle 갱신 후
+  `scp ~/code_space.bundle hsm:/home/hsm/code_space.bundle`, Jetson 에서 로컬 수정 파일
+  `git checkout -- <파일>` 후 `git pull origin <브랜치>`, compose 장치 sed 재적용.
 
 **DDS discovery (실측 확정)**: 이 Wi-Fi 환경은 멀티캐스트 discovery 가 막혀 있어
 `scripts/fastdds_lan_peers.xml` (unicast peers, 양쪽 IP 명시) 를 **양쪽 모두** 적용해야 한다.

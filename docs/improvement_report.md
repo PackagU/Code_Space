@@ -243,4 +243,13 @@
 - (d) **교훈**: `wait_for_service`(daemon 그래프 조회)와 실제 call(신규 DDS participant 직접 discovery)은 경로가 달라 전자가 통과해도 후자가 무한 대기할 수 있음 — 스크립트의 CLI 서비스 호출엔 항상 timeout을 건다.
 - (e) **잔존 (멀티캐스트 복원 후에도)**: Jetson 로컬 신규 CLI가 산발적으로 half-hang — param set 이 서버엔 적용되고 응답만 유실된 사례 실측 (F1 미션 중 footprint 확장에서 1회). 대응: smoke 의 모든 CLI 경계(`service call`/`param set`)에 timeout+재시도 적용, nav goal 은 기존 `NAV_GOAL_RETRIES` 사용. 근본 대책 후보: Fast DDS Discovery Server 로 전환(분산 구성 전반의 discovery 를 단일 서버로 일원화) — 회의 안건.
 
+### 1.24 🟡 ✅ 층 전환 시 로봇 위치 연속성 — tolerance 주차가 F2 출구를 봉쇄
+
+> 상태: ✅ done (스폰 정렬 + costmap 클리어) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **증상**: F2 전환(맵+월드+팔) 성공 직후 f2_corridor 가 `no valid path found` ABORT — 로봇이 엘리베이터에서 못 나옴.
+- (b) **원인**: `elevator_inside` goal 이 xy tolerance 한계(실측 0.5m 오프셋, (-0.2,-0.49))로 SUCCEEDED 한 채 전환되면 orchestrator 가 initialpose 를 스폰 좌표 (0,0) 으로 시딩 → belief-실위치 오프셋 상태에서 스캔의 엘베 벽이 belief 좌표계의 문 통로 위에 마킹 → costmap 출구 봉쇄.
+- (c) **수정 (완주로 검증)**: smoke 에 `align_robot_to_spawn` — 전환 검증 후 `set_entity_state` 로 로봇을 스폰 (0,0) 에 정렬 + 양쪽 costmap 클리어. 실물 엘리베이터는 물리적 연속이라 없는 문제 — 시뮬 world-swap 전용 부기.
+- (d) **후속 후보**: 정렬을 smoke 가 아닌 `gazebo_world_swap_pkg`(world_swap 노드) 책임으로 이동하면 smoke 외 사용처에서도 안전 — 회의 안건.
+
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

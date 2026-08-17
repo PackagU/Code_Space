@@ -290,7 +290,7 @@ PackagU/Code_Space
 
 ## 현재 포커스 (세션 후 업데이트)
 
-**현재 단계**: Roadmap 01~06을 world-swap 방식으로 상당 부분 통과 — 남은 관문은 03(실측 맵)·06 완결(반복 10회)·07(Jetson 실기). `Roadmap/README.md` 참조.
-**현재 작업**: GitHub(Code_Space) 이관 + 문서 정합화 + F3 전환 검증
-**블로커**: 모터/배터리/Depth 카메라 미정 + 복도/엘리베이터 실측 대기 ([docs/hardware_spec.md](docs/hardware_spec.md) §미정 항목, [improvement_report.md](docs/improvement_report.md) §1.8)
-**다음 할 일**: 신공학관 실측 → 맵 재생성 → Jetson aarch64 이미지 배포 + 부하 실측
+**현재 단계**: 07(Jetson) 분산 E2E 완주 — 데스크톱 Gazebo + Jetson 실전 스택 + 실물 로봇팔 2회 층 전환, 부하 여유 확인 (cpu_peak 77.6%/600%). 남은 관문은 03(실측 맵)·06 완결(반복 10회)·07 잔여(실기 센서 주행·반복 안정성). `Roadmap/README.md` 참조.
+**현재 작업**: 분산 스모크 재현성 정비 완료 (절차: [docs/deployment/01_portability_policy.md](docs/deployment/01_portability_policy.md) §4.5) — Jetson repo bundle 재동기화 대기
+**블로커**: 모터/배터리/Depth 카메라 미정 + 복도/엘리베이터 실측 대기 ([docs/hardware_spec.md](docs/hardware_spec.md) §미정 항목, [improvement_report.md](docs/improvement_report.md) §1.8) + OpenCR 쇼트(§1.20)
+**다음 할 일**: 신공학관 실측 → 맵 재생성 → Jetson 실기 센서(RPLiDAR) 주행 + missed-rate 실기 임계 수립
