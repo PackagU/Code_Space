@@ -38,6 +38,8 @@
 - 시뮬 전용 의존(Gazebo)은 Jetson 이미지에 절대 넣지 않는다. **Gazebo Classic 은 arm64 공식
   바이너리 자체가 없어** (improvement_report §1.21) Jetson 위 시뮬은 불가능하며, Jetson 을
   포함한 시뮬 검증은 분산 구성(§4.5: 데스크톱 Gazebo + Jetson 실전 스택)으로 수행한다.
+  예외: `ros-humble-gazebo-msgs` 는 메시지 정의만이라 (Gazebo 런타임 아님) Jetson 이미지에
+  포함한다 — 분산 검증 스크립트가 원격 Gazebo 서비스 호출에 사용 (없으면 verify 단계 즉사 실측).
 
 ## 4. Jetson 배포 절차 (원커맨드 지향)
 
