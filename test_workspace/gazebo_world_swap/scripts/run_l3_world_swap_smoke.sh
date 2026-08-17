@@ -523,6 +523,10 @@ export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 export DISPLAY="${DISPLAY:-:1}"
 
 cleanup_stale
+# ros2 daemon 이 오염된 상태(!rclpy.ok() XML-RPC fault)면 wait_for_topic 의
+# 'ros2 topic list' 가 전부 죽어 /clock 대기에서 멈춘다(2026-08-17 실측).
+# 반복 런 강건성을 위해 매 런 daemon 을 리셋한다(다음 CLI 호출이 새로 띄움).
+ros2 daemon stop >/dev/null 2>&1 || true
 ensure_maps
 
 log "building root workspace"
