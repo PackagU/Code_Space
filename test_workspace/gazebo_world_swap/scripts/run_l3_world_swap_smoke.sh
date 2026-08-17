@@ -283,8 +283,14 @@ set_costmap_footprint() {
   local scope
   for scope in local global; do
     local logf="$OUT/footprint_${tag}_${scope}.log"
-    ros2 param set "/${scope}_costmap/${scope}_costmap" footprint "$polygon" >"$logf" 2>&1 || true
-    if ! grep -q "Set parameter successful" "$logf"; then
+    # timeout+재시도: Jetson 로컬 CLI가 산발적 discovery 실패로 무한 대기하는 사례 실측 (§1.23)
+    local attempt ok=0
+    for attempt in 1 2 3; do
+      timeout 30 ros2 param set "/${scope}_costmap/${scope}_costmap" footprint "$polygon" >"$logf" 2>&1 || true
+      if grep -q "Set parameter successful" "$logf"; then ok=1; break; fi
+      log "footprint set retry: tag=$tag scope=${scope}_costmap attempt=$attempt/3"
+    done
+    if (( ! ok )); then
       log "FOOTPRINT SET FAILED: tag=$tag scope=${scope}_costmap"
       cat "$logf"
       exit 1

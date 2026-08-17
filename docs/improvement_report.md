@@ -241,5 +241,6 @@
 - (b) **원인**: `scripts/fastdds_lan_peers.xml`의 `initialPeersList`가 **기본 멀티캐스트 announce를 대체**해버림. unicast peer는 참가자 ID 0~3 포트만 탐색하므로 같은 호스트에서 늦게 뜬 참가자끼리(ID>=4: orchestrator↔world_swap/arm/신규 CLI)는 서로 발견할 경로가 없음. 참가자가 적은 데스크톱(낮은 ID)과의 교차 매칭만 성립 — 관측 전부(맵만 전환, 데스크톱 호출 즉시 성공)와 일치.
 - (c) **수정**: XML `initialPeersList`에 기본 멀티캐스트 locator `239.255.0.1` 복원(로컬/유선 직결 discovery 담당) + unicast 항목은 Wi-Fi 예비로 유지. smoke의 `ros2 service call` 2곳에 `timeout 45` + 실패 즉시 종료 추가. A/B 실측: 수정 전 Jetson 로컬 echo/call 블록 → 수정 후 즉시 수신.
 - (d) **교훈**: `wait_for_service`(daemon 그래프 조회)와 실제 call(신규 DDS participant 직접 discovery)은 경로가 달라 전자가 통과해도 후자가 무한 대기할 수 있음 — 스크립트의 CLI 서비스 호출엔 항상 timeout을 건다.
+- (e) **잔존 (멀티캐스트 복원 후에도)**: Jetson 로컬 신규 CLI가 산발적으로 half-hang — param set 이 서버엔 적용되고 응답만 유실된 사례 실측 (F1 미션 중 footprint 확장에서 1회). 대응: smoke 의 모든 CLI 경계(`service call`/`param set`)에 timeout+재시도 적용, nav goal 은 기존 `NAV_GOAL_RETRIES` 사용. 근본 대책 후보: Fast DDS Discovery Server 로 전환(분산 구성 전반의 discovery 를 단일 서버로 일원화) — 회의 안건.
 
 아직 없음 (완료 항목은 분기말에 이 절로 이동).
