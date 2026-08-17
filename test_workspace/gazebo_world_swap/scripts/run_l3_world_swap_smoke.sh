@@ -298,6 +298,26 @@ set_costmap_footprint() {
   done
 }
 
+align_robot_to_spawn() {
+  # 층 전환 직후 로봇 실위치를 스폰(=orchestrator initialpose) 좌표 (0,0)으로 정렬.
+  # elevator_inside goal 이 tolerance 한계(~0.5m 오프셋)로 성공한 채 전환되면 belief
+  # 오프셋 탓에 스캔 벽이 문 통로 위에 그려져 'no valid path' ABORT (2026-08-17 실측).
+  # 실물 엘베는 물리 연속이라 없는 문제 — 시뮬 world-swap 의 위치 연속성 부기.
+  local floor="$1"
+  log "aligning robot to $floor elevator spawn + clearing costmaps"
+  timeout 30 ros2 service call /gazebo/set_entity_state gazebo_msgs/srv/SetEntityState \
+    "{state: {name: elevator_robot_f1, pose: {position: {x: 0.0, y: 0.0, z: 0.05}, orientation: {z: 0.0, w: 1.0}}}}" \
+    >"$OUT/align_${floor}.log" 2>&1 || log "WARN: $floor teleport failed (continuing)"
+  sleep 2
+  local svc
+  for svc in "/global_costmap/clear_entirely_global_costmap" "/local_costmap/clear_entirely_local_costmap"; do
+    timeout 20 ros2 service call "$svc" nav2_msgs/srv/ClearEntireCostmap "{}" >>"$OUT/align_${floor}.log" 2>&1 \
+      || timeout 20 ros2 service call "$svc" nav2_msgs/srv/ClearEntireCostmap "{}" >>"$OUT/align_${floor}.log" 2>&1 \
+      || log "WARN: $floor costmap clear failed: $svc (continuing)"
+  done
+  sleep 1
+}
+
 start_pedestrian() {
   local ped_dir="$WORKSPACE/pedestrian"
   log "starting pedestrians (dynamic obstacles, waypoint-driven)"
@@ -615,6 +635,7 @@ fi
 # 확장 footprint 유지 시 엘리베이터(문 1.0m)에서 빠져나오다 끼는 문제 방지.
 log "parcel delivered -> reset footprint to normal for F2"
 set_costmap_footprint reset "$NORMAL_FOOTPRINT"
+align_robot_to_spawn F2
 
 if [[ "$WITH_LOC_FAULT" == "1" ]]; then
   # F2 진입점 실제 ~(0,0). 0.5m 어긋난 initialpose 주입 -> AMCL/scan 매칭 보정 후에도
@@ -660,6 +681,7 @@ if [[ "$WITH_F3" == "1" ]]; then
     verify_arm_sequence F3 90 2 || exit 1
   fi
 
+  align_robot_to_spawn F3
   log "sending F3 corridor navigation goal"
   send_nav_goal f3_corridor 2.5 12.0 0.0 1.0 150
 fi
