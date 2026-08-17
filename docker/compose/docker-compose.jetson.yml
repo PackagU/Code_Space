@@ -19,11 +19,15 @@ services:
     # privileged 대신 최소 권한: 시리얼은 devices로, RT(chrt/SCHED_RR)는 SYS_NICE로.
     # udev 별칭이 컨테이너에서 안 보이면 B-1 체크리스트의 'ls -l /dev/rplidar' 절차 참조.
     # (문제 지속 시 임시 복구: privileged: true 재활성 — 사유를 세션 일지에 기록)
+    # 장치 매핑은 env 로 제어 — 기본 /dev/null 이라 HW 미장착 상태에서도 up/recreate 가
+    # 성공한다. 장착 시 이 파일 옆 .env 에 실경로 지정 (예: RPLIDAR_DEVICE=/dev/rplidar).
+    # 주석 토글 방식은 Jetson pull 충돌 단골이라 폐지 (2026-08-17,
+    # 절차: docs/deployment/03_hw_update_checklist.md).
     devices:
-      - /dev/rplidar:/dev/rplidar     # RPLiDAR A1m8
-      - /dev/opencr:/dev/opencr       # OpenCR 1.0
-      # - /dev/arm_servo:/dev/arm_servo   # R1A 벤치에서 udev 확정 후 해제
-      # - /dev/motor_nano:/dev/motor_nano
+      - ${RPLIDAR_DEVICE:-/dev/null}:/dev/rplidar        # RPLiDAR A1m8
+      - ${OPENCR_DEVICE:-/dev/null}:/dev/opencr          # OpenCR 1.0
+      - ${ARM_SERVO_DEVICE:-/dev/null}:/dev/arm_servo    # 로봇팔 서보 (CH340)
+      - ${MOTOR_NANO_DEVICE:-/dev/null}:/dev/motor_nano  # Arduino Nano (모터)
     cap_add:
       - SYS_NICE
     stdin_open: true

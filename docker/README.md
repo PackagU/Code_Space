@@ -42,6 +42,10 @@ python3 scripts/generate_kku_worlds.py && python3 scripts/generate_kku_maps.py
 docker compose -f docker/compose/docker-compose.jetson.yml up -d
 ```
 
+시리얼 장치 매핑은 환경변수로 제어한다 — 기본 `/dev/null` 이라 HW 미장착 상태에서도 기동된다.
+장착한 장치만 `docker/compose/.env` 에 실경로를 지정한다 (예: `RPLIDAR_DEVICE=/dev/rplidar`,
+`ARM_SERVO_DEVICE=/dev/arm_servo`). 항목별 절차는 [docs/deployment/03_hw_update_checklist.md](../docs/deployment/03_hw_update_checklist.md) 참조.
+
 ## 이미지 전략
 
 - 개발: `ghcr.io/packagu/ros2-humble-slam:humble` (amd64)
