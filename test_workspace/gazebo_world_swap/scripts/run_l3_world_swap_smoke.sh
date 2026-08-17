@@ -625,8 +625,13 @@ send_nav_goal f1_elevator_inside 0.0 0.0 0.0 1.0 150
 
 if [[ "$WITH_ARM" == "1" ]]; then
   # 층 전환 신호를 놓치지 않도록 orchestrator 보다 먼저 구독을 시작한다.
-  start_bg arm_sequence ros2 run robot_arm_pkg arm_sequence --ros-args \
-    -p use_sim_time:=true -p serial_port:="$ARM_SERIAL_PORT"
+  # 주의: serial_port 는 값이 있을 때만 넘긴다 — 빈 값 '-p serial_port:=' 는
+  # rcl 파라미터 파싱 에러로 노드가 즉사한다(2026-08-17 실측, mock 경로 최초 노출).
+  ARM_ARGS=(--ros-args -p use_sim_time:=true)
+  if [[ -n "$ARM_SERIAL_PORT" ]]; then
+    ARM_ARGS+=(-p "serial_port:=$ARM_SERIAL_PORT")
+  fi
+  start_bg arm_sequence ros2 run robot_arm_pkg arm_sequence "${ARM_ARGS[@]}"
 fi
 
 start_bg orchestrator ros2 launch auto_floor_orchestrator_pkg auto_floor_orchestrator.launch.py dry_run_map_load:=false target_floor:=F2 use_sim_time:=true
