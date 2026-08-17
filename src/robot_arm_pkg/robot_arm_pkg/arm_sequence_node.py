@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""엘베 층 전환 완료 시 4 DOF 하드코딩 시퀀스를 실행하는 노드.
+"""엘베 층 전환 완료 시 버튼 누르기 사이클(Kim 실기 프로토콜)을 실행하는 노드.
 
 - 구독: /floor_orchestrator/status (std_msgs/String, JSON)
-- 발행: /packagu_arm/joint_cmd (sensor_msgs/JointState) — rate_hz 주기 보간 명령
-- 드라이버: serial_port 파라미터가 비어 있으면 토픽 발행만(시뮬/드라이런),
-  지정되면 시리얼로도 전송 (프로토콜은 Kim 실기 코드 확정 후 교체 — 아래 SerialDriver).
+- 발행: /packagu_arm/joint_cmd (sensor_msgs/JointState, position=PWM 근사 보간)
+  — 시뮬 부하/관측용. 실서보의 실제 보간은 컨트롤러가 T(ms) 명령으로 수행.
+- 시리얼: serial_port 파라미터 지정 시 포즈 스텝마다 {#000P....T....!} 묶음 명령 전송.
+  비어 있으면 토픽 발행만(시뮬/드라이런). 스텝 진행은 타이머 기반 — 콜백에서 sleep 없음.
 
-벤치 단독 테스트: ros2 run robot_arm_pkg arm_sequence --ros-args -p self_test:=true
+벤치 단독 테스트(주변 확인 후!): ros2 run robot_arm_pkg arm_sequence --ros-args \
+  -p self_test:=true -p serial_port:=/dev/arm_servo
 """
 
 import rclpy
@@ -14,28 +16,26 @@ from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 
-from robot_arm_pkg.arm_sequence import (
-    BUTTON_PRESS_SEQUENCE,
-    JOINT_NAMES,
-    FloorReadyTrigger,
-    interpolate,
-    sequence_duration,
-)
+from robot_arm_pkg import servo_protocol as sp
+from robot_arm_pkg.arm_sequence import FloorReadyTrigger
 
 
-class SerialDriver:
-    """실서보 시리얼 백엔드. TODO(Kim): 실기 스크립트의 명령 포맷으로 send() 교체."""
+class SerialPoseDriver:
+    """실서보 시리얼 백엔드 — Kim 벤치 스크립트와 동일 명령 문자열을 쓴다."""
 
     def __init__(self, port, baud, logger):
         import serial  # python3-serial — 이미지에 포함
 
         self._logger = logger
-        self._conn = serial.Serial(port, baud, timeout=0.05)
+        self._conn = serial.Serial(port, baud, timeout=0.1)
         self._logger.info(f"arm serial open: {port} @ {baud}")
 
-    def send(self, angles):
-        line = "A " + " ".join(f"{a:.4f}" for a in angles) + "\n"
-        self._conn.write(line.encode("ascii"))
+    def send_pose(self, pose_name, duration_ms):
+        self._conn.write(sp.pose_command(pose_name, duration_ms).encode("ascii"))
+
+    def stop_all(self):
+        for servo_id in sp.SERVO_IDS:
+            self._conn.write(sp.stop_command(servo_id).encode("ascii"))
 
     def close(self):
         self._conn.close()
@@ -54,14 +54,15 @@ class ArmSequenceNode(Node):
 
         self._rate_hz = float(self.get_parameter("rate_hz").value)
         self._trigger = FloorReadyTrigger(str(self.get_parameter("initial_floor").value))
-        self._elapsed = None  # None = 대기, float = 시퀀스 진행 중
+        self._elapsed_ms = None  # None = 대기, float = 사이클 진행 중 (사이클 기준 경과)
+        self._step_index = 0
         self._tick_count = 0
 
         self._driver = None
         port = str(self.get_parameter("serial_port").value).strip()
         if port:
             try:
-                self._driver = SerialDriver(port, int(self.get_parameter("serial_baud").value), self.get_logger())
+                self._driver = SerialPoseDriver(port, int(self.get_parameter("serial_baud").value), self.get_logger())
             except Exception as exc:  # noqa: BLE001 — 시리얼 실패는 부하테스트를 막지 않는다
                 self.get_logger().error(f"arm serial open failed ({exc}) — topic-only로 계속")
 
@@ -72,12 +73,12 @@ class ArmSequenceNode(Node):
         self._timer = self.create_timer(1.0 / self._rate_hz, self._on_tick)
 
         if bool(self.get_parameter("self_test").value):
-            self.get_logger().info("self_test: 2초 후 시퀀스 1회 실행")
+            self.get_logger().info("self_test: 2초 후 사이클 1회 실행 — 팔 주변 공간 확보!")
             self._self_test_timer = self.create_timer(2.0, self._start_self_test)
 
         self.get_logger().info(
             f"packagu_arm_sequence ready — trigger={self._trigger.last_floor} 이후 층 전환, "
-            f"duration={sequence_duration():.1f}s @ {self._rate_hz:.0f}Hz, "
+            f"cycle={sp.cycle_duration_ms() / 1000.0:.1f}s @ {self._rate_hz:.0f}Hz, "
             f"driver={'serial' if self._driver else 'topic-only'}"
         )
 
@@ -92,33 +93,51 @@ class ArmSequenceNode(Node):
         self._start_sequence(floor)
 
     def _start_sequence(self, reason):
-        if self._elapsed is not None:
+        if self._elapsed_ms is not None:
             self.get_logger().warn(f"시퀀스 진행 중 — {reason} 트리거 무시")
             return
-        self._elapsed = 0.0
+        self._elapsed_ms = 0.0
+        self._step_index = 0
         self._tick_count = 0
-        self.get_logger().info(f"버튼 시퀀스 시작 ({reason}) — {sequence_duration():.1f}s")
+        self._send_step_command()
+        self.get_logger().info(f"버튼 시퀀스 시작 ({reason}) — {sp.cycle_duration_ms() / 1000.0:.1f}s")
+
+    def _send_step_command(self):
+        pose_name, duration_ms, send = sp.PRESS_CYCLE[self._step_index]
+        if not (send and self._driver):
+            return
+        try:
+            self._driver.send_pose(pose_name, duration_ms)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error(f"arm serial send failed ({exc}) — driver 비활성화")
+            try:
+                self._driver.stop_all()
+            except Exception:  # noqa: BLE001
+                pass
+            self._driver = None
 
     def _on_tick(self):
-        if self._elapsed is None:
+        if self._elapsed_ms is None:
             return
-        angles = interpolate(self._elapsed, BUTTON_PRESS_SEQUENCE)
+        pwm = sp.interpolate_pwm(self._elapsed_ms)
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = list(JOINT_NAMES)
-        msg.position = [float(a) for a in angles]
+        msg.name = [f"servo_{sid}" for sid in sp.SERVO_IDS]
+        msg.position = [float(pwm[sid]) for sid in sp.SERVO_IDS]
         self._pub.publish(msg)
-        if self._driver is not None:
-            try:
-                self._driver.send(angles)
-            except Exception as exc:  # noqa: BLE001
-                self.get_logger().error(f"arm serial send failed ({exc}) — driver 비활성화")
-                self._driver = None
         self._tick_count += 1
-        self._elapsed += 1.0 / self._rate_hz
-        if self._elapsed >= sequence_duration():
+        self._elapsed_ms += 1000.0 / self._rate_hz
+
+        # 현재 스텝 경계를 넘었으면 다음 스텝 시작 명령 전송
+        boundary = sum(d for _, d, _ in sp.PRESS_CYCLE[: self._step_index + 1])
+        while self._elapsed_ms >= boundary and self._step_index + 1 < len(sp.PRESS_CYCLE):
+            self._step_index += 1
+            self._send_step_command()
+            boundary = sum(d for _, d, _ in sp.PRESS_CYCLE[: self._step_index + 1])
+
+        if self._elapsed_ms >= sp.cycle_duration_ms():
             self.get_logger().info(f"버튼 시퀀스 완료 — {self._tick_count} ticks")
-            self._elapsed = None
+            self._elapsed_ms = None
 
 
 def main(args=None):

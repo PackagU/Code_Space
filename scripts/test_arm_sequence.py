@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""robot_arm_pkg.arm_sequence 오프라인 테스트 (ROS 불필요, host 실행)."""
+"""robot_arm_pkg 트리거 + Kim 서보 프로토콜 오프라인 테스트 (ROS 불필요, host 실행)."""
 import importlib.util
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "src" / "robot_arm_pkg" / "robot_arm_pkg" / "arm_sequence.py"
+PKG = ROOT / "src" / "robot_arm_pkg" / "robot_arm_pkg"
 
 
-def load_module():
-    spec = importlib.util.spec_from_file_location("arm_sequence", MODULE_PATH)
+def load_module(name):
+    spec = importlib.util.spec_from_file_location(name, PKG / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -21,11 +21,20 @@ def ready_status(floor, pending=False, map_loaded=True, phase="ready"):
     )
 
 
+def expect_raise(fn, *args):
+    try:
+        fn(*args)
+    except ValueError:
+        return
+    raise AssertionError(f"{fn.__name__}{args} 이 ValueError 를 내지 않음")
+
+
 def main():
-    mod = load_module()
+    seq = load_module("arm_sequence")
+    sp = load_module("servo_protocol")
 
     # 1) 트리거: ready+맵로드+층 변경에서만 1회 발동
-    trigger = mod.FloorReadyTrigger("F1")
+    trigger = seq.FloorReadyTrigger("F1")
     assert trigger.observe("not json") is None
     assert trigger.observe(ready_status("F2", phase="moving")) is None
     assert trigger.observe(ready_status("F2", pending=True)) is None
@@ -35,30 +44,58 @@ def main():
     assert trigger.observe(ready_status("F2")) is None, "중복 신호 dedupe"
     assert trigger.observe(ready_status("f3")) == "F3", "소문자 층 표기 허용"
 
-    # 2) 시퀀스: 홈에서 시작해 홈으로 복귀, 총 길이 일치
-    seq = mod.BUTTON_PRESS_SEQUENCE
-    total = mod.sequence_duration(seq)
-    assert abs(total - sum(s for s, _ in seq)) < 1e-9
-    assert mod.interpolate(0.0, seq) == seq[0][1]
-    assert mod.interpolate(total + 1.0, seq) == seq[-1][1]
-    assert mod.interpolate(-1.0, seq) == seq[0][1]
+    # 2) 명령 문자열: Kim 벤치 스크립트 포맷과 정확히 일치해야 함
+    assert (
+        sp.pose_command("press_ready", 2000)
+        == "{#000P1500T2000!#001P1500T2000!#002P1500T2000!#003P1500T2000!}"
+    )
+    assert (
+        sp.pose_command("home", 3000)
+        == "{#000P1500T3000!#001P1200T3000!#002P2000T3000!#003P1500T3000!}"
+    )
+    assert sp.stop_command("002") == "#002PDPT!"
+    assert sp.read_position_command("001") == "#001PRAD!"
 
-    # 3) 보간 연속성: 50Hz 틱 간 관절 변화가 급격하지 않음 (하드코딩 시퀀스 검증)
-    rate = 50.0
-    prev = mod.interpolate(0.0, seq)
+    # 3) 안전 가드: 잘못된 포즈/시간/PWM/ID 는 ValueError
+    expect_raise(sp.pose_command, "no_such_pose", 1000)
+    expect_raise(sp.pose_command, "home", 10000)
+    expect_raise(sp.check_pwm, "000", 900)
+    expect_raise(sp.check_pwm, "000", 2600)
+    expect_raise(sp.check_pwm, "999", 1500)
+
+    # 4) 위치 응답 파싱
+    assert sp.parse_position("000", "#000P1500!") == 1500
+    assert sp.parse_position("000", "garbage") is None
+    assert sp.parse_position("000", None) is None
+
+    # 5) 사이클: run_press_cycle 과 동일 구성 (총 9초, hold 는 재전송 없음)
+    assert sp.cycle_duration_ms() == 9000
+    assert [(p, s) for p, _, s in sp.PRESS_CYCLE] == [
+        ("press_ready", True),
+        ("pre_press", True),
+        ("press", True),
+        ("press", False),
+        ("retreat", True),
+        ("press_ready", True),
+        ("home", True),
+    ]
+
+    # 6) PWM 보간: home 에서 시작해 home 으로 복귀, 50Hz 틱 간 점프가 완만
+    assert sp.interpolate_pwm(0) == sp.POSES["home"]
+    assert sp.interpolate_pwm(sp.cycle_duration_ms() + 1000) == sp.POSES["home"]
+    tick_ms = 20.0
+    prev = sp.interpolate_pwm(0)
     max_step = 0.0
-    ticks = int(total * rate) + 1
+    ticks = int(sp.cycle_duration_ms() / tick_ms) + 1
     for i in range(1, ticks):
-        cur = mod.interpolate(i / rate, seq)
-        max_step = max(max_step, max(abs(a - b) for a, b in zip(cur, prev)))
+        cur = sp.interpolate_pwm(i * tick_ms)
+        max_step = max(max_step, max(abs(cur[s] - prev[s]) for s in sp.SERVO_IDS))
+        for servo_id in sp.SERVO_IDS:
+            sp.check_pwm(servo_id, cur[servo_id])  # 보간 전 구간이 안전 범위 안
         prev = cur
-    assert max_step < 0.05, f"틱당 관절 점프 {max_step:.4f} rad — 시퀀스가 불연속"
+    assert max_step < 10.0, f"틱당 PWM 점프 {max_step:.2f} — 사이클이 불연속"
 
-    # 4) 포즈 4 DOF 고정
-    assert all(len(pose) == 4 for _, pose in seq)
-    assert len(mod.JOINT_NAMES) == 4
-
-    print(f"PASS arm_sequence: trigger dedupe + interpolation ({ticks} ticks, max_step {max_step:.4f} rad)")
+    print(f"PASS arm trigger + servo protocol ({ticks} ticks, max_step {max_step:.2f} PWM/tick)")
 
 
 if __name__ == "__main__":
