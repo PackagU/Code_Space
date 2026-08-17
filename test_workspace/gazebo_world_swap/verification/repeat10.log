@@ -1,16 +1,8 @@
 [roundtrip-repeat] run_01/10 starting
-[roundtrip-repeat] run_01 PASS (616s, cpu 5.7%, mem 8708MB, missed 3)
+[roundtrip-repeat] run_01 PASS (263s, cpu 7.4%, mem 8693MB, missed 2)
 [roundtrip-repeat] run_02/10 starting
-[roundtrip-repeat] run_02 PASS (251s, cpu 5.3%, mem 8623MB, missed 5)
+[roundtrip-repeat] run_02 PASS (445s, cpu 7.4%, mem 8693MB, missed 2)
 [roundtrip-repeat] run_03/10 starting
-[roundtrip-repeat] run_03 PASS (604s, cpu 5.3%, mem 8623MB, missed 4)
+[roundtrip-repeat] run_03 PASS (374s, cpu 7.4%, mem 8693MB, missed 6)
 [roundtrip-repeat] run_04/10 starting
-[roundtrip-repeat] run_04 PASS (323s, cpu 7.1%, mem 8698MB, missed 1)
-[roundtrip-repeat] run_05/10 starting
-[roundtrip-repeat] run_05 PASS (276s, cpu 7.1%, mem 8698MB, missed 4)
-[roundtrip-repeat] run_06/10 starting
-[roundtrip-repeat] run_06 PASS (494s, cpu 7.1%, mem 8698MB, missed 3)
-[roundtrip-repeat] run_07/10 starting
-[roundtrip-repeat] run_07 PASS (563s, cpu 6.3%, mem 8698MB, missed 13)
-[roundtrip-repeat] run_08/10 starting
-[roundtrip-repeat] run_08 FAILED (rc=1) — stopping (연속 성공 조건 위반)
+[roundtrip-repeat] run_04 FAILED (rc=1) — stopping (연속 성공 조건 위반)

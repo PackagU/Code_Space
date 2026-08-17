@@ -269,6 +269,7 @@ send_nav_goal() {
     if (( attempt > 0 )); then
       log "goal $name failed (attempt $attempt/$retries) -> clearing costmaps + retrying in 10s (waiting for dynamic obstacle to clear)"
       dump_world_state "${name}_a${attempt}"
+      realign_belief_if_drifted
       # 떠난 장애물의 stale lethal 마크가 통로를 계속 봉쇄하는 사례 대응
       # (2026-08-17 반복 런 run_05: F2 엘베 출구 450s collision-ahead — §1.25).
       local clear_svc
@@ -327,12 +328,38 @@ dump_world_state() {
     for m in $models; do
       printf '%s ' "$m"
       timeout 10 ros2 service call /gazebo/get_entity_state gazebo_msgs/srv/GetEntityState "{name: '$m'}" 2>/dev/null \
-        | grep -oP "position=geometry_msgs\.msg\.Point\(\K x?=?[-0-9.e]+, y=[-0-9.e]+" | head -1 || echo "?"
+        | grep -oP "position=geometry_msgs\.msg\.Point\([^)]*\)" | head -1 || echo "?"
     done
     echo "-- amcl belief --"
     timeout 10 bash -c "ros2 topic echo --once /amcl_pose | head -20" 2>/dev/null || echo "amcl_pose unavailable"
   } >"$logf" 2>&1 || true
   log "world state snapshot saved: world_state_${tag}.log"
+}
+
+realign_belief_if_drifted() {
+  # 시뮬 한정 재정위(§1.25): AMCL belief 와 시뮬 참값 오프셋이 0.3m 초과면 참값으로
+  # initialpose 재발행 — 잘못된 좌표계에 스캔 벽이 재마킹되는 자기강화 봉쇄를 끊는다.
+  # 실기의 도킹/QR 재정위에 해당하는 시뮬 오라클 부기(§1.24와 동일 부류) — 로그에 명시.
+  local resp belief tx ty tz tw bx by dist
+  resp=$(timeout 10 ros2 service call /gazebo/get_entity_state gazebo_msgs/srv/GetEntityState \
+    "{name: 'elevator_robot_f1'}" 2>/dev/null | tr -d '\n') || true
+  tx=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=\K[-0-9.e]+" <<<"$resp" | head -1)
+  ty=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=[-0-9.e]+, y=\K[-0-9.e]+" <<<"$resp" | head -1)
+  tz=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\(x=[-0-9.e]+, y=[-0-9.e]+, z=\K[-0-9.e]+" <<<"$resp" | head -1)
+  tw=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\([^)]*w=\K[-0-9.e]+" <<<"$resp" | head -1)
+  belief=$(timeout 10 bash -c "ros2 topic echo --once /amcl_pose" 2>/dev/null | tr -d '\n') || true
+  bx=$(grep -oP "x: \K[-0-9.e]+" <<<"$belief" | head -1)
+  by=$(grep -oP "y: \K[-0-9.e]+" <<<"$belief" | head -1)
+  if [[ -z "$tx" || -z "$ty" || -z "$tz" || -z "$tw" || -z "$bx" || -z "$by" ]]; then
+    log "belief drift check skipped (pose unavailable: true=($tx,$ty) belief=($bx,$by))"
+    return 0
+  fi
+  dist=$(awk "BEGIN{printf \"%.3f\", sqrt(($tx-($bx))^2 + ($ty-($by))^2)}")
+  log "belief drift: true=($tx,$ty) belief=($bx,$by) dist=${dist}m"
+  if awk "BEGIN{exit !($dist > 0.3)}"; then
+    log "REALIGN: belief drift ${dist}m > 0.3m -> republishing initialpose at true pose (sim-only bookkeeping, §1.25)"
+    publish_initial_pose realign "$tx" "$ty" "$tz" "$tw" || true
+  fi
 }
 
 set_orchestrator_target_floor() {
