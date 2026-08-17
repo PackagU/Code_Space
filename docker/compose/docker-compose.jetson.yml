@@ -1,7 +1,7 @@
 # Jetson Xavier NX 배포용 compose (GUI 없음, aarch64 이미지)
 # 사용: docker compose -f docker/compose/docker-compose.jetson.yml up -d
 # 사전: (1) GHCR 로그인(read-only PAT) (2) sudo bash scripts/udev/install_udev_rules.sh
-# 시뮬 부하테스트: PACKAGU_JETSON_IMAGE=...:humble-jetson-sim 로 기동 (docker/Dockerfile.jetson-sim 참조)
+# 이미지 오버라이드: PACKAGU_JETSON_IMAGE 환경변수 (기본 humble-jetson)
 services:
   ros2:
     image: ${PACKAGU_JETSON_IMAGE:-ghcr.io/packagu/ros2-humble-slam:humble-jetson}

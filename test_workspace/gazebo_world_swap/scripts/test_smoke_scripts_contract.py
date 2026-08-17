@@ -55,6 +55,7 @@ def main():
     assert "verify_arm_sequence F3" in runner_text, "arm sequence F3 verification missing"
     assert 'GAZEBO_GUI="${GAZEBO_GUI:-false}"' in runner_text, "GAZEBO_GUI default must be false (headless)"
     assert "gui:=$GAZEBO_GUI" in runner_text, "gazebo launch must pass gui flag"
+    assert 'GAZEBO_REMOTE="${GAZEBO_REMOTE:-0}"' in runner_text, "GAZEBO_REMOTE default must be 0 (local gazebo)"
     assert "--floor F3 --from-floor F2" in runner_text, "F3 hop verification missing"
     assert "expect_nav_abort unreachable" in runner_text, "recovery check missing"
     assert "inject_wrong_initialpose" in runner_text, "localization fault hook missing"

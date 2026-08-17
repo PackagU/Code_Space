@@ -216,4 +216,12 @@
 - (b) **실측 매핑 영향**: 2026-08-09 구축한 OpenCR 브리지→오도메트리 체인 사용 불가. LiDAR 단독(스캔매칭 only) 매핑은 가능하나 품질 저하 가능 — `run_field_mapping.sh` 오도메트리 없는 경로 검증 필요.
 - (c) **Jetson compose 영향**: `/dev/opencr` devices 매핑은 장치 부재 시 컨테이너 기동 실패 → OpenCR 복구 전까지 해당 줄 주석 운용 (커밋 금지, 로컬 수정만).
 
+### 1.21 🟡 ✅ Gazebo Classic arm64 바이너리 부재 — Jetson 단독 시뮬 불가
+
+> 상태: ✅ done (분산 구성으로 결정) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **실측 근거**: Ubuntu jammy arm64 저장소에 `gazebo`/`libgazebo-dev` 없음(설치 후보 없음), packages.ros.org arm64 는 `gazebo-dev`/`gazebo-msgs` 만 존재(런타임 래퍼 `gazebo-ros`/`gazebo-plugins` 는 amd64 전용, 그마저 arm64 deb 은 의존 미충족으로 설치 불가), OSRF ubuntu-stable jammy arm64 인덱스(711 패키지)는 Ignition/신형 Gazebo 뿐.
+- (b) **결정**: gazebo11 소스 빌드(수 시간·고위험)는 손절. Jetson 포함 시뮬 검증은 **분산 구성** — 데스크톱 Gazebo(`scripts/run_sim_host.sh`) + Jetson 실전 스택(smoke `GAZEBO_REMOTE=1`). 절차: portability policy §4.5. 부수 효과: Jetson 부하 측정에서 Gazebo 오버헤드 제거(더 정확).
+- (c) **장기**: 신형 Gazebo(gz-sim)는 arm64 지원 — 시뮬 스택 이관은 별도 대형 과제로 회의 안건 (world/plugin/launch 전면 포팅 필요, 당장 불필요).
+
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

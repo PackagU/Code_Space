@@ -6,9 +6,14 @@ WORKSPACE="$ROOT/test_workspace/gazebo_world_swap"
 OUT="$WORKSPACE/verification/latest"
 KEEP_RUNNING="${KEEP_RUNNING:-0}"
 WITH_RVIZ="${WITH_RVIZ:-false}"
-# Gazebo GUI(gzclient) 관찰 옵션. 기본 false -> gzserver 헤드리스 (부하 측정 오염 방지,
-# GUI 없는 Jetson sim 이미지에서도 동일 동작). 데스크톱 관찰 시 GAZEBO_GUI=true.
+# Gazebo GUI(gzclient) 관찰 옵션. 기본 false -> gzserver 헤드리스 (부하 측정 오염 방지).
+# 데스크톱 관찰 시 GAZEBO_GUI=true.
 GAZEBO_GUI="${GAZEBO_GUI:-false}"
+# 분산 시뮬 모드(Jetson 부하테스트). GAZEBO_REMOTE=1 이면 Gazebo 를 이 머신에서 띄우지
+# 않고, 같은 LAN 의 다른 머신(데스크톱 scripts/run_sim_host.sh)이 띄운 Gazebo 를
+# DDS 로 쓴다. Gazebo Classic 은 arm64 바이너리가 없어 Jetson 에선 이 모드가 표준
+# (docs/deployment/01_portability_policy.md §4.5). 기본 0 -> 로컬 Gazebo.
+GAZEBO_REMOTE="${GAZEBO_REMOTE:-0}"
 # 동적 장애물(보행자) 회피 연습 옵션. 기본 off -> 결정적 smoke 유지.
 # WITH_PEDESTRIAN=1 이면 F1 복도를 가로질러 왕복하는 collision 보행자를 띄워
 # 로봇이 LiDAR 로 감지하고 Nav2 로 회피하게 한다(실기 동적 회피 전이용).
@@ -504,7 +509,11 @@ source_setup "$ROOT/test_workspace/elevator_auto_map_switch/install/setup.bash"
 source_setup "$ROOT/test_workspace/elevator_mission/install/setup.bash"
 source_setup "$WORKSPACE/install/setup.bash"
 
-start_bg gazebo_f1 ros2 launch common_pkg gazebo.launch.py floor:=F1 spawn_point:=charge_station use_sim_time:=true gui:=$GAZEBO_GUI
+if [[ "$GAZEBO_REMOTE" == "1" ]]; then
+  log "GAZEBO_REMOTE=1 — 원격 Gazebo 사용 (spawn_point:=charge_station 는 원격 호스트에서 띄울 것)"
+else
+  start_bg gazebo_f1 ros2 launch common_pkg gazebo.launch.py floor:=F1 spawn_point:=charge_station use_sim_time:=true gui:=$GAZEBO_GUI
+fi
 wait_for_topic /clock 30
 wait_for_service /spawn_entity 30
 wait_for_service /delete_entity 30

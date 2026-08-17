@@ -30,13 +30,14 @@
 |------|------|--------|------|
 | `ghcr.io/packagu/ros2-humble-slam:humble` | 개발 (amd64) | `osrf/ros:humble-desktop-full` | Gazebo, RViz, Nav2, SLAM Toolbox |
 | `ghcr.io/packagu/ros2-humble-slam:humble-jetson` | 실기 (aarch64) | `ros:humble-ros-base` | Nav2, SLAM Toolbox, rplidar (GUI 제외) |
-| `...:humble-jetson-sim` (로컬 전용) | Jetson 시뮬 부하테스트 | `humble-jetson` | + gzserver (§4.5, publish 금지) |
 
 원칙:
 
 - 정의는 `docker/`가 SSOT. 두 Dockerfile의 공통 패키지 목록이 어긋나지 않게 함께 수정한다.
 - SLAM/Nav2는 CPU 스택이므로 CUDA/L4T 베이스가 필요 없다. GPU가 필요해지는 시점(예: 카메라 추론)에 별도 태그로 분리한다.
-- 시뮬 전용 의존(Gazebo)은 실기 이미지(`humble-jetson`)에 절대 넣지 않는다. Jetson 위 시뮬 검증이 필요하면 별도 태그 `humble-jetson-sim`(로컬 빌드 전용, §4.5)을 쓰고, 검증 후 이미지를 삭제해 실기 환경을 원상 복구한다.
+- 시뮬 전용 의존(Gazebo)은 Jetson 이미지에 절대 넣지 않는다. **Gazebo Classic 은 arm64 공식
+  바이너리 자체가 없어** (improvement_report §1.21) Jetson 위 시뮬은 불가능하며, Jetson 을
+  포함한 시뮬 검증은 분산 구성(§4.5: 데스크톱 Gazebo + Jetson 실전 스택)으로 수행한다.
 
 ## 4. Jetson 배포 절차 (원커맨드 지향)
 
@@ -90,32 +91,34 @@ bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh   # 컨
 
 CI(`.github/workflows/check.yml`)는 이 중 오프라인 검사를 PR마다 자동 실행한다.
 
-### 4.5 Jetson 단독 시뮬 부하테스트 (테스트 전용)
+### 4.5 분산 시뮬 부하테스트 — 데스크톱 Gazebo + Jetson 실전 스택
 
-Gazebo 미션(world swap + 층 전환 + 로봇팔 시퀀스)을 Jetson 위에서 그대로 돌려 부하를 재는 절차.
-측정값은 Gazebo 오버헤드가 포함된 보수(worst-case) 값으로 해석한다. 실전 전환 시 Gazebo 자리는
-실센서(rplidar, 오도메트리)가 대체하며 Nav2/오케스트레이터/미션/팔 스택은 무수정.
+Gazebo Classic(11)은 arm64 공식 바이너리가 없어(§1.21) Jetson 위에서 시뮬을 직접 돌릴 수 없다.
+대신 같은 LAN 에서 역할을 나눈다 — 이 구성이 부하 측정도 더 정확하다(Jetson 에 실전 부하만 실림):
+
+- **데스크톱**: Gazebo 물리/센서 (기존 amd64 dev 컨테이너) — 실전에서 실센서가 대체할 부분
+- **Jetson**: Nav2 + 층전환 오케스트레이터 + 미션 + 로봇팔 (프로덕션 `humble-jetson` 이미지 그대로)
+
+전제: 두 머신 같은 서브넷, `ROS_DOMAIN_ID` 동일(기본 0), 두 compose 모두 `network_mode: host` (기본값).
 
 ```bash
-# Jetson에서 (1회) 시뮬 이미지 로컬 빌드 — GHCR publish 금지
-docker build -f docker/Dockerfile.jetson-sim -t ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim docker/
+# [데스크톱] Gazebo 호스트 원커맨드 (Ctrl+C 종료, GAZEBO_GUI=true 로 관찰 가능)
+bash scripts/run_sim_host.sh F1
 
-# 시뮬 이미지로 컨테이너 기동
-docker compose -f docker/compose/docker-compose.jetson.yml down
-PACKAGU_JETSON_IMAGE=ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim \
-  docker compose -f docker/compose/docker-compose.jetson.yml up -d
+# [Jetson] 연결 확인 — 데스크톱의 시뮬 토픽이 보여야 한다
+docker exec -it ros2_humble bash -c "source /opt/ros/humble/setup.bash && timeout 10 ros2 topic list | grep -E '/clock|/scan'"
 
-# 컨테이너 안: 미션 + 로봇팔 + 부하 프로파일 원커맨드
-WITH_ARM=1 WITH_PROFILE=1 WITH_F3=1 bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh
-# 실서보 연결 시(udev 확정 후): ARM_SERIAL_PORT=/dev/arm_servo 추가
-
-# 검증 후 원상 복구 (Gazebo 완전 삭제)
-docker compose -f docker/compose/docker-compose.jetson.yml down
-docker compose -f docker/compose/docker-compose.jetson.yml up -d
-docker rmi ghcr.io/packagu/ros2-humble-slam:humble-jetson-sim
+# [Jetson] 미션 + 로봇팔 + 부하 프로파일 원커맨드 (컨테이너 안)
+GAZEBO_REMOTE=1 WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo WITH_PROFILE=1 WITH_F3=1 \
+  bash test_workspace/gazebo_world_swap/scripts/run_l3_world_swap_smoke.sh
 ```
 
 통과 기준은 §4.3과 동일 + `WITH_ARM` 검증(층 전환마다 팔 시퀀스 시작·완료 로그).
+Jetson 프로파일 값이 곧 실전 스택 순수 부하다.
+
+트러블슈팅: Jetson 에서 `/clock`/`/scan` 이 안 보이면 Wi-Fi 멀티캐스트 discovery 문제 —
+両머신 방화벽(ufw) 확인 후, 지속되면 Fast DDS `initialPeersList` 에 상대 IP 를 명시한
+프로파일 XML 을 `FASTRTPS_DEFAULT_PROFILES_FILE` 로 両쪽에 지정한다.
 
 ## 5. 새 코드 작성 시 체크리스트
 
