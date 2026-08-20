@@ -103,7 +103,14 @@ Gazebo Classic(11)은 arm64 공식 바이너리가 없어(§1.21) Jetson 위에�
 
 전제: 두 머신 같은 서브넷, `ROS_DOMAIN_ID` 동일(기본 0), 두 compose 모두 `network_mode: host` (기본값).
 
-실행 순서는 반드시 지킨다 (2026-08-17 완주 실증 절차 — 순서 위반이 실패 2회를 유발했다):
+**원커맨드 (2026-08-21 신설, 권장)**: 데스크톱에서 `bash scripts/run_distributed_e2e.sh` 한 줄이 아래 [0]~[3] 을
+자동으로 수행한다 — Jetson 잔존 노드 정리 → 데스크톱 Gazebo 리셋·기동 → `Successfully spawned entity` 로그 확인(사람 눈 의존 제거) →
+Jetson smoke(nohup) 기동 → 종료까지 폴링 → Jetson 로그·`run_<ts>/` 아티팩트를 `verification/dist_<ts>/` 로 수집.
+옵션은 `SMOKE_ENV`(기본: 왕복+보행자+정적 장애물+리프트+팔+프로파일, retries=2, MAX_MISSED_RATE=30), `GAZEBO_GUI`, `JETSON_SSH`.
+실측 2026-08-21 3/3 PASS: 각 11 goal 1차 SUCCEEDED·재시도 0, Jetson cpu avg 48%/peak 89~94%(6코어 시스템 전체), mem 2.5GB/6.8GB,
+missed 23~29(데스크톱 0~3 대비 높음 → 원커맨드 기본 `MAX_MISSED_RATE=60`, 실기 임계는 실센서 주행에서 수립).
+
+수동 절차(원커맨드가 안 될 때). 실행 순서는 반드시 지킨다 (2026-08-17 완주 실증 절차 — 순서 위반이 실패 2회를 유발했다):
 
 ```bash
 # [0] Jetson 정리 — 이전 런의 노드/스크립트 잔류 제거

@@ -279,10 +279,11 @@
 - (d) **수정**: `delivery_robot.urdf.xacro` — 바퀴 `fdir1 0 0 1`, mu 100/100, **캐스터 mu 0.5**(스키드 드래그 ~12N ≈ 구동 여유 1%, 파킹 브레이크). 검증: check_idle_drift **0.0000m/90s**(이전 0.5425), 주행 후 정지 0.0m/30s ×2, 후진·회전 없음. contract 테스트로 고정(fdir1 차축·`1 0 0` 금지·캐스터 mu≥0.3). §1.22 의 "2.4mm/90s" 는 스폰 직후(`1 0 0`, θ=0) 한정 측정이었고 "0.3~0.7cm/s" 가 일반 상태였다 — §1.25h/i 의 belief 드리프트 0.7~1.0m(REALIGN 발화)은 이 활주가 근원일 가능성이 높다(odom 불변 활주 = AMCL 갱신 트리거 없음).
 - (e) **잔여**: 캐스터 마찰은 시뮬 전용 근사(실물 볼 캐스터는 구름). 실기 §1.15 와 무관. 반복 캠페인에서 REALIGN 발화 빈도 변화로 (d) 의 가설 확인.
 
-### 1.27 🟡 [70%] 적대 리뷰(2026-08-20) 핫픽스 묶음 — 스모크/보행자/리프트/정적 장애물
+### 1.27 🟡 ✅ 적대 리뷰(2026-08-20) 핫픽스 묶음 — 스모크/보행자/리프트/정적 장애물
 
-> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-08-21
-> 진척: (a) 핫픽스 반영·정적 검증 ✅ / (b) 단발 스모크(전 옵션) 🔄 / (c) 반복 캠페인·Jetson 미착수
+> 상태: ✅ done (최종 스택 재검증 완료; 미해결 MED 는 (c) 에 기록) · 담당: Lee · 완료: 2026-08-21
+> 진척: (a) 핫픽스 반영·정적 검증 ✅ / (b) 단발 스모크(전 옵션) ✅ run4 무결점 / (c) 반복 캠페인 ✅ **10/10 연속 PASS(전 회차 재시도 0·REALIGN 0·응답유실 0, 278~348s)** + 선행 4/4 / (d) Jetson 분산 원커맨드 ✅ **3/3**(11 goal 1차, mem 2.5/6.8GB, cpu peak 89~94%, missed 23~29 → 분산 게이트 60)
+> 단발 스모크 run1~3 에서 잡은 결함: lift frame_id 빈값(플러그인 abort) / F2 출구 corner-cut collision-ahead → 스테이징 goal / inflation 0.30 밴드 3cm → 0.55/3.0 / goal 응답 유실(실행 안 됨) → 빠른 재전송 / finalize ls|wc pipefail rc=2 / 정적 장애물 +4m 오프셋 / 보행자↔로봇 교착 → yield(4s 후 0.8m 후퇴·퇴장)
 
 - (a) **반영 (review_report §3 findings)**: #1 pedestrians init 복원+근접 판정 참값(model_states)화 / #3 프로파일 flush 후 아카이브 / #4 request_switch `success=True` 본문 판정 / #5 INT/TERM trap rc 보존 / #9·#10 노즈 0.40 복원 + 몸통 polygon 반폭 0.27(내접 결함) / #12 missed-rate fail-closed·finalize 이전 / #13 trap 멱등 finalize / #14 wait_for_* timeout 랩 / #15 재시도 전 cancel_goal / #16 realign 수치 검증 / #17 RUN_DIR 계약 / #19 armed 앵커 / #20 팔 완료 층별 쌍 판정 / #23 실패 attempt 로그 보존 / H9 cgroup OOM(v1/v2) / M11 KEEP_RUNNING 차단 / 최적화 (a)-1 SKIP_BUILD(2회차부터). 신규: 정적 장애물 경로 위 배치(static=true, 레인 간격 단위 테스트), 리프트 mock(joint_pose_trajectory + lift_joint 자기잠금 friction 20, /joint_states 검증), 기동 레이스 방지(gzserver 완전 종료 대기).
 - (b) **검증**: 오프라인 28/28(신규 행위 테스트 2종 + AST 가드), 실패 경로 아티팩트 보존 실증, TERM 143 실증. 문서 사실오류(#28: 로봇 폭 0.5382/포켓 1.48/yaml 0.9 stale)와 통계 표현(#8)은 이 항목에서 계속.
