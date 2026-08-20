@@ -89,6 +89,8 @@ docs/**
 !docs/deployment/**
 !docs/superpowers/
 !docs/superpowers/**
+!docs/handover/
+!docs/handover/**
 !docs/_style/
 !docs/_style/**
 !docs/.notion_sync.json
