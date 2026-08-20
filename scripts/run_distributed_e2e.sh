@@ -47,7 +47,9 @@ trap 'exit 143' TERM
 
 # [0] Jetson 잔존 정리 (이전 smoke/노드) — 같은 컨테이너 이름이라 Jetson 쪽에서만 실행
 log "[0] jetson: cleaning stale smoke/nav processes"
-jssh "docker exec ros2_humble bash -c 'for p in run_l3_world_swap_smoke.sh component_container_isolated auto_floor_orchestrator world_swap pedestrians.py spawn_static_obstacles.py lift_cycle.py arm_sequence profile_resources.sh kku_navigation.launch.py; do pkill -f \$p 2>/dev/null; done; sleep 1; true'" >/dev/null 2>&1 || log "WARN: jetson cleanup ssh failed (continuing)"
+# pkill -f 는 이 bash -c 명령줄 자체(패턴 문자열 포함)를 잡아 자살한다 → 패턴 첫 글자를 [x] 로 감싸
+# 리터럴 자기매칭을 피한다(실측: run1 에서 WARN 발생).
+jssh "docker exec ros2_humble bash -c 'for p in run_l3_world_swap_smoke.sh component_container_isolated auto_floor_orchestrator world_swap pedestrians.py spawn_static_obstacles.py lift_cycle.py arm_sequence profile_resources.sh kku_navigation.launch.py; do pkill -f \"[\${p:0:1}]\${p:1}\" 2>/dev/null; done; sleep 1; true'" >/dev/null 2>&1 || log "WARN: jetson cleanup ssh failed (continuing)"
 
 # [1] 데스크톱 Gazebo 리셋 + 기동 + 스폰 확인
 log "[1] desktop: reset + start gazebo host (run_sim_host.sh F1, gui=$GAZEBO_GUI)"
