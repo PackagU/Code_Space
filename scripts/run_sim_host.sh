@@ -22,7 +22,8 @@ xhost +local:docker >/dev/null 2>&1 || true
 docker compose -f "$COMPOSE" up -d
 
 cleanup() {
-  docker exec ros2_humble bash -c "pkill -f 'gazebo.launch.py' 2>/dev/null; pkill gzserver 2>/dev/null; pkill gzclient 2>/dev/null" || true
+  # '[g]azebo…' : pkill -f 가 이 bash -c 명령줄(패턴 포함)을 자기매칭해 자살하면 뒤의 gzserver 정리가 안 된다(2026-08-21 실측).
+  docker exec ros2_humble bash -c "pkill -f '[g]azebo.launch.py' 2>/dev/null; pkill gzserver 2>/dev/null; pkill gzclient 2>/dev/null" || true
   echo "[run_sim_host] gazebo 정리 완료"
 }
 trap cleanup EXIT

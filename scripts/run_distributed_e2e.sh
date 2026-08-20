@@ -37,7 +37,7 @@ cleanup() {
     sleep 3
     kill -TERM "$HOST_PID" 2>/dev/null || true
   fi
-  docker exec ros2_humble bash -c "pkill -f 'gazebo.launch.py' 2>/dev/null; pkill -9 -x gzserver 2>/dev/null; pkill -9 -x gzclient 2>/dev/null; true" >/dev/null 2>&1 || true
+  docker exec ros2_humble bash -c "pkill -f '[g]azebo.launch.py' 2>/dev/null; pkill -9 -x gzserver 2>/dev/null; pkill -9 -x gzclient 2>/dev/null; true" >/dev/null 2>&1 || true
   log "done rc=$rc (artifacts: $OUT)"
   exit "$rc"
 }
@@ -47,13 +47,13 @@ trap 'exit 143' TERM
 
 # [0] Jetson 잔존 정리 (이전 smoke/노드) — 같은 컨테이너 이름이라 Jetson 쪽에서만 실행
 log "[0] jetson: cleaning stale smoke/nav processes"
-# pkill -f 는 이 bash -c 명령줄 자체(패턴 문자열 포함)를 잡아 자살한다 → 패턴 첫 글자를 [x] 로 감싸
-# 리터럴 자기매칭을 피한다(실측: run1 에서 WARN 발생).
-jssh "docker exec ros2_humble bash -c 'for p in run_l3_world_swap_smoke.sh component_container_isolated auto_floor_orchestrator world_swap pedestrians.py spawn_static_obstacles.py lift_cycle.py arm_sequence profile_resources.sh kku_navigation.launch.py; do pkill -f \"[\${p:0:1}]\${p:1}\" 2>/dev/null; done; sleep 1; true'" >/dev/null 2>&1 || log "WARN: jetson cleanup ssh failed (continuing)"
+# 주의: 원격 bash -c 의 명령줄에는 아래 패턴 문자열이 그대로 들어 있어 pkill -f 가 자기 자신을 죽인다
+# (실측: run1~3 "jetson cleanup ssh failed"). pgrep 결과에서 자기 pid($$)를 제외하고 kill 한다.
+jssh "docker exec ros2_humble bash -c 'for p in run_l3_world_swap_smoke.sh component_container_isolated auto_floor_orchestrator world_swap pedestrians.py spawn_static_obstacles.py lift_cycle.py arm_sequence profile_resources.sh kku_navigation.launch.py; do for pid in \$(pgrep -f \"\$p\"); do [ \"\$pid\" != \"\$\$\" ] && kill \"\$pid\" 2>/dev/null; done; done; sleep 1; true'" >/dev/null 2>&1 || log "WARN: jetson cleanup ssh failed (continuing)"
 
 # [1] 데스크톱 Gazebo 리셋 + 기동 + 스폰 확인
 log "[1] desktop: reset + start gazebo host (run_sim_host.sh F1, gui=$GAZEBO_GUI)"
-docker exec ros2_humble bash -c "pkill -f 'gazebo.launch.py' 2>/dev/null; pkill -9 -x gzserver 2>/dev/null; pkill -9 -x gzclient 2>/dev/null; true" >/dev/null 2>&1 || true
+docker exec ros2_humble bash -c "pkill -f '[g]azebo.launch.py' 2>/dev/null; pkill -9 -x gzserver 2>/dev/null; pkill -9 -x gzclient 2>/dev/null; true" >/dev/null 2>&1 || true
 for _ in $(seq 1 10); do docker exec ros2_humble pgrep -x gzserver >/dev/null 2>&1 || break; sleep 1; done
 sleep 2
 GAZEBO_GUI="$GAZEBO_GUI" nohup bash scripts/run_sim_host.sh F1 >"$OUT/sim_host.log" 2>&1 &
