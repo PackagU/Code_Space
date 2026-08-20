@@ -111,6 +111,10 @@ kill_matching() {
 }
 
 cleanup_started() {
+  # 정리 중 2차 INT/TERM 은 무시 — 정리 도중 끊기면 finalize(아티팩트 보존)가 중단된다
+  # (2026-08-21 fg-INT 테스트: 오류 종료 직후 INT 가 EXIT trap 을 끊어 finalize=0). 정리는
+  # 대기가 전부 유한(최대 ~20s)이라 안전. 종료 코드는 trap 진입 전 값(130/143/1)이 보존된다.
+  trap '' INT TERM
   # 미션이 실패해도 제어 계측은 남긴다(부하 실패 측정). nav 노드 kill 전에 먼저 기록.
   write_control_metrics 2>/dev/null || true
   # 실패 경로 아티팩트 보존 (2026-08-20 리뷰 findings #13): finalize 를 못 거치고
