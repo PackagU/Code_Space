@@ -685,7 +685,7 @@ finalize_artifacts() {
   # 로그/아티팩트 자동 수집: scenario_summary.md 작성 후 latest -> 타임스탬프 dir 로 복사.
   # 멱등: EXIT trap 과 본문 양쪽에서 호출될 수 있다(실패 경로 보존, findings #13).
   if [[ "${FINALIZED:-0}" == "1" ]]; then return 0; fi
-  FINALIZED=1
+  # FINALIZED 는 아카이브 복사가 끝난 뒤에 세운다 — 도중에 죽으면 EXIT trap 의 재호출이 이어서 복사한다.
   local summary="$OUT/scenario_summary.md"
   # 프로파일 flush (2026-08-20 리뷰 findings #3): resource_summary.txt 는 프로파일러의
   # SIGTERM 핸들러에서만 생성된다 — 복사 전에 먼저 종료시키고 이번 런 파일 생성을
@@ -728,9 +728,13 @@ finalize_artifacts() {
       if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"
       elif grep -q "SERVER-EVIDENCE: bt_navigator 'Goal succeeded'" "$f"; then res="SUCCEEDED (server evidence, client response lost)"
       else res="NOT_SUCCEEDED"; fi
-      # 재시도 사본 수 = 실패한 attempt 수 (0 이면 무결점 1차 통과)
-      local nfail
-      nfail=$(ls "$OUT"/nav2_goal_"${gname}"_a[0-9]*.fail.log 2>/dev/null | wc -l)
+      # 재시도 사본 수 = 실패한 attempt 수 (0 이면 무결점 1차 통과).
+      # 주의: `ls ... | wc -l` 은 매치가 없으면 pipefail 로 rc=2 가 되어 set -e 가 finalize 를 죽였다
+      # (2026-08-21 G004 run4: 전 구간 PASS 뒤 rc=2 로 집계·아티팩트 미복사). 글롭 루프로 센다.
+      local nfail=0 ff
+      for ff in "$OUT"/nav2_goal_"${gname}"_a[0-9]*.fail.log; do
+        [[ -e "$ff" ]] && nfail=$((nfail + 1))
+      done
       if (( nfail > 0 )); then res="$res (after $nfail failed attempt(s))"; fi
       echo "| $gname | $res |"
     done
@@ -766,6 +770,7 @@ finalize_artifacts() {
   ros2 topic list >"$OUT/topics_final.txt" 2>&1 || true
   ros2 service list >"$OUT/services_final.txt" 2>&1 || true
   cp -a "$OUT/." "$RUN_DIR/" 2>/dev/null || true
+  FINALIZED=1
   log "artifacts collected -> $RUN_DIR (summary: $RUN_DIR/scenario_summary.md)"
 }
 
@@ -1082,7 +1087,8 @@ if [[ -n "$MAX_MISSED_RATE" ]]; then
   fi
 fi
 
-finalize_artifacts
+# finalize 내부 오류는 미션 판정을 바꾸지 않는다(아티팩트는 EXIT trap 재호출이 마저 복사).
+finalize_artifacts || log "WARN: finalize_artifacts returned non-zero (artifacts may be incomplete)"
 if (( gate_rc != 0 )); then
   exit "$gate_rc"
 fi

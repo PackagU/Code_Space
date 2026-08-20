@@ -67,10 +67,20 @@ def main():
     )
     assert "finalize_artifacts 2>/dev/null || true" in runner_text, "#13: EXIT trap must call finalize (idempotent)"
     assert 'if [[ "${FINALIZED:-0}" == "1" ]]; then return 0; fi' in runner_text, "#13: finalize must be idempotent"
+    fin_body = runner_text.split("finalize_artifacts() {", 1)[1].split("\n}\n", 1)[0]
+    fin_code = "\n".join(l for l in fin_body.splitlines() if not l.strip().startswith("#"))
+    assert "| wc -l" not in fin_code, (
+        "finalize must not use 'ls ... | wc -l' (pipefail rc=2 on no match killed finalize under set -e — G004 run4)"
+    )
+    assert fin_body.rstrip().endswith('log "artifacts collected -> $RUN_DIR (summary: $RUN_DIR/scenario_summary.md)"') \
+        and "FINALIZED=1\n  log \"artifacts collected" in fin_body, "FINALIZED must be set only after the archive copy"
+    assert 'finalize_artifacts || log "WARN: finalize_artifacts returned non-zero' in runner_text, (
+        "main-flow finalize must not change the mission verdict"
+    )
     assert 'kill -TERM "$PROFILE_PID"' in runner_text, "#3: profiler must be flushed before archive copy"
     assert 'if [[ ! "$missed" =~ ^[0-9]+$ ]]; then' in runner_text, "#12: missed-rate gate must fail closed"
     gate_idx = runner_text.index("CONTROL FIDELITY FAIL: missed-rate metric unavailable")
-    final_idx = runner_text.rindex("\nfinalize_artifacts\n")
+    final_idx = runner_text.rindex('\nfinalize_artifacts || log "WARN')
     assert gate_idx < final_idx, "#12: missed-rate gate must be evaluated before finalize_artifacts"
     for fn in ("wait_for_topic", "wait_for_service", "wait_for_action"):
         body = runner_text.split(f"{fn}() {{", 1)[1].split("\n}\n", 1)[0]
