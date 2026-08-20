@@ -72,6 +72,14 @@ PEDESTRIANS = [
 # 퇴장한 보행자 대기 위치(건물 밖, LiDAR 사거리 밖). 인덱스로 서로 겹치지 않게 배치.
 PARK_BASE = (30.0, 30.0)
 
+# 로봇 근접 일시정지 거리(m): 로봇 footprint 최대 반경(노즈 0.40) + 보행자 반지름 0.22 + 여유.
+PAUSE_DIST = 0.7
+# 양보(yield): 이 시간 이상 막히면 RETREAT_STEP 만큼 경로를 되돌아가고, MAX_RETREATS 초과나
+# 물러나도 PAUSE_DIST 이내면 이번 통행을 포기(퇴장). 교착(로봇↔보행자 상호 대기) 해소용.
+YIELD_PAUSE_S = 4.0
+RETREAT_STEP = 0.8
+MAX_RETREATS = 3
+
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
@@ -94,6 +102,7 @@ class Pedestrians(Node):
         # 응답이 아예 안 오는(콜백 미발화) 모드도 잡기 위해 마지막 성공 시각을 추적한다.
         self._set_fail = 0
         self._last_ok = self.get_clock().now()
+        self._last_attempt = self._last_ok   # 마지막 set_entity_state 호출 시각(프리즈 감지 오탐 방지)
         # 로봇 근접 시 보행자 일시정지용 로봇 위치 추적.
         # set_entity_state 텔레포트가 로봇과 겹치면 Gazebo 가 관통을 충격량으로 해소해
         # 로봇이 뒤집힌 사례 실측 (2026-08-18 분산 run2: 로봇 참값 z=0.23m — §1.25g).
@@ -131,6 +140,7 @@ class Pedestrians(Node):
                 "state": "resting", "wait": float(spec.get("delay_s", 0.0)),
                 "rest": float(spec.get("rest_s", 20.0)),
                 "xr": xr, "yr": yr,
+                "paused_s": 0.0, "retreats": 0,
             })
             # 처음에는 건물 밖(PARK)에서 스폰 -> delay_s 후 첫 등장.
             self._spawn(spec["name"], park, spec.get("shirt", "0.2 0.4 0.8 1"))
@@ -208,6 +218,7 @@ class Pedestrians(Node):
         req.state.pose.orientation.z = math.sin(yaw / 2.0)
         req.state.pose.orientation.w = math.cos(yaw / 2.0)
         req.state.reference_frame = "world"
+        self._last_attempt = self.get_clock().now()
         fut = self.state_cli.call_async(req)
         fut.add_done_callback(lambda f, n=name: self._check_set_result(f, n))
 
@@ -238,13 +249,39 @@ class Pedestrians(Node):
                 if ped["wait"] <= 0.0:
                     ped["state"] = "walking"
                     ped["s"] = 0.0
+                    ped["paused_s"] = 0.0
+                    ped["retreats"] = 0
                 continue
             # 로봇 근접 시 일시정지: 사람이 로봇을 뚫고 걷지 않도록 0.7m 이내 위치
             # 갱신은 보류한다(로봇 통과 후 재개). 관통-충격량 캐터펄트 원천 차단(§1.25g).
             if self._robot_xy is not None:
                 nx, ny, _ = self._pose_at_s(ped, ped["s"] + ped["speed"] * self.dt)
-                if math.hypot(nx - self._robot_xy[0], ny - self._robot_xy[1]) < 0.7:
+                if math.hypot(nx - self._robot_xy[0], ny - self._robot_xy[1]) < PAUSE_DIST:
+                    # 양보(yield, 2026-08-21 캠페인 run_05 실측): 보행자가 로봇 진행 경로 위에 멈춰
+                    # 서고 로봇은 그 보행자 때문에 collision-ahead 로 멈추는 교착(8분 정지) 발생.
+                    # 사람은 마주 선 로봇 앞에서 영원히 기다리지 않고 물러선다 — YIELD_PAUSE_S 이상
+                    # 막히면 경로를 따라 RETREAT_STEP 뒤로 물러나고(로봇에서 멀어지는 방향),
+                    # 물러나도 가까우면(또는 MAX_RETREATS 초과) 이번 통행을 포기하고 퇴장한다.
+                    ped["paused_s"] += self.dt
+                    if ped["paused_s"] >= YIELD_PAUSE_S:
+                        ped["paused_s"] = 0.0
+                        ped["retreats"] += 1
+                        back_s = max(0.0, ped["s"] - RETREAT_STEP)
+                        bx, by, byaw = self._pose_at_s(ped, back_s)
+                        far_enough = math.hypot(bx - self._robot_xy[0], by - self._robot_xy[1]) >= PAUSE_DIST
+                        if ped["retreats"] <= MAX_RETREATS and far_enough and back_s < ped["s"]:
+                            ped["s"] = back_s
+                            self.get_logger().info(
+                                f"yield: {ped['name']} steps back {RETREAT_STEP}m (retreat {ped['retreats']}/{MAX_RETREATS})")
+                            self._set_state(ped["name"], clamp(bx, *ped["xr"]), clamp(by, *ped["yr"]), byaw)
+                        else:
+                            self.get_logger().info(f"yield: {ped['name']} gives way and leaves (park)")
+                            ped["state"] = "resting"
+                            ped["wait"] = ped["rest"]
+                            ped["forward"] = not ped["forward"]
+                            self._set_state(ped["name"], ped["park"][0], ped["park"][1], 0.0)
                     continue
+            ped["paused_s"] = 0.0
             ped["s"] += ped["speed"] * self.dt
             if ped["s"] >= ped["total"]:
                 # 목적지 도착 -> 퇴장. 다음 등장은 반대 방향(반대편에서 오는 사람 효과).
@@ -259,7 +296,10 @@ class Pedestrians(Node):
             self._set_state(ped["name"], x, y, yaw)
         # 무응답 프리즈 감지: walking 보행자가 있는데 5초 이상 성공 응답이 없으면
         # Gazebo 쪽 정체 — 보행자가 마지막 위치에 정지 장애물로 굳는다(§1.25).
-        if any(p["state"] == "walking" for p in self.peds):
+        # 단, 전원 근접 일시정지 중이면 호출 자체가 없어 성공도 없다 — 마지막 호출이 마지막 성공보다
+        # 뒤일 때(응답 없는 호출이 있을 때)만 프리즈로 본다(2026-08-21 run_05 오탐 정정).
+        if any(p["state"] == "walking" for p in self.peds) \
+                and self._last_attempt.nanoseconds > self._last_ok.nanoseconds:
             stale_s = (self.get_clock().now() - self._last_ok).nanoseconds / 1e9
             if stale_s > 5.0:
                 self.get_logger().error(

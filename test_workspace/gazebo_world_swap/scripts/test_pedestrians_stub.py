@@ -226,7 +226,31 @@ def main():
     tick()
     assert p["s"] > s0, "pedestrian must resume when robot is far"
 
-    print("PASS pedestrians stub behavior (init once, no callback re-init, truth-first proximity)")
+    # (5) 양보(yield): 로봇이 앞을 막고 서 있으면 YIELD_PAUSE_S 뒤 RETREAT_STEP 물러나고(set_state 호출),
+    #     물러나도 PAUSE_DIST 이내면 퇴장(park) — 캠페인 run_05 교착(8분) 재발 차단
+    p["s"] = max(p["s"], 1.5)
+    nx, ny, _ = node._pose_at_s(p, p["s"] + p["speed"] * node.dt)
+    node._robot_xy = (nx, ny)            # 로봇이 바로 다음 지점에 서 있다
+    s_block = p["s"]
+    n_set0 = len(node._tracker.get("/gazebo/set_entity_state", []))
+    for _ in range(int(pedestrians.YIELD_PAUSE_S / node.dt)):
+        tick()
+    assert p["s"] < s_block, "pedestrian must retreat along its route after YIELD_PAUSE_S blocked"
+    assert abs((s_block - p["s"]) - pedestrians.RETREAT_STEP) < 1e-6 or p["s"] == 0.0
+    assert len(node._tracker.get("/gazebo/set_entity_state", [])) > n_set0, "retreat must teleport (set_state)"
+    assert p["retreats"] == 1 and p["state"] == "walking"
+    # 로봇이 계속 바로 앞에 있으면(물러난 지점 기준 다시 막힘) 반복 후 결국 퇴장
+    for _ in range(int(pedestrians.YIELD_PAUSE_S / node.dt) * (pedestrians.MAX_RETREATS + 2)):
+        nx, ny, _ = node._pose_at_s(p, p["s"] + p["speed"] * node.dt) if p["state"] == "walking" else (0, 0, 0)
+        if p["state"] == "walking":
+            node._robot_xy = (nx, ny)
+        tick()
+    assert p["state"] == "resting", f"pedestrian must give way (park) after repeated blocking, state={p['state']}"
+    mine = [r for r in node._tracker["/gazebo/set_entity_state"] if r.state.name == p["name"]]
+    last = mine[-1]
+    assert (last.state.pose.position.x, last.state.pose.position.y) == (p["park"][0], p["park"][1]), "park teleport expected"
+
+    print("PASS pedestrians stub behavior (init once, no callback re-init, truth-first proximity, yield)")
 
 
 if __name__ == "__main__":
