@@ -323,11 +323,54 @@ send_nav_goal() {
       sleep 10
     fi
     log "sending navigation goal $name"
-    if timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+    # 서버측 증거 병행 판정 (2026-08-21 G004 run2 실측): rmw_fastrtps 가 goal 응답을 유실하면
+    # (nav2 로그 "[bt_navigator.rclcpp_action] Failed to send goal response (timeout)") CLI 는
+    # 결과를 영영 못 받아 timeout 까지 대기 → 이미 도착한 goal 을 실패로 세고 150s+재시도를
+    # 낭비한다(§1.23e 와 같은 응답 유실 계열). CLI 를 백그라운드로 띄우고 앵커 이후의
+    # bt_navigator "Goal succeeded/failed" 로그로 조기 판정한다. 참값(시뮬 오라클)은 쓰지 않는다.
+    local anchor cli_pid verdict="" tailn g
+    anchor=$(wc -l <"$OUT/nav2_f1.log" 2>/dev/null || echo 0)
+    timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
       "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
-      >"$OUT/nav2_goal_$name.log" 2>&1 \
-      && grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then
-      grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"
+      >"$OUT/nav2_goal_$name.log" 2>&1 &
+    cli_pid=$!
+    while true; do
+      if ! kill -0 "$cli_pid" 2>/dev/null; then
+        wait "$cli_pid" 2>/dev/null || true
+        if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok; else verdict=failed; fi
+        break
+      fi
+      tailn=$(tail -n +$((anchor + 1)) "$OUT/nav2_f1.log" 2>/dev/null \
+        | grep -E "\[bt_navigator\]: Goal (succeeded|failed)" | tail -1 || true)
+      if [[ "$tailn" == *"Goal succeeded"* || "$tailn" == *"Goal failed"* ]]; then
+        # CLI 가 결과를 곧 받을 수 있으니 5s 유예 후 판정
+        for g in 1 2 3 4 5; do kill -0 "$cli_pid" 2>/dev/null || break; sleep 1; done
+        if kill -0 "$cli_pid" 2>/dev/null; then
+          kill -TERM "$cli_pid" 2>/dev/null || true
+          wait "$cli_pid" 2>/dev/null || true
+          if [[ "$tailn" == *"Goal succeeded"* ]]; then
+            echo "SERVER-EVIDENCE: bt_navigator 'Goal succeeded' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
+            verdict=lost_ok
+          else
+            echo "SERVER-EVIDENCE: bt_navigator 'Goal failed' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
+            verdict=failed
+          fi
+        else
+          wait "$cli_pid" 2>/dev/null || true
+          if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok
+          elif [[ "$tailn" == *"Goal succeeded"* ]]; then verdict=lost_ok
+          else verdict=failed; fi
+        fi
+        break
+      fi
+      sleep 2
+    done
+    if [[ "$verdict" == "ok" || "$verdict" == "lost_ok" ]]; then
+      grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log" || true
+      if [[ "$verdict" == "lost_ok" ]]; then
+        log "goal $name: server reported success, client response lost -> accepting (response-loss absorbed, §1.23e)"
+        cp -f "$OUT/nav2_goal_$name.log" "$OUT/nav2_goal_${name}_a${attempt}.responselost.log" 2>/dev/null || true
+      fi
       if (( attempt > 0 )); then
         # 재시도로 살아난 goal 은 요약 표에서 구분되게 표식을 남긴다 (findings #23).
         log "goal $name SUCCEEDED after $attempt retry(ies) — recovered, not clean"
@@ -655,10 +698,12 @@ finalize_artifacts() {
     echo "|------|--------|"
     for f in "$OUT"/nav2_goal_*.log; do
       [[ -e "$f" ]] || continue
-      [[ "$f" == *.fail.log ]] && continue   # 실패 attempt 사본은 표에서 제외(원본 파일로 판정)
+      [[ "$f" == *.fail.log || "$f" == *.responselost.log ]] && continue   # attempt 사본은 표에서 제외(원본 파일로 판정)
       local gname res
       gname="$(basename "$f" .log | sed 's/^nav2_goal_//')"
-      if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"; else res="NOT_SUCCEEDED"; fi
+      if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"
+      elif grep -q "SERVER-EVIDENCE: bt_navigator 'Goal succeeded'" "$f"; then res="SUCCEEDED (server evidence, client response lost)"
+      else res="NOT_SUCCEEDED"; fi
       # 재시도 사본 수 = 실패한 attempt 수 (0 이면 무결점 1차 통과)
       local nfail
       nfail=$(ls "$OUT"/nav2_goal_"${gname}"_a[0-9]*.fail.log 2>/dev/null | wc -l)
@@ -908,6 +953,13 @@ if [[ "$WITH_LOC_FAULT" == "1" ]]; then
   # 아래 f2_corridor goal 이 SUCCEEDED 해야 한다(한정 오차 robustness 검증).
   inject_wrong_initialpose f2_entry 0.5 0.0
 fi
+
+# 엘베 출구 스테이징 (2026-08-21 G004 run2): 전환 직후 (0,0)에서 곧바로 (2.5,12) 로 향하면
+# 경로가 문 북측 jamb 쪽으로 꺾여 RPP 가 코너를 깎다 footprint 가장자리가 jamb inflation(내접
+# 0.27) 에 걸려 'collision ahead' 로 3회 전부 ABORT(true y=+0.11 에서 정지). 문을 직진으로
+# 빠져나오는 중간 goal 을 두어 정렬된 상태로 통과한 뒤 북쪽으로 돈다(실기 미션도 동일 패턴).
+log "staging straight out of the F2 elevator door"
+send_nav_goal f2_elevator_exit 1.8 0.0 0.0 1.0 150
 
 log "sending F2 corridor navigation goal near room 208"
 send_nav_goal f2_corridor 2.5 12.0 0.0 1.0 150

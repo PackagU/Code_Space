@@ -5,7 +5,7 @@
 #   [2] Jetson smoke(GAZEBO_REMOTE=1, nohup) 기동  [3] 종료까지 폴링  [4] 로그·아티팩트 수집  [5] 정리
 #
 # 사용: bash scripts/run_distributed_e2e.sh            # 왕복+보행자+정적장애물+리프트+팔+프로파일
-#   환경변수: JETSON_SSH(기본 hsm) JETSON_REPO(기본 /home/hsm/Code_Space) GAZEBO_GUI(false)
+#   환경변수: JETSON_SSH(기본 hsm) JETSON_REPO(기본 ~/Code_Space, Jetson 측 경로) GAZEBO_GUI(false)
 #             SMOKE_ENV(Jetson smoke 에 전달할 추가 env 문자열) POLL_TIMEOUT_S(기본 3000)
 # 산출물: test_workspace/gazebo_world_swap/verification/dist_<ts>/ (dist.log, sim_host.log,
 #         jetson_smoke.log, jetson_run/ = Jetson 의 run_<ts> 디렉터리 복사본)
@@ -15,7 +15,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 JETSON_SSH="${JETSON_SSH:-hsm}"
-JETSON_REPO="${JETSON_REPO:-/home/hsm/Code_Space}"
+# Jetson 쪽 저장소 경로 (원격 셸이 ~ 를 펼친다 — 사용자 홈 하드코딩 금지, portability R1)
+JETSON_REPO="${JETSON_REPO:-~/Code_Space}"
 GAZEBO_GUI="${GAZEBO_GUI:-false}"
 POLL_TIMEOUT_S="${POLL_TIMEOUT_S:-3000}"
 SMOKE_ENV="${SMOKE_ENV:-WITH_RETURN=1 WITH_PEDESTRIAN=1 WITH_STATIC_OBSTACLE=1 WITH_LIFT=1 WITH_ARM=1 WITH_PROFILE=1 NAV_GOAL_RETRIES=2 MAX_MISSED_RATE=30}"

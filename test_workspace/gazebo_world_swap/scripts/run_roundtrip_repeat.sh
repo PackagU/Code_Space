@@ -56,8 +56,8 @@ fi
   echo "- started: $REPEAT_TS"
   echo "- target: $REPEAT_N consecutive PASS (WITH_RETURN=$WITH_RETURN WITH_PEDESTRIAN=$WITH_PEDESTRIAN WITH_STATIC_OBSTACLE=$WITH_STATIC_OBSTACLE WITH_ARM=$WITH_ARM WITH_LIFT=$WITH_LIFT MAX_MISSED_RATE=$MAX_MISSED_RATE)"
   echo
-  echo "| run | result | duration_s | cpu_pct_peak | mem_used_peak_mb | missed_rate | retries | realign |"
-  echo "|-----|--------|------------|--------------|------------------|-------------|---------|---------|"
+  echo "| run | result | duration_s | cpu_pct_peak | mem_used_peak_mb | missed_rate | retries | realign | resp_lost |"
+  echo "|-----|--------|------------|--------------|------------------|-------------|---------|---------|-----------|"
 } > "$SUMMARY"
 
 pass=0
@@ -86,8 +86,10 @@ for ((i = 1; i <= REPEAT_N; i++)); do
   # (리뷰 A: 이 구분 없이는 회복 스택이 체계 결함을 은폐한다).
   retries="$(grep -c 'clearing costmaps + retrying' "$REPEAT_DIR/$slot.log" 2>/dev/null || true)"
   realign="$(grep -c 'REALIGN: belief drift' "$REPEAT_DIR/$slot.log" 2>/dev/null || true)"
+  # 응답 유실 흡수 횟수 (서버 증거로 성공 판정한 goal 수 — rmw 응답 유실 빈도 추적, §1.23e)
+  lost="$(grep -c 'client response lost -> accepting' "$REPEAT_DIR/$slot.log" 2>/dev/null || true)"
   if (( rc == 0 )); then result=PASS; pass=$((pass+1)); else result="FAIL(rc=$rc)"; fi
-  echo "| $i | $result | $dur | ${cpu_peak:-n/a} | ${mem_peak:-n/a} | ${missed:-n/a} | ${retries:-0} | ${realign:-0} |" >> "$SUMMARY"
+  echo "| $i | $result | $dur | ${cpu_peak:-n/a} | ${mem_peak:-n/a} | ${missed:-n/a} | ${retries:-0} | ${realign:-0} | ${lost:-0} |" >> "$SUMMARY"
   oom_now="$(oom_count)"
   if (( oom_now > OOM_BASE )); then
     { echo; echo "OOM kill detected at $slot (cgroup oom_kill $OOM_BASE -> $oom_now)"; } >> "$SUMMARY"

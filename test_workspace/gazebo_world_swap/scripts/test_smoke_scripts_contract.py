@@ -79,6 +79,17 @@ def main():
         "#16: realign parser must validate numerics before awk"
     )
     assert "nav2_goal_${name}_a${attempt}.fail.log" in runner_text, "#23: failed attempt logs must be preserved"
+    # 2026-08-21 G004 run2: rmw 응답 유실 시 서버(bt_navigator) 로그 증거로 조기 판정 + F2 출구 스테이징 goal
+    assert "SERVER-EVIDENCE: bt_navigator 'Goal succeeded' after anchor" in runner_text, (
+        "send_nav_goal must absorb lost goal responses via anchored bt_navigator evidence"
+    )
+    assert '"$f" == *.responselost.log' in runner_text, "summary must skip response-lost attempt copies"
+    assert "send_nav_goal f2_elevator_exit 1.8 0.0 0.0 1.0" in runner_text, (
+        "F2 elevator-exit staging goal missing (straight exit before turning north — run2 collision-ahead)"
+    )
+    f2_exit_idx = runner_text.index("send_nav_goal f2_elevator_exit 1.8 0.0")
+    f2_corr_idx = runner_text.index("send_nav_goal f2_corridor 2.5 12.0")
+    assert f2_exit_idx < f2_corr_idx, "staging goal must precede f2_corridor"
     assert 'index($0,"버튼 시퀀스 완료"){c++}' in runner_text, "#20: arm completion must be paired per floor (anchored)"
     # 정적 장애물 / 리프트 옵션의 fail-closed 호출 경로
     assert "spawn_static_obstacles.py" in runner_text and "STATIC OBSTACLE SPAWN FAILED" in runner_text
