@@ -84,6 +84,10 @@ def main():
         "send_nav_goal must absorb lost goal responses via anchored bt_navigator evidence"
     )
     assert '"$f" == *.responselost.log' in runner_text, "summary must skip response-lost attempt copies"
+    assert '"$f" == *.dropped.log' in runner_text, "summary must skip dropped-request copies"
+    assert "quick resend $quick/3 (no retry budget)" in runner_text, (
+        "send_nav_goal must quick-resend when the server dropped the request (response race, no 'Begin navigating')"
+    )
     assert "send_nav_goal f2_elevator_exit 1.8 0.0 0.0 1.0" in runner_text, (
         "F2 elevator-exit staging goal missing (straight exit before turning north — run2 collision-ahead)"
     )

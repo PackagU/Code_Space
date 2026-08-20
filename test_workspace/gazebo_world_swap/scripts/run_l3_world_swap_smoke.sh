@@ -328,42 +328,66 @@ send_nav_goal() {
     # 결과를 영영 못 받아 timeout 까지 대기 → 이미 도착한 goal 을 실패로 세고 150s+재시도를
     # 낭비한다(§1.23e 와 같은 응답 유실 계열). CLI 를 백그라운드로 띄우고 앵커 이후의
     # bt_navigator "Goal succeeded/failed" 로그로 조기 판정한다. 참값(시뮬 오라클)은 쓰지 않는다.
-    local anchor cli_pid verdict="" tailn g
-    anchor=$(wc -l <"$OUT/nav2_f1.log" 2>/dev/null || echo 0)
-    timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
-      "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
-      >"$OUT/nav2_goal_$name.log" 2>&1 &
-    cli_pid=$!
-    while true; do
-      if ! kill -0 "$cli_pid" 2>/dev/null; then
-        wait "$cli_pid" 2>/dev/null || true
-        if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok; else verdict=failed; fi
-        break
-      fi
-      tailn=$(tail -n +$((anchor + 1)) "$OUT/nav2_f1.log" 2>/dev/null \
-        | grep -E "\[bt_navigator\]: Goal (succeeded|failed)" | tail -1 || true)
-      if [[ "$tailn" == *"Goal succeeded"* || "$tailn" == *"Goal failed"* ]]; then
-        # CLI 가 결과를 곧 받을 수 있으니 5s 유예 후 판정
-        for g in 1 2 3 4 5; do kill -0 "$cli_pid" 2>/dev/null || break; sleep 1; done
-        if kill -0 "$cli_pid" 2>/dev/null; then
+    local anchor cli_pid verdict="" tailn g after t_sent quick=0 dropped=0
+    while :; do
+      verdict=""; dropped=0
+      anchor=$(wc -l <"$OUT/nav2_f1.log" 2>/dev/null || echo 0)
+      timeout "${timeout_sec}s" ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+        "{pose: {header: {frame_id: map}, pose: {position: {x: $x, y: $y, z: 0.0}, orientation: {z: $yaw_z, w: $yaw_w}}}}" \
+        >"$OUT/nav2_goal_$name.log" 2>&1 &
+      cli_pid=$!
+      t_sent=$SECONDS
+      while true; do
+        if ! kill -0 "$cli_pid" 2>/dev/null; then
+          wait "$cli_pid" 2>/dev/null || true
+          if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok; else verdict=failed; fi
+          break
+        fi
+        after=$(tail -n +$((anchor + 1)) "$OUT/nav2_f1.log" 2>/dev/null || true)
+        tailn=$(grep -E "\[bt_navigator\]: Goal (succeeded|failed)" <<<"$after" | tail -1 || true)
+        if [[ "$tailn" == *"Goal succeeded"* || "$tailn" == *"Goal failed"* ]]; then
+          # CLI 가 결과를 곧 받을 수 있으니 5s 유예 후 판정
+          for g in 1 2 3 4 5; do kill -0 "$cli_pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$cli_pid" 2>/dev/null; then
+            kill -TERM "$cli_pid" 2>/dev/null || true
+            wait "$cli_pid" 2>/dev/null || true
+            if [[ "$tailn" == *"Goal succeeded"* ]]; then
+              echo "SERVER-EVIDENCE: bt_navigator 'Goal succeeded' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
+              verdict=lost_ok
+            else
+              echo "SERVER-EVIDENCE: bt_navigator 'Goal failed' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
+              verdict=failed
+            fi
+          else
+            wait "$cli_pid" 2>/dev/null || true
+            if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok
+            elif [[ "$tailn" == *"Goal succeeded"* ]]; then verdict=lost_ok
+            else verdict=failed; fi
+          fi
+          break
+        fi
+        # 요청 유실 감지 (G004 run3 실측): 서버가 goal 응답 전송에 실패하고 20s 안에 'Begin navigating'
+        # 도 없으면 goal 이 실행되지 않는 상태(CLI 만 150s 대기) — 빠른 재전송(재시도 예산 미소모).
+        if grep -q "Failed to send goal response" <<<"$after" \
+          && ! grep -q "Begin navigating" <<<"$after" && (( SECONDS - t_sent >= 20 )); then
           kill -TERM "$cli_pid" 2>/dev/null || true
           wait "$cli_pid" 2>/dev/null || true
-          if [[ "$tailn" == *"Goal succeeded"* ]]; then
-            echo "SERVER-EVIDENCE: bt_navigator 'Goal succeeded' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
-            verdict=lost_ok
-          else
-            echo "SERVER-EVIDENCE: bt_navigator 'Goal failed' after anchor; client response lost" >>"$OUT/nav2_goal_$name.log"
-            verdict=failed
-          fi
-        else
-          wait "$cli_pid" 2>/dev/null || true
-          if grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then verdict=ok
-          elif [[ "$tailn" == *"Goal succeeded"* ]]; then verdict=lost_ok
-          else verdict=failed; fi
+          dropped=1
+          break
         fi
-        break
+        sleep 2
+      done
+      if (( dropped )); then
+        if (( quick < 3 )); then
+          quick=$((quick + 1))
+          log "goal $name: request dropped by server (goal-response race, not executing) -> quick resend $quick/3 (no retry budget)"
+          cp -f "$OUT/nav2_goal_$name.log" "$OUT/nav2_goal_${name}_q${quick}.dropped.log" 2>/dev/null || true
+          sleep 3
+          continue
+        fi
+        verdict=failed
       fi
-      sleep 2
+      break
     done
     if [[ "$verdict" == "ok" || "$verdict" == "lost_ok" ]]; then
       grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log" || true
@@ -698,7 +722,7 @@ finalize_artifacts() {
     echo "|------|--------|"
     for f in "$OUT"/nav2_goal_*.log; do
       [[ -e "$f" ]] || continue
-      [[ "$f" == *.fail.log || "$f" == *.responselost.log ]] && continue   # attempt 사본은 표에서 제외(원본 파일로 판정)
+      [[ "$f" == *.fail.log || "$f" == *.responselost.log || "$f" == *.dropped.log ]] && continue   # attempt 사본은 표에서 제외(원본 파일로 판정)
       local gname res
       gname="$(basename "$f" .log | sed 's/^nav2_goal_//')"
       if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"
