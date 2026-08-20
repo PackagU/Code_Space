@@ -16,6 +16,7 @@ import math
 
 import rclpy
 from rclpy.node import Node
+from gazebo_msgs.msg import ModelStates
 from gazebo_msgs.srv import SetEntityState, SpawnEntity
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
@@ -93,17 +94,23 @@ class Pedestrians(Node):
         # 응답이 아예 안 오는(콜백 미발화) 모드도 잡기 위해 마지막 성공 시각을 추적한다.
         self._set_fail = 0
         self._last_ok = self.get_clock().now()
-        # 로봇 근접 시 보행자 일시정지용 belief 구독 (map≈world 프레임 — 생성 맵 원점 일치).
+        # 로봇 근접 시 보행자 일시정지용 로봇 위치 추적.
         # set_entity_state 텔레포트가 로봇과 겹치면 Gazebo 가 관통을 충격량으로 해소해
         # 로봇이 뒤집힌 사례 실측 (2026-08-18 분산 run2: 로봇 참값 z=0.23m — §1.25g).
-        self._robot_xy = None
-        self.create_subscription(
-            PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, 10
-        )
+        # 1순위: /gazebo/model_states 참값(50Hz, gazebo_ros_state) — 액터 안전장치는
+        #   로봇 능력 검증이 아니므로 참값이 옳다(belief 드리프트 0.716~0.974m 실측이
+        #   근접 임계 0.7m 를 넘어 belief 기반 판정은 무발화할 수 있음).
+        # 2순위(참값 부재 시): /amcl_pose belief 폴백.
+        # 회귀 주의(a6a5115): 이 아래 초기화 본문은 반드시 __init__ 안에 있어야 한다.
+        #   콜백으로 이동하면 amcl 수신마다 재초기화(타이머 누수·전면 리셋)된다 —
+        #   test_smoke_scripts_contract.py 의 AST 가드가 이를 강제한다.
+        self.declare_parameter("robot_model_name", "elevator_robot_f1")
+        self._robot_model_name = str(self.get_parameter("robot_model_name").value)
+        self._robot_xy = None       # 근접 판정에 쓰는 최종 로봇 (x, y)
+        self._robot_xy_true = None  # 참값 캐시
+        self.create_subscription(ModelStates, "/gazebo/model_states", self._on_model_states, 10)
+        self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, 10)
 
-    def _on_amcl(self, msg):
-        p = msg.pose.pose.position
-        self._robot_xy = (p.x, p.y)
         self.get_logger().info("waiting for /spawn_entity, /gazebo/set_entity_state...")
         self.spawn_cli.wait_for_service()
         self.state_cli.wait_for_service()
@@ -136,6 +143,23 @@ class Pedestrians(Node):
         self.dt = 0.2
         self.timer = self.create_timer(self.dt, self._tick)
         self.get_logger().info(f"driving {len(self.peds)} pedestrians")
+
+    def _on_model_states(self, msg):
+        # Gazebo 참값 (1순위). 콜백은 위치 갱신만 한다 — 초기화 금지(a6a5115 회귀).
+        try:
+            i = msg.name.index(self._robot_model_name)
+        except ValueError:
+            return
+        p = msg.pose[i].position
+        self._robot_xy_true = (p.x, p.y)
+        self._robot_xy = self._robot_xy_true
+
+    def _on_amcl(self, msg):
+        # belief 폴백 (참값 미수신 시에만 사용). 콜백은 위치 갱신만 한다.
+        if self._robot_xy_true is not None:
+            return
+        p = msg.pose.pose.position
+        self._robot_xy = (p.x, p.y)
 
     def _segments(self, wps, loop):
         pts = wps + ([wps[0]] if loop and len(wps) > 1 else [])

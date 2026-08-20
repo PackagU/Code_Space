@@ -43,6 +43,8 @@ PY_TESTS=(
   test_workspace/gazebo_world_swap/scripts/test_gazebo_launch_spawn_point.py
   test_workspace/gazebo_world_swap/scripts/test_package_metadata.py
   test_workspace/gazebo_world_swap/scripts/test_smoke_scripts_contract.py
+  test_workspace/gazebo_world_swap/scripts/test_pedestrians_stub.py
+  test_workspace/gazebo_world_swap/scripts/test_static_obstacles_layout.py
 )
 
 pass=0

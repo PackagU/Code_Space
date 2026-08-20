@@ -61,6 +61,14 @@ if [[ "$WITH_RETURN" == "1" && "$WITH_F3" == "1" ]]; then
   echo "error: WITH_RETURN=1 과 WITH_F3=1 은 동시 사용 불가 (왕복은 F1<->F2 전용)" >&2
   exit 1
 fi
+# 정적 장애물 옵션. WITH_STATIC_OBSTACLE=1 이면 복도에 정지 보행자(정적 장애물)를
+# 스폰해 로봇이 '멈춰 서 있는 사람'을 우회하는지 검증한다(최종 시나리오의 정적
+# 장애물 요구 — 동적 보행자와 독립 옵션). 기본 0 -> 결정적 smoke 유지.
+WITH_STATIC_OBSTACLE="${WITH_STATIC_OBSTACLE:-0}"
+# 리프트(Z축) 동작 옵션. WITH_LIFT=1 이면 택배 픽업 직후와 F2 하역 시점에
+# lift_joint 상승/하강 사이클을 실행·검증한다(최종 시나리오의 리프트 동작 —
+# URDF joint trajectory 플러그인 + /joint_states 검증). 기본 0.
+WITH_LIFT="${WITH_LIFT:-0}"
 # nav goal 재시도 횟수. 보행자 런 기본 2(조우로 인한 일시 ABORTED 흡수),
 # 결정적 smoke 기본 0(회귀를 재시도로 가리지 않기). 명시 설정이 우선.
 if [[ -z "${NAV_GOAL_RETRIES:-}" ]]; then
@@ -105,6 +113,10 @@ kill_matching() {
 cleanup_started() {
   # 미션이 실패해도 제어 계측은 남긴다(부하 실패 측정). nav 노드 kill 전에 먼저 기록.
   write_control_metrics 2>/dev/null || true
+  # 실패 경로 아티팩트 보존 (2026-08-20 리뷰 findings #13): finalize 를 못 거치고
+  # 죽으면 증거가 latest/ 에만 남아 다음 런의 rm -f 에 파괴됐다(Jetson 빈 실패
+  # 디렉터리 4개 실증). trap 에서 멱등 finalize 로 항상 run_<ts>/ 에 스냅샷을 남긴다.
+  finalize_artifacts 2>/dev/null || true
   # 부하 주입 워커는 KEEP_RUNNING 과 무관하게 항상 정리(미션용 부하일 뿐).
   for pid in "${STRESS_PIDS[@]}"; do
     kill -KILL "$pid" 2>/dev/null || true
@@ -140,14 +152,33 @@ cleanup_stale() {
   kill_matching "profile_resources.sh"
   kill_matching "gzserver"
   kill_matching "gzclient"
-  sleep 1
+  # 2026-08-20: 죽어가는 gzserver 와 새 gzserver 가 겹치면(마스터 포트 11345 인계 레이스)
+  # 로봇이 "무명령 활주(6mm/s, 마찰 무력)" 모드로 스폰되는 사례를 반복 재현(§1.22 의 활주는
+  # 기동 레이스가 방아쇠였다 — journal 2026-08-20_review_followup §2). 완전히 사라질 때까지
+  # 기다린 뒤(최대 10s, 잔존 시 SIGKILL) 2s 안정화한다.
+  # pgrep -x(프로세스명 정확 일치): -f 는 이 스크립트를 감싼 셸의 명령줄에 'gzserver' 가
+  # 들어 있으면 자기 자신을 잡아 영원히 기다린다(실측: 래퍼 bash -c 문자열 자기매칭).
+  local w
+  for w in $(seq 1 10); do
+    pgrep -x gzserver >/dev/null 2>&1 || break
+    sleep 1
+  done
+  if pgrep -x gzserver >/dev/null 2>&1; then
+    log "stale gzserver still alive after 10s -> SIGKILL"
+    pkill -9 -x gzserver 2>/dev/null || true
+    sleep 1
+  fi
+  sleep 2
 }
 
+# 주의: 아래 wait_for_* 의 CLI 는 반드시 timeout 으로 감싼다 (2026-08-20 리뷰
+# findings #14) — daemon 오염 등으로 CLI 자체가 행하면 루프가 다음 반복으로 못 가
+# timeout 검사에 영원히 도달하지 못한다(§1.23f 의 /clock 멈춤이 이 경로).
 wait_for_topic() {
   local topic="$1"
   local timeout_sec="$2"
   local end=$((SECONDS + timeout_sec))
-  until ros2 topic list >"$OUT/topics.tmp" && grep -qx "$topic" "$OUT/topics.tmp"; do
+  until timeout 10 ros2 topic list >"$OUT/topics.tmp" 2>/dev/null && grep -qx "$topic" "$OUT/topics.tmp"; do
     if (( SECONDS >= end )); then
       log "timeout waiting for topic $topic"
       return 1
@@ -160,7 +191,7 @@ wait_for_service() {
   local service="$1"
   local timeout_sec="$2"
   local end=$((SECONDS + timeout_sec))
-  until ros2 service list >"$OUT/services.tmp" && grep -qx "$service" "$OUT/services.tmp"; do
+  until timeout 10 ros2 service list >"$OUT/services.tmp" 2>/dev/null && grep -qx "$service" "$OUT/services.tmp"; do
     if (( SECONDS >= end )); then
       log "timeout waiting for service $service"
       return 1
@@ -173,7 +204,7 @@ wait_for_action() {
   local action="$1"
   local timeout_sec="$2"
   local end=$((SECONDS + timeout_sec))
-  until ros2 action list >"$OUT/actions.tmp" && grep -qx "$action" "$OUT/actions.tmp"; do
+  until timeout 10 ros2 action list >"$OUT/actions.tmp" 2>/dev/null && grep -qx "$action" "$OUT/actions.tmp"; do
     if (( SECONDS >= end )); then
       log "timeout waiting for action $action"
       return 1
@@ -210,14 +241,18 @@ start_bg() {
 
 verify_arm_sequence() {
   # 층 전환 후 팔 버튼 시퀀스가 시작(해당 층 트리거)·완료됐는지 노드 로그로 확인한다.
+  # 2026-08-20 리뷰 findings #20: 완료 로그에 층이 없어 누계 카운트는 층 무구분이었다
+  # (F1 복귀 시 F2 완료 2회면 F1 미완료여도 통과). "해당 층 시작 줄 이후에 찍힌 완료"가
+  # 1개 이상인지(층별 쌍)로 판정하고, min_complete 는 전체 누계 하한으로만 쓴다.
   local floor="$1"
   local timeout_sec="$2"
   local min_complete="${3:-1}"
   local end=$((SECONDS + timeout_sec))
   while true; do
     if grep -q "버튼 시퀀스 시작 ($floor)" "$OUT/arm_sequence.log" 2>/dev/null \
-      && [[ "$(grep -c "버튼 시퀀스 완료" "$OUT/arm_sequence.log" 2>/dev/null)" -ge "$min_complete" ]]; then
-      log "ARM PASS: $floor 버튼 시퀀스 시작+완료 확인"
+      && [[ "$(grep -c "버튼 시퀀스 완료" "$OUT/arm_sequence.log" 2>/dev/null)" -ge "$min_complete" ]] \
+      && [[ "$(awk -v f="버튼 시퀀스 시작 ($floor)" 'index($0,f){seen=1;c=0;next} seen&&index($0,"버튼 시퀀스 완료"){c++} END{print c+0}' "$OUT/arm_sequence.log" 2>/dev/null)" -ge 1 ]]; then
+      log "ARM PASS: $floor 버튼 시퀀스 시작+완료 확인 (층별 쌍)"
       return 0
     fi
     if (( SECONDS >= end )); then
@@ -268,6 +303,11 @@ send_nav_goal() {
   for attempt in $(seq 0 "$retries"); do
     if (( attempt > 0 )); then
       log "goal $name failed (attempt $attempt/$retries) -> clearing costmaps + retrying in 10s (waiting for dynamic obstacle to clear)"
+      # 이전 시도의 goal 이 액션 서버에 살아있을 수 있다(send_goal CLI 는 timeout
+      # SIGTERM 에 cancel 을 보내지 않음, findings #15). 살아있는 goal 위에서
+      # initialpose 재발행/costmap 클리어를 하면 주행 중 재정위가 된다 — 먼저 취소.
+      timeout 10 ros2 service call /navigate_to_pose/_action/cancel_goal action_msgs/srv/CancelGoal "{}" \
+        >/dev/null 2>&1 || true
       dump_world_state "${name}_a${attempt}"
       realign_belief_if_drifted
       # 떠난 장애물의 stale lethal 마크가 통로를 계속 봉쇄하는 사례 대응
@@ -284,9 +324,20 @@ send_nav_goal() {
       >"$OUT/nav2_goal_$name.log" 2>&1 \
       && grep -q "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"; then
       grep "status: SUCCEEDED" "$OUT/nav2_goal_$name.log"
+      if (( attempt > 0 )); then
+        # 재시도로 살아난 goal 은 요약 표에서 구분되게 표식을 남긴다 (findings #23).
+        log "goal $name SUCCEEDED after $attempt retry(ies) — recovered, not clean"
+      fi
       return 0
     fi
+    # 실패한 attempt 의 로그를 보존한다 — 다음 attempt 가 같은 파일을 덮어써 재시도 이력이
+    # 사라지던 문제(findings #23). 요약 표는 마지막 attempt 결과만 반영하므로 attempt 사본으로
+    # 실패 원인(ABORTED 사유)을 사후 판독할 수 있게 한다.
+    cp -f "$OUT/nav2_goal_$name.log" "$OUT/nav2_goal_${name}_a${attempt}.fail.log" 2>/dev/null || true
   done
+  # 최종 실패 시에도 잔존 goal 취소 — 이후 정리/스냅샷이 주행 중 로봇 위에서 돌지 않게.
+  timeout 10 ros2 service call /navigate_to_pose/_action/cancel_goal action_msgs/srv/CancelGoal "{}" \
+    >/dev/null 2>&1 || true
   dump_world_state "${name}_final"
   cat "$OUT/nav2_goal_$name.log"
   return 1
@@ -343,17 +394,23 @@ realign_belief_if_drifted() {
   local resp belief tx ty tz tw bx by dist
   resp=$(timeout 10 ros2 service call /gazebo/get_entity_state gazebo_msgs/srv/GetEntityState \
     "{name: 'elevator_robot_f1'}" 2>/dev/null | tr -d '\n') || true
-  tx=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=\K[-0-9.e]+" <<<"$resp" | head -1)
-  ty=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=[-0-9.e]+, y=\K[-0-9.e]+" <<<"$resp" | head -1)
-  tz=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\(x=[-0-9.e]+, y=[-0-9.e]+, z=\K[-0-9.e]+" <<<"$resp" | head -1)
-  tw=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\([^)]*w=\K[-0-9.e]+" <<<"$resp" | head -1)
+  tx=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=\K[-0-9.e+]+" <<<"$resp" | head -1)
+  ty=$(grep -oP "position=geometry_msgs\.msg\.Point\(x=[-0-9.e+]+, y=\K[-0-9.e+]+" <<<"$resp" | head -1)
+  tz=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\(x=[-0-9.e+]+, y=[-0-9.e+]+, z=\K[-0-9.e+]+" <<<"$resp" | head -1)
+  tw=$(grep -oP "orientation=geometry_msgs\.msg\.Quaternion\([^)]*w=\K[-0-9.e+]+" <<<"$resp" | head -1)
   belief=$(timeout 10 bash -c "ros2 topic echo --once /amcl_pose" 2>/dev/null | tr -d '\n') || true
-  bx=$(grep -oP "x: \K[-0-9.e]+" <<<"$belief" | head -1)
-  by=$(grep -oP "y: \K[-0-9.e]+" <<<"$belief" | head -1)
-  if [[ -z "$tx" || -z "$ty" || -z "$tz" || -z "$tw" || -z "$bx" || -z "$by" ]]; then
-    log "belief drift check skipped (pose unavailable: true=($tx,$ty) belief=($bx,$by))"
-    return 0
-  fi
+  bx=$(grep -oP "x: \K[-0-9.e+]+" <<<"$belief" | head -1)
+  by=$(grep -oP "y: \K[-0-9.e+]+" <<<"$belief" | head -1)
+  # 수치 검증 (findings #16): grep 문자클래스가 '.'/'e' 단독 캡처를 허용해 awk 소스가
+  # 깨지면 set -e 로 스모크 전체가 즉사한다 — 정규식으로 완전한 수치만 통과시킨다.
+  local num_re='^-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$'
+  local v
+  for v in "$tx" "$ty" "$tz" "$tw" "$bx" "$by"; do
+    if [[ ! "$v" =~ $num_re ]]; then
+      log "belief drift check skipped (unparsable pose: true=($tx,$ty) belief=($bx,$by))"
+      return 0
+    fi
+  done
   dist=$(awk "BEGIN{printf \"%.3f\", sqrt(($tx-($bx))^2 + ($ty-($by))^2)}")
   log "belief drift: true=($tx,$ty) belief=($bx,$by) dist=${dist}m"
   if awk "BEGIN{exit !($dist > 0.3)}"; then
@@ -381,14 +438,25 @@ request_floor_switch() {
   # request_switch 호출 + half-hang 흡수(§1.23e): 응답 유실 시(서버는 armed 완료,
   # rmw 'failed to send response' — 2026-08-17 데스크톱 반복 런 run_02 실측)
   # orchestrator 로그의 armed 증거로 성공을 판정한다. 증거도 없으면 1회 재호출.
+  # 2026-08-20 리뷰 findings #4/#19: (a) ros2 service call 은 서버가 거절
+  # (success=False, busy 등)해도 rc=0 이라 응답 본문 success=True 로 판정한다.
+  # (b) armed 증거는 이 호출 이후에 새로 찍힌 로그에서만 찾는다(시간 앵커) —
+  # 같은 층 재방문/재호출 시 과거 armed 라인 재사용 방지.
   local floor="$1"
   local logf="$OUT/request_switch_$(echo "$floor" | tr 'A-Z' 'a-z').log"
+  local anchor
+  anchor=$(wc -l <"$OUT/orchestrator.log" 2>/dev/null || echo 0)
   local attempt
   for attempt in 1 2; do
-    if timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$logf" 2>&1; then
+    if timeout 45 ros2 service call /floor_orchestrator/request_switch std_srvs/srv/Trigger >"$logf" 2>&1 \
+      && grep -q "success=True" "$logf"; then
       return 0
     fi
-    if grep -q "auto floor switch armed: target=$floor" "$OUT/orchestrator.log" 2>/dev/null; then
+    if grep -q "success=False" "$logf"; then
+      log "request_switch($floor) REJECTED by server (attempt $attempt/2)"
+      cat "$logf"
+    elif tail -n +$((anchor + 1)) "$OUT/orchestrator.log" 2>/dev/null \
+      | grep -q "auto floor switch armed: target=$floor"; then
       log "request_switch($floor) response lost but server armed — continuing (§1.23e half-hang absorbed)"
       return 0
     fi
@@ -426,11 +494,39 @@ start_pedestrian() {
   start_bg pedestrians python3 "$ped_dir/pedestrians.py"
 }
 
+spawn_static_obstacles() {
+  # 정적 장애물(정지 보행자) 스폰 — 원샷, 실패 시 즉시 FAIL (장애물 없이 통과하면
+  # '정적 장애물 하 완주' 검증이 무의미해지므로 fail-closed).
+  log "spawning static obstacles (stationary pedestrians)"
+  if ! timeout 60 python3 "$WORKSPACE/pedestrian/spawn_static_obstacles.py" \
+    >"$OUT/static_obstacles.log" 2>&1; then
+    log "STATIC OBSTACLE SPAWN FAILED"
+    cat "$OUT/static_obstacles.log"
+    exit 1
+  fi
+}
+
+run_lift_cycle() {
+  # 리프트 상승→하강 사이클 + /joint_states 실측 검증 (WITH_LIFT=1).
+  local tag="$1"
+  log "running lift cycle: $tag (up 0.30 -> down 0.0, verified via /joint_states)"
+  if ! timeout 90 python3 "$WORKSPACE/scripts/lift_cycle.py" --tag "$tag" \
+    >"$OUT/lift_$tag.log" 2>&1; then
+    log "LIFT FAIL: $tag"
+    cat "$OUT/lift_$tag.log"
+    exit 1
+  fi
+  grep "LIFT PASS" "$OUT/lift_$tag.log" || true
+}
+
 start_profiler() {
   log "starting resource profiler (CPU/mem/runtime sampling)"
   mkdir -p "$OUT/profile"
+  # 이전 회차 산출물 제거 — 이번 런 파일만 아카이브되게 한다(findings #3).
+  rm -f "$OUT/profile/resource_summary.txt" "$OUT/profile/resource_samples.csv"
   start_bg profile bash "$WORKSPACE/scripts/profile_resources.sh" \
     --out "$OUT/profile" --interval 2 --label smoke
+  PROFILE_PID="${PIDS[${#PIDS[@]}-1]}"
 }
 
 start_stress() {
@@ -516,7 +612,23 @@ write_control_metrics() {
 
 finalize_artifacts() {
   # 로그/아티팩트 자동 수집: scenario_summary.md 작성 후 latest -> 타임스탬프 dir 로 복사.
+  # 멱등: EXIT trap 과 본문 양쪽에서 호출될 수 있다(실패 경로 보존, findings #13).
+  if [[ "${FINALIZED:-0}" == "1" ]]; then return 0; fi
+  FINALIZED=1
   local summary="$OUT/scenario_summary.md"
+  # 프로파일 flush (2026-08-20 리뷰 findings #3): resource_summary.txt 는 프로파일러의
+  # SIGTERM 핸들러에서만 생성된다 — 복사 전에 먼저 종료시키고 이번 런 파일 생성을
+  # 기다리지 않으면 이전 회차 summary 가 아카이브돼 repeat 표 cpu/mem 이 전부
+  # 오귀속된다(run_01~03 md5 동일 실증).
+  if [[ -n "${PROFILE_PID:-}" ]]; then
+    kill -TERM "$PROFILE_PID" 2>/dev/null || true
+    local w
+    for w in 1 2 3 4 5 6 7 8 9 10; do
+      [[ -s "$OUT/profile/resource_summary.txt" ]] && break
+      sleep 1
+    done
+    PROFILE_PID=""
+  fi
   write_control_metrics
   {
     echo "# world-swap smoke scenario summary"
@@ -529,6 +641,9 @@ finalize_artifacts() {
     echo "- WITH_STRESS: $WITH_STRESS"
     echo "- WITH_RT_PRIORITY: $WITH_RT_PRIORITY"
     echo "- WITH_RETURN: $WITH_RETURN"
+    echo "- WITH_STATIC_OBSTACLE: $WITH_STATIC_OBSTACLE"
+    echo "- WITH_LIFT: $WITH_LIFT"
+    echo "- NAV_GOAL_RETRIES: $NAV_GOAL_RETRIES"
     echo
     echo "## nav goals"
     echo
@@ -536,9 +651,14 @@ finalize_artifacts() {
     echo "|------|--------|"
     for f in "$OUT"/nav2_goal_*.log; do
       [[ -e "$f" ]] || continue
+      [[ "$f" == *.fail.log ]] && continue   # 실패 attempt 사본은 표에서 제외(원본 파일로 판정)
       local gname res
       gname="$(basename "$f" .log | sed 's/^nav2_goal_//')"
       if grep -q "status: SUCCEEDED" "$f"; then res="SUCCEEDED"; else res="NOT_SUCCEEDED"; fi
+      # 재시도 사본 수 = 실패한 attempt 수 (0 이면 무결점 1차 통과)
+      local nfail
+      nfail=$(ls "$OUT"/nav2_goal_"${gname}"_a[0-9]*.fail.log 2>/dev/null | wc -l)
+      if (( nfail > 0 )); then res="$res (after $nfail failed attempt(s))"; fi
       echo "| $gname | $res |"
     done
     for f in "$OUT"/nav2_recovery_*.log; do
@@ -593,6 +713,14 @@ ensure_maps() {
 }
 
 trap cleanup_started EXIT
+# 시그널 rc 보존 (findings #5): INT trap 이 없으면 trap 마지막 명령(sleep) rc=0 이
+# 스크립트 종료 코드가 돼 Ctrl-C 로 중단된 회차가 repeat 러너에서 PASS 로 집계됐다.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# 반복 러너와의 아티팩트 귀속 계약 (findings #17): 이번 런의 산출 디렉터리를
+# stdout 에 명시한다 — 러너는 ls -dt 추측 대신 이 줄을 파싱한다.
+log "RUN_DIR=$RUN_DIR"
 
 cd "$ROOT"
 source_setup /opt/ros/humble/setup.bash
@@ -606,6 +734,12 @@ cleanup_stale
 ros2 daemon stop >/dev/null 2>&1 || true
 ensure_maps
 
+# SKIP_BUILD=1 이면 4단 colcon 빌드를 건너뛴다 (반복 러너가 2회차부터 전달 — 코드 불변이라
+# 검증력 손실 없이 회차당 1~2분 절감, 2026-08-20 리뷰 최적화 (a)-1). 기본 0 = 항상 빌드.
+SKIP_BUILD="${SKIP_BUILD:-0}"
+if [[ "$SKIP_BUILD" == "1" ]]; then
+  log "SKIP_BUILD=1 — colcon 빌드 생략 (이전 회차 install 재사용)"
+else
 log "building root workspace"
 # --base-paths src: 루트 빌드가 /ros2_ws 재귀 탐색으로 test_workspace 패키지까지
 # 루트 install에 흡수하던 문제 차단 (패키지 삭제 시 stale ament index로
@@ -635,6 +769,7 @@ log "building gazebo_world_swap"
   source_setup "$ROOT/install/setup.bash"
   colcon build --symlink-install
 ) >"$OUT/build_gazebo_world_swap.log" 2>&1
+fi
 
 source_setup "$ROOT/install/setup.bash"
 source_setup "$ROOT/test_workspace/elevator_auto_map_switch/install/setup.bash"
@@ -671,6 +806,10 @@ if [[ "$WITH_PEDESTRIAN" == "1" ]]; then
   start_pedestrian
 fi
 
+if [[ "$WITH_STATIC_OBSTACLE" == "1" ]]; then
+  spawn_static_obstacles
+fi
+
 if [[ "$WITH_PROFILE" == "1" ]]; then
   start_profiler
 fi
@@ -691,18 +830,25 @@ send_nav_goal f1_parcel_pickup 5.0 -3.4 -0.7071068 0.7071068 150
 # 여기서 initialpose 를 재발행해 belief 를 재정박한다.
 publish_initial_pose parcel_dock 5.0 -3.4 -0.7071068 0.7071068
 
+# 택배함 픽업 리프트 동작 (최종 시나리오: 대기 -> 택배함(리프트) -> 로비 -> ...).
+if [[ "$WITH_LIFT" == "1" ]]; then
+  run_lift_cycle pickup
+fi
+
 log "returning to F1 elevator for floor transfer"
 send_nav_goal f1_parcel_exit 5.0 -2.1 0.7071068 0.7071068 150
 
 # 택배 픽업 후 출고 -> 앞쪽으로 살짝 튀어나온 footprint 적용(택배 들고 가는 형상).
-# 앞 중앙만 0.40 으로 확장, 몸통 폭(±0.26)/후방(-0.18)은 유지해 엘리베이터 문(폭 1.0m) 통과 보장.
-# 노즈 0.40→0.35 (2026-08-18): 0.40 은 1.6m 엘베 포켓에서 북벽 inflation 과 겹쳐
-# collision-ahead patience 초과로 산발 ABORT (분산 run3 실측, §1.25). 택배 크기는
+# 2026-08-20 적대 리뷰 C 반영: 구 폴리곤(반폭 0.26, 후방 -0.18)은 내접반경 0.18 <
+# 실반폭 0.2691 이라 Smac2D 가 벽에서 8.9cm 물리 불가능 경로를 허용했다(엘베 진입
+# patience 초과의 유력 기전). 반폭 0.27(실폭 0.5382m)·후방 -0.27 로 내접 0.27 확보.
+# 노즈는 0.40 복원 — 구 0.35 축소의 명분(포켓 inflation 간섭)은 두 폴리곤의 내접
+# 반경이 동일(코스트필드 동일)해 물리적으로 불성립(리뷰 findings #9). 택배 크기는
 # hardware_spec 미정 항목 — 실측 확정 시 갱신.
-PARCEL_FOOTPRINT="[[0.35,0.12],[0.35,-0.12],[0.27,-0.26],[-0.18,-0.26],[-0.18,0.26],[0.27,0.26]]"
+PARCEL_FOOTPRINT="[[0.40,0.12],[0.40,-0.12],[0.27,-0.27],[-0.27,-0.27],[-0.27,0.27],[0.27,0.27]]"
 # 원복용 몸통 polygon (전방 확장 제거). robot_radius 0.28 원 대신 실제 몸통 사각형 —
 # "[]" 로 radius 복귀를 시도하면 type error 로 무음 실패한다(2026-07-03 엘베 갇힘).
-NORMAL_FOOTPRINT="[[0.27,0.26],[0.27,-0.26],[-0.18,-0.26],[-0.18,0.26]]"
+NORMAL_FOOTPRINT="[[0.27,0.27],[0.27,-0.27],[-0.27,-0.27],[-0.27,0.27]]"
 log "parcel loaded -> extend front footprint (carrying parcel)"
 set_costmap_footprint parcel "$PARCEL_FOOTPRINT"
 send_nav_goal f1_corridor_return 5.0 0.0 1.0 0.0 150
@@ -761,6 +907,11 @@ fi
 
 log "sending F2 corridor navigation goal near room 208"
 send_nav_goal f2_corridor 2.5 12.0 0.0 1.0 150
+
+# F2 배달 지점 도착 -> 택배 하차 리프트 동작 (최종 시나리오: F2 도착 -> 하차(리프트)).
+if [[ "$WITH_LIFT" == "1" ]]; then
+  run_lift_cycle f2_delivery
+fi
 
 if [[ "$WITH_RECOVERY" == "1" ]]; then
   # 도달 불가능 goal(맵 밖) -> Nav2 가 한정된 시간 안에 ABORTED 로 안전 종료해야 한다.
@@ -832,17 +983,28 @@ if [[ "$WITH_RETURN" == "1" ]]; then
   send_nav_goal f1_charge_station 1.6 0.0 0.0 1.0 150
 fi
 
-finalize_artifacts
-
 # P0 제어 충실도 회귀 가드: MAX_MISSED_RATE 설정 시 임계 초과면 FAIL.
+# 2026-08-20 리뷰 findings #12: (a) finalize 이전에 판정해 FAIL 런의 아티팩트가
+# 성공처럼 남지 않게 한다 (b) 지표가 비거나 숫자가 아니면 fail-closed —
+# 구버전은 빈 값이 산술 구문오류를 타고 조용히 '통과'였다.
+gate_rc=0
+write_control_metrics
 if [[ -n "$MAX_MISSED_RATE" ]]; then
-  missed=$(grep '^control_loop_missed_rate=' "$OUT/control_metrics.txt" | cut -d= -f2)
-  log "control fidelity: missed-rate=$missed (threshold MAX_MISSED_RATE=$MAX_MISSED_RATE)"
-  if (( missed > MAX_MISSED_RATE )); then
+  missed=$(grep '^control_loop_missed_rate=' "$OUT/control_metrics.txt" 2>/dev/null | cut -d= -f2 || true)
+  if [[ ! "$missed" =~ ^[0-9]+$ ]]; then
+    log "CONTROL FIDELITY FAIL: missed-rate metric unavailable ('$missed') — fail-closed"
+    gate_rc=1
+  elif (( missed > MAX_MISSED_RATE )); then
     log "CONTROL FIDELITY FAIL: nav2 control loop missed rate $missed > $MAX_MISSED_RATE"
-    exit 1
+    gate_rc=1
+  else
+    log "control fidelity: missed-rate=$missed <= MAX_MISSED_RATE=$MAX_MISSED_RATE — OK"
   fi
-  log "control fidelity OK"
+fi
+
+finalize_artifacts
+if (( gate_rc != 0 )); then
+  exit "$gate_rc"
 fi
 
 log "logs written to $OUT"

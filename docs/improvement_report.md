@@ -268,4 +268,24 @@
 - (h) **드리프트 재정위 실증**: 5차 반복 run_01 에서 belief 드리프트 0.716m 실측 → REALIGN 발화 → 런 PASS. 데스크톱 10/10 연속 PASS 달성(repeat_20260817_133709).
 - (i) **4번째 원인 + 최종 완결 (2026-08-18)**: 분산 run3 — 택배 확장 footprint 노즈 0.40m 가 1.6m 엘베 포켓의 벽 inflation 과 겹쳐 collision-ahead patience 초과(성공 21회/실패 1회 산발). 노즈 0.35m 로 조정(택배 크기 실측 전 가정치). 이후 분산 3/3 완주 — 마지막 런에서 REALIGN 이 0.974m 드리프트를 흡수하고 재시도 1회로 완주(회복 스택 실전 검증). 잔여 과제: mu2=1.0 방향 분리의 실기 파라미터 무관성 확인(시뮬 전용 값), Fast DDS Discovery Server 전환(§1.23).
 
+### 1.26 🔴 ✅ 바퀴 마찰 방향(fdir1) 퇴화 + 무마찰 캐스터 크리프 — 정지 중 자발 회전·6mm/s 활주의 진짜 원인
+
+> 상태: ✅ done (표준 ODE 하네스 + 스택 검증) · 담당: Lee · 완료: 2026-08-21
+> 근거: docs/session_wiki/2026-08-20_review_followup/journal.md §2 (실험 전수), 적대 리뷰 findings #2/#11
+
+- (a) **발단**: 2026-08-20 적대 리뷰 D — `fdir1="1 0 0"` 은 collision 프레임 기준이라 바퀴와 함께 회전(θ≈90° 마다 마찰축이 접지 법선과 겹치는 퇴화 창), "mu2=1.0 횡력 캡으로 전복 불가(1.8배)" 는 COM 산술 오류(마스트·LiDAR 누락, 실제 1.465g). 끊긴 후속 세션이 `fdir1="0 0 1"` 로 바꿨으나 check_idle_drift 가 0.54m/90s FAIL 인 채 남았다(주석은 해소됐다고 기재 — 거짓).
+- (b) **실험 1 (표준 ODE 하네스, 바퀴 고정·중력 0.03g 기울임·바퀴각 0/45/80/90°)**: `0 0 1`(차축) 전 각도 0 이동 / `1 0 0` θ90 yaw 1.59 rad / 커밋본(`1 0 0`, mu2 1) θ0 에서도 yaw 0.1 + θ80~90 yaw 1.4~2.3 / `0 1 0` θ0 퇴화 → Gazebo 11 소스로 "fdir1 은 collision WorldPose 회전" 확인. 스택 stop_probe: `1 0 0` 은 주행 후 정지 30s 에 −0.63m 이동·이후 전진 명령에 후진(정지 중 yaw 반전).
+- (c) **실험 2 (활주 원인 분리)**: `0 0 1` 의 6.1mm/s 등속 활주는 플러그인(diff_drive/jsp/LiDAR/리프트)·ROS·월드(ground mu2, gazebo_ros_state, RTF)·팩토리 스폰 전부 무관, 순수 gzserver 최소 월드에서 결정적 재현. 하네스 로봇과의 유일한 차이 = **캐스터 마찰**(하네스는 regex 사고로 캐스터에 mu 100). 캐스터 mu 스윕: 0 → 6.1mm/s, 0.05 → 5.0, 0.3/1.0/3.0 → 0. 속도 보고값이 ~0 인데 위치만 증가(운동학적 양상)·바퀴 접선력 0 — 무마찰 고정 구 캐스터 + 차축 fdir1 조합에서 ODE 가 만드는 아티팩트.
+- (d) **수정**: `delivery_robot.urdf.xacro` — 바퀴 `fdir1 0 0 1`, mu 100/100, **캐스터 mu 0.5**(스키드 드래그 ~12N ≈ 구동 여유 1%, 파킹 브레이크). 검증: check_idle_drift **0.0000m/90s**(이전 0.5425), 주행 후 정지 0.0m/30s ×2, 후진·회전 없음. contract 테스트로 고정(fdir1 차축·`1 0 0` 금지·캐스터 mu≥0.3). §1.22 의 "2.4mm/90s" 는 스폰 직후(`1 0 0`, θ=0) 한정 측정이었고 "0.3~0.7cm/s" 가 일반 상태였다 — §1.25h/i 의 belief 드리프트 0.7~1.0m(REALIGN 발화)은 이 활주가 근원일 가능성이 높다(odom 불변 활주 = AMCL 갱신 트리거 없음).
+- (e) **잔여**: 캐스터 마찰은 시뮬 전용 근사(실물 볼 캐스터는 구름). 실기 §1.15 와 무관. 반복 캠페인에서 REALIGN 발화 빈도 변화로 (d) 의 가설 확인.
+
+### 1.27 🟡 [70%] 적대 리뷰(2026-08-20) 핫픽스 묶음 — 스모크/보행자/리프트/정적 장애물
+
+> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-08-21
+> 진척: (a) 핫픽스 반영·정적 검증 ✅ / (b) 단발 스모크(전 옵션) 🔄 / (c) 반복 캠페인·Jetson 미착수
+
+- (a) **반영 (review_report §3 findings)**: #1 pedestrians init 복원+근접 판정 참값(model_states)화 / #3 프로파일 flush 후 아카이브 / #4 request_switch `success=True` 본문 판정 / #5 INT/TERM trap rc 보존 / #9·#10 노즈 0.40 복원 + 몸통 polygon 반폭 0.27(내접 결함) / #12 missed-rate fail-closed·finalize 이전 / #13 trap 멱등 finalize / #14 wait_for_* timeout 랩 / #15 재시도 전 cancel_goal / #16 realign 수치 검증 / #17 RUN_DIR 계약 / #19 armed 앵커 / #20 팔 완료 층별 쌍 판정 / #23 실패 attempt 로그 보존 / H9 cgroup OOM(v1/v2) / M11 KEEP_RUNNING 차단 / 최적화 (a)-1 SKIP_BUILD(2회차부터). 신규: 정적 장애물 경로 위 배치(static=true, 레인 간격 단위 테스트), 리프트 mock(joint_pose_trajectory + lift_joint 자기잠금 friction 20, /joint_states 검증), 기동 레이스 방지(gzserver 완전 종료 대기).
+- (b) **검증**: 오프라인 28/28(신규 행위 테스트 2종 + AST 가드), 실패 경로 아티팩트 보존 실증, TERM 143 실증. 문서 사실오류(#28: 로봇 폭 0.5382/포켓 1.48/yaml 0.9 stale)와 통계 표현(#8)은 이 항목에서 계속.
+- (c) **미해결(기록)**: #18 문폭 1.0 가정치(실측 대기, 회의 안건) / #21 kill_matching 과잉(GAZEBO_REMOTE 데스크톱 동시 실행 시) / #22 latest/ 무잠금 / #24 cpu_pct 시스템 전체 / #25 fastdds IP 하드코딩 / #29 contract 문자열 검사(행위 테스트로 점진 대체).
+
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

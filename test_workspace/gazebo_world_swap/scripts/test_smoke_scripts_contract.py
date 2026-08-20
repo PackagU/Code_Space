@@ -49,8 +49,90 @@ def main():
 
     # --- 회귀 보호: 새 gated 옵션이 유지되고 기본값이 결정적인지 확인 ---
     for opt in ("WITH_PEDESTRIAN", "WITH_RECOVERY", "WITH_LOC_FAULT", "WITH_PROFILE",
-                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3", "WITH_ARM", "WITH_RETURN"):
+                "WITH_STRESS", "WITH_RT_PRIORITY", "WITH_F3", "WITH_ARM", "WITH_RETURN",
+                "WITH_STATIC_OBSTACLE", "WITH_LIFT", "SKIP_BUILD"):
         assert f'{opt}="${{{opt}:-0}}"' in runner_text, f"{opt} default must be 0 (deterministic)"
+
+    # --- 회귀 보호: 2026-08-20 적대 리뷰 핫픽스 (review_report §3 findings 번호) ---
+    assert "trap 'exit 130' INT" in runner_text and "trap 'exit 143' TERM" in runner_text, (
+        "#5: INT/TERM trap must preserve non-zero exit (interrupted run counted as PASS before)"
+    )
+    assert 'log "RUN_DIR=$RUN_DIR"' in runner_text, "#17: RUN_DIR contract line for repeat runner missing"
+    assert '&& grep -q "success=True" "$logf"' in runner_text, (
+        "#4: request_switch must judge by response body success=True (ros2 service call rc=0 on rejection)"
+    )
+    assert "tail -n +$((anchor + 1))" in runner_text, "#19: armed-evidence grep must be time-anchored"
+    assert runner_text.count("/navigate_to_pose/_action/cancel_goal") >= 2, (
+        "#15: live goal must be cancelled before retry and on final failure"
+    )
+    assert "finalize_artifacts 2>/dev/null || true" in runner_text, "#13: EXIT trap must call finalize (idempotent)"
+    assert 'if [[ "${FINALIZED:-0}" == "1" ]]; then return 0; fi' in runner_text, "#13: finalize must be idempotent"
+    assert 'kill -TERM "$PROFILE_PID"' in runner_text, "#3: profiler must be flushed before archive copy"
+    assert 'if [[ ! "$missed" =~ ^[0-9]+$ ]]; then' in runner_text, "#12: missed-rate gate must fail closed"
+    gate_idx = runner_text.index("CONTROL FIDELITY FAIL: missed-rate metric unavailable")
+    final_idx = runner_text.rindex("\nfinalize_artifacts\n")
+    assert gate_idx < final_idx, "#12: missed-rate gate must be evaluated before finalize_artifacts"
+    for fn in ("wait_for_topic", "wait_for_service", "wait_for_action"):
+        body = runner_text.split(f"{fn}() {{", 1)[1].split("\n}\n", 1)[0]
+        assert "timeout 10 ros2" in body, f"#14: {fn} CLI must be wrapped in timeout"
+    assert "local num_re='^-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$'" in runner_text, (
+        "#16: realign parser must validate numerics before awk"
+    )
+    assert "nav2_goal_${name}_a${attempt}.fail.log" in runner_text, "#23: failed attempt logs must be preserved"
+    assert 'index($0,"버튼 시퀀스 완료"){c++}' in runner_text, "#20: arm completion must be paired per floor (anchored)"
+    # 정적 장애물 / 리프트 옵션의 fail-closed 호출 경로
+    assert "spawn_static_obstacles.py" in runner_text and "STATIC OBSTACLE SPAWN FAILED" in runner_text
+    assert "lift_cycle.py" in runner_text and 'run_lift_cycle pickup' in runner_text \
+        and 'run_lift_cycle f2_delivery' in runner_text, "lift cycle must run at pickup and F2 delivery"
+
+    # --- 회귀 보호: pedestrians.py 구조 (AST) — a6a5115 형 재발 차단 ---
+    import ast
+    ped_src = (repo_root / "test_workspace" / "gazebo_world_swap" / "pedestrian" / "pedestrians.py")
+    tree = ast.parse(ped_src.read_text(encoding="utf-8"))
+    cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "Pedestrians")
+    methods = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
+    init_calls = {n.func.attr for n in ast.walk(methods["__init__"])
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert "create_timer" in init_calls and "_spawn" in init_calls, (
+        "pedestrians.__init__ must create the tick timer and spawn pedestrians (a6a5115 regression)"
+    )
+    for cb in ("_on_amcl", "_on_model_states"):
+        assert cb in methods, f"pedestrians.py must define {cb}"
+        cb_calls = {n.func.attr for n in ast.walk(methods[cb])
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+        for forbidden in ("create_timer", "_spawn", "wait_for_service", "create_subscription"):
+            assert forbidden not in cb_calls, (
+                f"pedestrians.{cb} must only update robot position — found {forbidden} (re-init regression)"
+            )
+    # 정적 장애물 배치 단일 소스 + 레이아웃 테스트 존재
+    layout = repo_root / "test_workspace" / "gazebo_world_swap" / "pedestrian" / "static_obstacle_layout.py"
+    assert layout.exists() and "<static>true</static>" in layout.read_text(encoding="utf-8")
+    assert (scripts / "test_static_obstacles_layout.py").exists()
+    assert (scripts / "test_pedestrians_stub.py").exists()
+    assert (scripts / "check_idle_drift.sh").exists() and os.access(scripts / "check_idle_drift.sh", os.X_OK), (
+        "wheel friction regression check (check_idle_drift.sh) missing"
+    )
+    # 리프트: URDF 의 lift_joint 는 자기잠금 dynamics(friction) 를 가져야 한다 (플러그인이 조인트를 놓음)
+    urdf = repo_root / "src" / "common_pkg" / "urdf" / "delivery_robot.urdf.xacro"
+    urdf_text = urdf.read_text(encoding="utf-8")
+    lift_block = urdf_text.split('<joint name="lift_joint"', 1)[1].split("</joint>", 1)[0]
+    assert "<dynamics" in lift_block and "friction=" in lift_block, (
+        "lift_joint needs <dynamics friction> so the carrier holds position after joint_pose_trajectory releases it"
+    )
+    assert 'filename="libgazebo_ros_joint_pose_trajectory.so"' in urdf_text, "lift trajectory plugin missing"
+    lift_cycle = (scripts / "lift_cycle.py").read_text(encoding="utf-8")
+    assert 'traj.header.frame_id = "world"' in lift_cycle, (
+        "lift_cycle must set frame_id='world' — joint_pose_trajectory aborts on empty frame_id (G004 run1)"
+    )
+    # 바퀴 물리 확정값 (2026-08-21, session_wiki/2026-08-20_review_followup §2): 차축 fdir1 + 캐스터 마찰.
+    # "1 0 0" 은 θ≈90° 퇴화(정지 중 자발 yaw), 캐스터 mu 0 은 차축 fdir1 과 조합 시 6mm/s 크리프.
+    assert urdf_text.count("<fdir1>0 0 1</fdir1>") == 2, "wheel fdir1 must be the axle direction '0 0 1' (collision frame)"
+    assert "<fdir1>1 0 0</fdir1>" not in urdf_text, "fdir1 '1 0 0' rotates with the wheel (degenerate at 90deg) — forbidden"
+    import re as _re
+    for caster in ("caster_wheel", "caster_wheel_front"):
+        blk = urdf_text.split(f'<gazebo reference="{caster}">', 1)[1].split("</gazebo>", 1)[0]
+        mu = float(_re.search(r"<mu1>([0-9.]+)</mu1>", blk).group(1))
+        assert mu >= 0.3, f"{caster} mu1={mu}: frictionless casters + axle fdir1 creep 6mm/s (need >= 0.3)"
     assert "verify_arm_sequence F2" in runner_text, "arm sequence F2 verification missing"
     assert "verify_arm_sequence F3" in runner_text, "arm sequence F3 verification missing"
     assert 'GAZEBO_GUI="${GAZEBO_GUI:-false}"' in runner_text, "GAZEBO_GUI default must be false (headless)"
