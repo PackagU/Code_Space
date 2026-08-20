@@ -16,6 +16,7 @@ F2 뒤 복도 중앙 (2.5, 7.5): 엘베(0,0)->f2_corridor(2.5,12) 주행선 위.
   (F1 월드에도 같은 뒤 복도가 있으나 F1 미션은 가지 않으므로 상시 존재해도 무간섭.)
 """
 import math
+import re
 
 ROBOT_HALF_WIDTH = 0.27      # 실폭 0.5382 m
 PED_RADIUS = 0.22            # pedestrian.sdf collision 반지름
@@ -53,4 +54,12 @@ def static_xml(template: str, name: str, shirt: str) -> str:
     xml = xml.replace("__SHIRT__", shirt)
     xml = xml.replace("<static>false</static>", "<static>true</static>")
     assert "<static>true</static>" in xml, "pedestrian.sdf must carry a <static> tag to override"
+    # 템플릿의 모델 <pose>(4.0 0 0 …)는 spawn initial_pose 에 합성되어 정적 장애물이 +4m 어긋나
+    # 스폰됐다(2026-08-21 G004 run2 world_state: (3.3,0)→(7.3,0), (2.5,7.5)→(6.5,7.5) — 경로 밖).
+    # 동적 보행자는 매 틱 절대좌표 텔레포트라 무관했다. 모델 포즈를 0 으로 고정한다.
+    xml = re.sub(r"<model name=\"[^\"]+\">(\s*)<static>true</static>(\s*)<pose>[^<]*</pose>",
+                 lambda m: m.group(0).rsplit("<pose>", 1)[0] + "<pose>0 0 0 0 0 0</pose>", xml, count=1)
+    assert re.search(r"<model name=\"[^\"]+\">\s*<static>true</static>\s*<pose>0 0 0 0 0 0</pose>", xml), (
+        "static obstacle model pose must be zeroed (template pose offsets the spawn position)"
+    )
     return xml

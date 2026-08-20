@@ -52,6 +52,12 @@ def main():
     xml = L.static_xml(template, "static_x", "0.1 0.2 0.3 1")
     assert "<static>true</static>" in xml and "<static>false</static>" not in xml
     assert 'name="static_x"' in xml and "__SHIRT__" not in xml
+    # 템플릿 모델 pose(4.0 0 0) 가 spawn 위치에 합성돼 +4m 어긋나던 결함(G004 run2) 회귀 차단
+    import re
+    m = re.search(r'<model name="static_x">\s*<static>true</static>\s*<pose>([^<]*)</pose>', xml)
+    assert m and [float(v) for v in m.group(1).split()] == [0.0] * 6, (
+        f"static obstacle model pose must be zero, got {m.group(1) if m else None}"
+    )
     # 이름 중복 금지
     names = [o["name"] for o in L.STATIC_OBSTACLES]
     assert len(names) == len(set(names))
