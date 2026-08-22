@@ -101,6 +101,22 @@ def main():
     state = teleop.process_key(" ", state[0], state[1], state[2])
     assert_state(state, (0.0, 0.0), 0.3025, 0.99, (0.0, 0.0), None)
 
+    # dead-man: 0.5s 키 미수신 시 강제 정지
+    cmd, stopped = teleop.apply_deadman((0.25, 0.0), idle_seconds=0.6)
+    assert_tuple(cmd, (0.0, 0.0))
+    if not stopped:
+        raise AssertionError("deadman must report stop")
+
+    cmd, stopped = teleop.apply_deadman((0.25, 0.0), idle_seconds=0.3)
+    assert_tuple(cmd, (0.25, 0.0))
+    if stopped:
+        raise AssertionError("fresh command must not be stopped")
+
+    cmd, stopped = teleop.apply_deadman((0.0, 0.0), idle_seconds=9.9)
+    assert_tuple(cmd, (0.0, 0.0))
+    if stopped:
+        raise AssertionError("zero command must not report stop")
+
     print("PASS: WASD teleop key mapping is correct.")
 
 

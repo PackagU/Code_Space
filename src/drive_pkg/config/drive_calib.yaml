@@ -1,0 +1,10 @@
+# R1B 지면 캘리브레이션에서 확정 후 갱신 (스펙 §5.5)
+# 초기값 근거: docs/hardware_spec.md §1.3 (바퀴 지름 0.066m, 간격 0.51324m)
+packagu_opencr_bridge:
+  ros__parameters:
+    wheel_radius: 0.033
+    wheel_separation: 0.51324
+    left_sign: 1.0
+    right_sign: 1.0
+    cmd_timeout_sec: 0.5
+    cmd_rate_hz: 20.0

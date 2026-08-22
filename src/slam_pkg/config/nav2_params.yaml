@@ -117,7 +117,10 @@ controller_server:
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     # P1 graceful degradation: 부하로 제어가 잠깐 막혀도 바로 실패하지 않게 여유 확대.
-    failure_tolerance: 1.0
+    # 2026-07-03: 1.0 -> 45.0. 좁은 문(엘베 1.0m/택배 0.9m) 앞을 보행자가 지나는 동안
+    # RPP 가 collision ahead 예외를 던지는데 1초 만에 "patience exceeded" ABORTED 됐다.
+    # 보행자 순찰 주기(최대 ~34s)를 기다릴 수 있게 확대 — 사람 공존 환경 전제 튜닝.
+    failure_tolerance: 45.0
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"] # "precise_goal_checker"
     controller_plugins: ["FollowPath"]
@@ -127,7 +130,9 @@ controller_server:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.5
       # P1: 부하 지터로 잠깐 느려져도 recovery spin 으로 안 빠지게 진행 판정 시간 확대.
-      movement_time_allowance: 30.0
+      # 2026-07-03: 30 -> 60. failure_tolerance 45s 대기 중 progress checker 가
+      # 먼저 발동해 recovery 로 빠지지 않게 대기 상한보다 길게 둔다.
+      movement_time_allowance: 60.0
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
@@ -167,7 +172,7 @@ controller_server:
       use_cost_regulated_linear_velocity_scaling: true
       cost_scaling_dist: 0.3
       cost_scaling_gain: 1.0
-      inflation_cost_scaling_factor: 5.0
+      inflation_cost_scaling_factor: 3.0   # costmap inflation cost_scaling_factor 와 동기 (2026-08-21)
       # 차동 구동: 경로 시작/목표에서 헤딩 정렬을 위해 제자리 회전 사용(좁은 alcove 180° 대응)
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
@@ -192,8 +197,13 @@ local_costmap:
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.30
+        # 2026-08-21: 0.30/5.0 -> 0.55/3.0 (적대 리뷰 C 대안 D). footprint 내접 0.27 로 정정한 뒤
+        # inflation 0.30 은 그래디언트 밴드가 3cm 뿐이라 플래너가 장애물 inflation 가장자리(중심
+        # 0.52m)까지 붙어 경로를 내고 RPP 가 코너를 깎다 충돌(G004 run3: 정적 장애물 (3.3,0) 옆
+        # y=0.48 에서 collision ahead 3회). 밴드를 0.28m 로 넓혀 경로가 장애물에서 떨어지게 한다.
+        # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -250,8 +260,13 @@ global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.30
+        # 2026-08-21: 0.30/5.0 -> 0.55/3.0 (적대 리뷰 C 대안 D). footprint 내접 0.27 로 정정한 뒤
+        # inflation 0.30 은 그래디언트 밴드가 3cm 뿐이라 플래너가 장애물 inflation 가장자리(중심
+        # 0.52m)까지 붙어 경로를 내고 RPP 가 코너를 깎다 충돌(G004 run3: 정적 장애물 (3.3,0) 옆
+        # y=0.48 에서 collision ahead 3회). 밴드를 0.28m 로 넓혀 경로가 장애물에서 떨어지게 한다.
+        # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
       always_send_full_costmap: True
 
 map_server:

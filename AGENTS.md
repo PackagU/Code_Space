@@ -290,7 +290,7 @@ PackagU/Code_Space
 
 ## 현재 포커스 (세션 후 업데이트)
 
-**현재 단계**: Roadmap 01~06을 world-swap 방식으로 상당 부분 통과 — 남은 관문은 03(실측 맵)·06 완결(반복 10회)·07(Jetson 실기). `Roadmap/README.md` 참조.
-**현재 작업**: GitHub(Code_Space) 이관 + 문서 정합화 + F3 전환 검증
-**블로커**: 모터/배터리/Depth 카메라 미정 + 복도/엘리베이터 실측 대기 ([docs/hardware_spec.md](docs/hardware_spec.md) §미정 항목, [improvement_report.md](docs/improvement_report.md) §1.8)
-**다음 할 일**: 신공학관 실측 → 맵 재생성 → Jetson aarch64 이미지 배포 + 부하 실측
+**현재 단계**: 왕복 배달 체인 완성 (2026-08-18) — 충전소→택배함→엘베→F2 배달→엘베→F1 복귀→충전소가 데스크톱 10/10 연속 + Jetson 분산 3/3 완주. 산발 결함 6종 근절(§1.25 ✅), 회복 스택(재시도 costmap 클리어+드리프트 재정위+참값 스냅샷) 상설화. 남은 관문은 03(실측 맵)·06 잔여(고장 주입 5종)·07 잔여(실기 센서 주행). `Roadmap/README.md` 참조.
+**현재 작업**: 시뮬 측 완결 — 왕복 스모크(`WITH_RETURN=1`)·반복 판정기(`run_roundtrip_repeat.sh`)·compose 장치 env화(HW 미장착 기동 OK)까지 커밋됨. 절차: [docs/deployment/01_portability_policy.md](docs/deployment/01_portability_policy.md) §4.5
+**블로커**: 모터/배터리/Depth 카메라 미정 + 복도/엘리베이터 실측 대기 ([docs/hardware_spec.md](docs/hardware_spec.md) §미정 항목, [improvement_report.md](docs/improvement_report.md) §1.8) + OpenCR 쇼트(§1.20). 라이다/로봇팔/HDMI는 Jetson에서 제거된 상태(재장착 절차: [docs/deployment/03_hw_update_checklist.md](docs/deployment/03_hw_update_checklist.md))
+**다음 할 일**: 신공학관 실측 → 맵 재생성(문폭·footprint 가정치를 실측값으로) → RPLiDAR 실기 주행 + missed-rate 실기 임계 수립
