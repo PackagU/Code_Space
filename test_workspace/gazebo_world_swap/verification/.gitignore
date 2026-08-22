@@ -2,3 +2,4 @@ latest/
 run_*/
 repeat_*/
 *.log
+dist_*/

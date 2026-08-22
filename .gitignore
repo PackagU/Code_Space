@@ -102,3 +102,10 @@ docs/capstone/
 *.ppt
 *.pptx
 *.xlsx
+
+# Local-only: personal submission drafts, scratch workspace, slide-tool deps (2026-08-22)
+/Learning_Sharing/
+/_workspace/
+/node_modules/
+/package.json
+/package-lock.json
