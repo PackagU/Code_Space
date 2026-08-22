@@ -25,9 +25,9 @@ PWM_LIMITS = {
 POSES = {
     "home": {"000": 1500, "001": 1200, "002": 2000, "003": 1500},
     "press_ready": {"000": 1500, "001": 1500, "002": 1500, "003": 1500},
-    "pre_press": {"000": 1500, "001": 1550, "002": 1550, "003": 1550},
-    "press": {"000": 1500, "001": 1600, "002": 1600, "003": 1600},
-    "retreat": {"000": 1500, "001": 1550, "002": 1550, "003": 1550},
+    "pre_press": {"000": 1500, "001": 1600, "002": 1600, "003": 1600},
+    "press": {"000": 1500, "001": 1900, "002": 1700, "003": 1300},
+    "retreat": {"000": 1500, "001": 1600, "002": 1600, "003": 1600},
 }
 
 # Kim run_press_cycle 과 동일한 버튼 누르기 사이클: (pose, duration_ms, send_command)
@@ -41,6 +41,11 @@ PRESS_CYCLE = (
     ("press_ready", 1500, True),
     ("home", 1500, True),
 )
+
+# 기동 homing: 전원 인가 직후 서보는 전부 1500(중립)에 있다. 노드가 뜨면 한 번 home 으로
+# 보내 "대기 중 = home" 을 맞춘다. 사이클 마지막 스텝도 home 이라 이후 대기는 자동 유지.
+HOME_POSE = "home"
+HOMING_DURATION_MS = 2000
 
 
 def check_pwm(servo_id, pwm):
@@ -62,6 +67,11 @@ def pose_command(pose_name, duration_ms):
         check_pwm(servo_id, pwm)
     parts = [f"#{servo_id}P{pose[servo_id]:04d}T{duration_ms:04d}!" for servo_id in SERVO_IDS]
     return "{" + "".join(parts) + "}"
+
+
+def homing_command(duration_ms=HOMING_DURATION_MS):
+    """기동 시 1회 전송 — 전원 인가 직후(전 모터 1500) → home 대기 자세."""
+    return pose_command(HOME_POSE, duration_ms)
 
 
 def stop_command(servo_id):

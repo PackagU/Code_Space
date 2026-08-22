@@ -55,6 +55,10 @@ def main():
     )
     assert sp.stop_command("002") == "#002PDPT!"
     assert sp.read_position_command("001") == "#001PRAD!"
+    # 기동 homing: 전원 인가 직후(전 모터 1500) → home. 명령은 pose_command(home) 과 동일 포맷
+    assert sp.HOME_POSE in sp.POSES and sp.PRESS_CYCLE[-1][0] == sp.HOME_POSE, "대기 자세 = 사이클 종료 자세"
+    assert sp.homing_command() == sp.pose_command("home", sp.HOMING_DURATION_MS)
+    assert sp.homing_command(3000) == "{#000P1500T3000!#001P1200T3000!#002P2000T3000!#003P1500T3000!}"
 
     # 3) 안전 가드: 잘못된 포즈/시간/PWM/ID 는 ValueError
     expect_raise(sp.pose_command, "no_such_pose", 1000)

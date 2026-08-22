@@ -6,6 +6,8 @@
   — 시뮬 부하/관측용. 실서보의 실제 보간은 컨트롤러가 T(ms) 명령으로 수행.
 - 시리얼: serial_port 파라미터 지정 시 포즈 스텝마다 {#000P....T....!} 묶음 명령 전송.
   비어 있으면 토픽 발행만(시뮬/드라이런). 스텝 진행은 타이머 기반 — 콜백에서 sleep 없음.
+- 기동 homing: 시리얼이 열리면 즉시 home 명령 1회 전송 (전원 인가 직후 전 모터 1500 →
+  대기 자세 home). home_on_start:=false 로 끌 수 있다. 대기 중에는 명령을 보내지 않는다.
 
 벤치 단독 테스트(주변 확인 후!): ros2 run robot_arm_pkg arm_sequence --ros-args \
   -p self_test:=true -p serial_port:=/dev/arm_servo
@@ -51,6 +53,7 @@ class ArmSequenceNode(Node):
         self.declare_parameter("serial_port", "")  # 예: /dev/arm_servo (launch 인자로만 지정)
         self.declare_parameter("serial_baud", 115200)
         self.declare_parameter("self_test", False)
+        self.declare_parameter("home_on_start", True)  # 기동 시 home 자세로 이동 (실서보일 때만 의미)
 
         self._rate_hz = float(self.get_parameter("rate_hz").value)
         self._trigger = FloorReadyTrigger(str(self.get_parameter("initial_floor").value))
@@ -66,6 +69,12 @@ class ArmSequenceNode(Node):
             except Exception as exc:  # noqa: BLE001 — 시리얼 실패는 부하테스트를 막지 않는다
                 self.get_logger().error(f"arm serial open failed ({exc}) — topic-only로 계속")
 
+        # 전원 인가 직후 서보는 전부 1500 — 대기 자세(home)로 맞춘다. 컨트롤러가 자체 보간하므로
+        # 여기서는 명령 1회만 보내고 기다리지 않는다(self_test 는 homing 끝난 뒤 시작).
+        homing_sec = 0.0
+        if self._driver is not None and bool(self.get_parameter("home_on_start").value):
+            homing_sec = self._go_home()
+
         self._pub = self.create_publisher(JointState, str(self.get_parameter("cmd_topic").value), 10)
         self._sub = self.create_subscription(
             String, str(self.get_parameter("status_topic").value), self._on_status, 10
@@ -73,8 +82,9 @@ class ArmSequenceNode(Node):
         self._timer = self.create_timer(1.0 / self._rate_hz, self._on_tick)
 
         if bool(self.get_parameter("self_test").value):
-            self.get_logger().info("self_test: 2초 후 사이클 1회 실행 — 팔 주변 공간 확보!")
-            self._self_test_timer = self.create_timer(2.0, self._start_self_test)
+            delay_sec = 2.0 + homing_sec
+            self.get_logger().info(f"self_test: {delay_sec:.1f}초 후 사이클 1회 실행 — 팔 주변 공간 확보!")
+            self._self_test_timer = self.create_timer(delay_sec, self._start_self_test)
 
         self.get_logger().info(
             f"packagu_arm_sequence ready — trigger={self._trigger.last_floor} 이후 층 전환, "
@@ -85,6 +95,21 @@ class ArmSequenceNode(Node):
     def _start_self_test(self):
         self._self_test_timer.cancel()
         self._start_sequence("self_test")
+
+    def _go_home(self):
+        """기동 homing 명령 1회 전송. 반환: 이동에 걸리는 초(실패 시 0.0, driver 비활성화)."""
+        try:
+            self._driver.send_pose(sp.HOME_POSE, sp.HOMING_DURATION_MS)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error(f"arm homing failed ({exc}) — driver 비활성화")
+            try:
+                self._driver.stop_all()
+            except Exception:  # noqa: BLE001
+                pass
+            self._driver = None
+            return 0.0
+        self.get_logger().info(f"기동 homing: 중립(1500) → {sp.HOME_POSE} {sp.HOMING_DURATION_MS / 1000.0:.1f}s")
+        return sp.HOMING_DURATION_MS / 1000.0
 
     def _on_status(self, msg):
         floor = self._trigger.observe(msg.data)
