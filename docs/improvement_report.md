@@ -143,6 +143,150 @@
 > 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
 > 조치: smoke `WITH_F3=1` 옵션 신설 — F2 검증 후 엘베 복귀 → target_floor=F3 param → request_switch → F2→F3 world swap 검증(`kku_f3_building` present/`kku_f2` absent, map ready) → F3 복도 goal SUCCEEDED. 컨테이너 전체 체인(F1→F2→F3) exit 0 확인. 주의: F3 world/맵은 실측 전까지 F2 레이아웃 복제본(§1.8 연계).
 
-## Completed Improvements
+### 1.14 🟡 ✅ Smoke footprint 원복 무음 실패 — F2 엘베 갇힘
+
+> 상태: ✅ done · 완료: 2026-07-03 · 담당: Lee
+> 조치: 원인 — F2 도착 후 footprint 원복 `ros2 param set ... footprint "[]"` 가 `[]` 를 bool_array 로 파싱해 type error 로 실패했는데 `|| true` 가 마스킹(초기 커밋부터 존재). 확장 footprint(전방 0.40m)가 유지된 채 엘베(문 1.0m)를 나오다 collision ahead → spin 회복 실패 → no valid path 로 갇힘(`WITH_PEDESTRIAN=1 WITH_F3=1` 런에서 발현 — 보행자 7명 set_entity_state 부하로 planner 20Hz→1Hz 저하가 방아쇠). 수정 — `set_costmap_footprint` 헬퍼 신설: 원복을 몸통 polygon 문자열로 교체하고 local/global 모두 "Set parameter successful" 확인, 실패 시 즉시 exit 1(무음 실패 차단). 후속 발견(같은 세션): (a) 보행자 7명×10Hz set_entity_state 부하로 엘베 정차가 벽에 붙어 탈출 불능 → pedestrians.py 5Hz 로 완화, (b) initialpose 유실 시 nav2 activation 데드락 → /amcl_pose 수신 확인 + 재발행, (c) bt_navigator active 前 goal 거부(시작 레이스) → lifecycle active 게이트(initialpose 뒤 배치 필수), (d) 좁은 문 앞 보행자 통과 대기 불가(failure_tolerance 1s) → 45s/움직임 판정 60s + 보행자 런 goal 재시도 2회. 검증 — `WITH_PEDESTRIAN=1 WITH_F3=1` 전체 체인(F1 픽업 7 goal + F1→F2→F3) exit 0, 전 goal SUCCEEDED(재시도 0회 소요), control_loop_missed_rate 20→4.
+
+### 1.15 🔴 실물 주행 불능 위험 — 접지 클리어런스 0 + 전방 지지 부재 (Fusion 반영 미확인)
+
+> 상태: 신규 (HW 제작 착수 전 확인 필수) · 담당: Han(설계 반영)/Lee(검증) · 업데이트: 2026-07-07
+> 근거: `delivery_robot.urdf.xacro` 원본(HW팀 Fusion 실측 기반) 주석 — 원본은 섀시 바닥이 바퀴 접지면과 같은 평면(클리어런스 0)이고 후방 캐스터 1개뿐.
+
+영향:
+
+- 클리어런스 0이면 섀시가 바닥에 깔려 바퀴가 헛돌아 **로봇이 아예 주행 불가**. 시뮬은 ★SIM 보정(+0.02m)으로만 돌고 있음.
+- 지지 다각형이 구동축(x=0)~후방 캐스터(x=-0.13) 사이인데 COM_x는 로봇 단독 +12mm(축 앞), **적재 5kg 시 +72mm** — 전방 지지 없이는 정적으로도 앞으로 전복.
+- 두 결함 모두 2026-06-29에 "HW팀 전달됨"으로만 기록 — **Fusion 설계에 실제 반영됐는지 미확인 상태로 제작 착수는 불가**.
+
+다음 조치:
+
+- Han에게 Fusion 최신본에서 (a) 접지 클리어런스 ≥20mm (b) 전방 캐스터/지지 확인 요청 — 반영 확인 후 이 항목 ✅.
+- 배터리(미정, §hardware_spec) 장착 위치를 **구동축 뒤쪽**으로 잡으면 COM_x를 축 뒤로 되돌릴 수 있음 — 배터리 베이 위치를 COM 보정 수단으로 설계에 포함할 것.
+
+### 1.16 🔴 바퀴 66mm·볼캐스터 30mm vs 엘베 문턱/틈새 — 계산상 통과 불가 위험
+
+> 상태: 신규 (부품 발주 전 결정 필요) · 담당: Han/Lee · 업데이트: 2026-07-07
+> 근거: 바퀴 r=33mm, 캐스터 볼 r=15mm(URDF/Fusion 실측), 엘베 문턱 높이·틈새 폭은 미실측(hardware_spec §3).
+
+영향:
+
+- 강체 바퀴 단차 등반 필요 견인비 F/W=√(h(2r−h))/(r−h): r=33mm에서 **h=5mm 문턱도 μ≈0.62 필요(고무 한계 근접), h=10mm는 μ≈1.03로 정적 통과 불가능** — 관성 돌파에 의존하게 됨.
+- 엘베 승강로 틈새는 통상 20~30mm — **볼 지름 30mm 캐스터는 30mm 틈새에 완전히 빠지고**, 20mm 틈새에서도 3.8mm 낙하 후 탈출해야 함. 엘베 탑승 로봇의 고전적 실패 지점.
+- 모터 토크 산정(§hardware_spec 미정 항목)도 문턱 높이에 종속 — 바퀴/캐스터/모터가 한 묶음 결정 사항.
+
+다음 조치:
+
+- **신공학관 엘베 문턱 높이·틈새 폭 실측을 부품 발주보다 먼저** 수행 (맵 실측 방문과 동일 일정에 처리 가능).
+- 실측 전 보수적 권고: 구동 바퀴 ≥100mm, 캐스터 ≥50mm(또는 스키드 플레이트 병용) 검토.
+- 실측 후 등반 견인비 재계산 → 바퀴 지름 확정 → 모터 토크 산정 순서로 진행 (지름 변경 시 URDF/odom 파라미터 연동 갱신).
+
+### 1.17 🟡 로봇팔 장착 위치 미정의 — 버튼 리치·COM·URDF 통합 공백
+
+> 상태: 신규 · 담당: Kim(팔)/Han(섀시 인터페이스)/Lee(URDF) · 업데이트: 2026-07-07
+
+영향:
+
+- 팔(4DOF, 리치 60cm)이 URDF/hardware_spec 어디에도 장착 위치·질량 없음. 엘베 버튼 높이는 통상 0.9~1.2m — **섀시 상판(z≈0.27m) 장착이면 최대 리치 0.87m로 버튼에 닿지 않을 수 있음**. 마스트 상단(z≈0.72m) 기준이면 여유.
+- 장착 위치가 섀시 구조·COM·footprint(수납 시 외곽)를 모두 바꾸므로 **섀시 제작 전에 확정해야 하는 값**.
+
+다음 조치:
+
+- 회의 안건: 팔 장착 위치/높이 + 버튼 실측 높이 확인 → hardware_spec §1 승격.
+- 확정 후 URDF에 팔 질량/수납 외곽 반영 (improvement_report §1.7과 연동).
+
+### 1.18 🟡 리프트·LiDAR 사양 불일치 3건 (제작 전 정리)
+
+> 상태: 신규 · 담당: Han/Lee · 업데이트: 2026-07-07
+
+- (a) **리프트 행정 표기 불일치**: hardware_spec "행정 0.5m(URDF)/설계 0.7m" — 마스트 총높이 0.7m에 행정 0.7m은 물리적으로 불가(캐리어 겹침 필요). 0.7m는 마스트 높이, 행정은 0.5m로 해석되나 **T스크류 발주 길이가 갈리므로 제작 전 확정 필요**.
+- (b) **리프트 구동력 여유 없음**: URDF `lift_joint` effort=50N < 캐리어 0.5kg+적재 5kg=54N — 시뮬에서도 정격 하중을 못 들어올리는 값. 실물 모터도 54N+마찰 기준으로 산정할 것 (웜기어 자기유지로 정지 유지력은 무관).
+- (c) **적재물 상승 시 LiDAR 간섭**: 스캔면 z≈0.77m, 캐리어 최상단 z≈0.62m — **높이 15cm 넘는 적재물을 최고점까지 올리면 스캔면을 가려 SLAM/costmap 오염**. 적재물 높이 상한 규정 또는 "리프트 상승 중 주행 금지" 인터락(§1.7 상호배제와 동일 메커니즘)으로 처리.
+
+### 1.19 🟡 [80%] Code_Space GHCR publish 403 — 패키지가 옛 repo에만 연결
+
+> 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-08-10
+> 진척: (a) 원인 확정 ✅ — GHCR 패키지 `ros2-humble-slam`이 `ros2-humble-slam-docker` repo에만 연결되어 Code_Space 워크플로우 GITHUB_TOKEN push가 403 (repo 이관 후 Code_Space publish-ghcr는 한 번도 성공한 적 없음, run 31289125731에서 최초 발현) / (b) 인터림 우회 ✅ — 옛 publish repo에 jetson 잡 동기화 후 그쪽 CI로 publish (Dockerfile 헤더에 명시된 기존 동기화 절차) / (c) 정식 해결 미착수 — **패키지 설정 Manage Actions access에 `PackagU/Code_Space`(Write) 추가** 후 Code_Space publish-ghcr 재검증, 이후 publish 경로 일원화 결정(회의).
+
+### 1.20 🔴 OpenCR 쇼트 사망 — 오도메트리/구동 계통 블로커
+
+> 상태: 신규 · 담당: Lee(보고)/Han(구동부) · 업데이트: 2026-08-17
+
+- (a) **하드웨어**: OpenCR 1.0 쇼트로 사용 불가 (2026-08-17 Jetson 세팅 중 확인). 재구매 vs 수리 vs 대체 보드(예: OpenCR 재구매, 또는 IMU+모터 드라이버 분리 구성) — 회의 안건.
+- (b) **실측 매핑 영향**: 2026-08-09 구축한 OpenCR 브리지→오도메트리 체인 사용 불가. LiDAR 단독(스캔매칭 only) 매핑은 가능하나 품질 저하 가능 — `run_field_mapping.sh` 오도메트리 없는 경로 검증 필요.
+- (c) **Jetson compose 영향**: `/dev/opencr` devices 매핑은 장치 부재 시 컨테이너 기동 실패 → OpenCR 복구 전까지 해당 줄 주석 운용 (커밋 금지, 로컬 수정만).
+
+### 1.21 🟡 ✅ Gazebo Classic arm64 바이너리 부재 — Jetson 단독 시뮬 불가
+
+> 상태: ✅ done (분산 구성으로 결정) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **실측 근거**: Ubuntu jammy arm64 저장소에 `gazebo`/`libgazebo-dev` 없음(설치 후보 없음), packages.ros.org arm64 는 `gazebo-dev`/`gazebo-msgs` 만 존재(런타임 래퍼 `gazebo-ros`/`gazebo-plugins` 는 amd64 전용, 그마저 arm64 deb 은 의존 미충족으로 설치 불가), OSRF ubuntu-stable jammy arm64 인덱스(711 패키지)는 Ignition/신형 Gazebo 뿐.
+- (b) **결정**: gazebo11 소스 빌드(수 시간·고위험)는 손절. Jetson 포함 시뮬 검증은 **분산 구성** — 데스크톱 Gazebo(`scripts/run_sim_host.sh`) + Jetson 실전 스택(smoke `GAZEBO_REMOTE=1`). 절차: portability policy §4.5. 부수 효과: Jetson 부하 측정에서 Gazebo 오버헤드 제거(더 정확).
+- (c) **장기**: 신형 Gazebo(gz-sim)는 arm64 지원 — 시뮬 스택 이관은 별도 대형 과제로 회의 안건 (world/plugin/launch 전면 포팅 필요, 당장 불필요).
+
+### 1.22 🟡 ✅ 시뮬 로봇 무명령 드리프트 — 대기 중 0.3~0.7cm/s 전진 미끄러짐
+
+> 상태: ✅ done (URDF 물리 수정 + 실측 검증) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **실측**: cmd_vel 발행자 0, RTF 0.99 상태에서 0.3~0.7cm/s 지속 활주 (분산 구성과 무관 — 명령 없이 접촉 물리만으로 미끄러짐).
+- (b) **영향 (최초 판단 정정)**: "미션 중엔 무해"는 **오판**이었다. goal 사이 정지 구간마다 몸체가 미끄러지는데 **바퀴가 안 구르는 활주라 odom이 정지로 인식** → AMCL 갱신 트리거(odom 이동량) 자체가 없어 belief 동결 → 실위치·belief 간극이 누적 → 스캔의 실제 벽이 belief 좌표계에서 로봇 발밑에 그려짐 → `Starting point in lethal space` + 회복행동 전부 `Collision Ahead` → **미션 ABORT** (F1 pickup에서 2회 재현, 1.2m 간극 실측).
+- (c) **수정 (검증 완료)**: `delivery_robot.urdf.xacro` — 바퀴 조인트 `dynamics damping 0.05/friction 0.3` (수동 활주 제동, max_wheel_torque 40 대비 무시 가능) + 바퀴/캐스터 접촉 `maxVel 1.0→0.0` (솔버 보정속도 주입 차단) + 바퀴 `mu 1.0→100` (슬립 방지). **A/B 실측: 30초당 8.6cm → 90초당 2.4mm (약 1/100).**
+- (d) **실기 시사점**: 좀비 노드 잔류 속도로 로봇이 계속 주행한 사례도 재현됨 — 시뮬 diff_drive엔 cmd_vel timeout이 없음. 실기 OpenCR 브리지의 0.5s watchdog 정책이 옳았다는 방증, Gazebo 쪽도 diff_drive `cmd_vel_timeout` 설정 검토(잔여 과제). 실물 바퀴/접지 검토는 §1.15에서 Han과 계속.
+
+### 1.23 🟡 ✅ Fast DDS unicast peers 함정 — 같은 호스트 late-participant 상호 발견 불가
+
+> 상태: ✅ done (멀티캐스트 locator 복원) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **증상**: 분산 smoke에서 F1 미션 완주 후 `request_switch` CLI 무한 대기. Nav2 맵은 F2로 전환됐지만(orchestrator↔map_server 매칭 정상) world_swap·로봇팔 노드가 status를 못 받아 월드 교체/팔 시퀀스 미발화.
+- (b) **원인**: `scripts/fastdds_lan_peers.xml`의 `initialPeersList`가 **기본 멀티캐스트 announce를 대체**해버림. unicast peer는 참가자 ID 0~3 포트만 탐색하므로 같은 호스트에서 늦게 뜬 참가자끼리(ID>=4: orchestrator↔world_swap/arm/신규 CLI)는 서로 발견할 경로가 없음. 참가자가 적은 데스크톱(낮은 ID)과의 교차 매칭만 성립 — 관측 전부(맵만 전환, 데스크톱 호출 즉시 성공)와 일치.
+- (c) **수정**: XML `initialPeersList`에 기본 멀티캐스트 locator `239.255.0.1` 복원(로컬/유선 직결 discovery 담당) + unicast 항목은 Wi-Fi 예비로 유지. smoke의 `ros2 service call` 2곳에 `timeout 45` + 실패 즉시 종료 추가. A/B 실측: 수정 전 Jetson 로컬 echo/call 블록 → 수정 후 즉시 수신.
+- (d) **교훈**: `wait_for_service`(daemon 그래프 조회)와 실제 call(신규 DDS participant 직접 discovery)은 경로가 달라 전자가 통과해도 후자가 무한 대기할 수 있음 — 스크립트의 CLI 서비스 호출엔 항상 timeout을 건다.
+- (e) **잔존 (멀티캐스트 복원 후에도)**: Jetson 로컬 신규 CLI가 산발적으로 half-hang — param set 이 서버엔 적용되고 응답만 유실된 사례 실측 (F1 미션 중 footprint 확장에서 1회). 대응: smoke 의 모든 CLI 경계(`service call`/`param set`)에 timeout+재시도 적용, nav goal 은 기존 `NAV_GOAL_RETRIES` 사용. 2026-08-17 후속: `set_orchestrator_target_floor` 헬퍼로 F1/F3 `target_floor` param set 에도 timeout 30s ×3 적용(기존 F3 경로는 timeout 부재였음). **데스크톱에서도 재현 확정(반복 런 run_02)**: 서버는 `armed: target=F1` 완료 후 rmw `failed to send response` — Jetson 한정이 아닌 로컬 rmw_fastrtps 일반 현상. 대응: `request_floor_switch` 헬퍼 — 응답 유실 시 orchestrator 로그의 armed 증거로 성공 판정(효과 검증), 증거 없을 때만 재호출. 근본 대책 후보: Fast DDS Discovery Server 로 전환(분산 구성 전반의 discovery 를 단일 서버로 일원화) — 회의 안건.
+- (f) **ros2 daemon 오염 (2026-08-17 야간 실측)**: 강제 프로세스 정리 후 daemon 의 rclpy 컨텍스트가 죽은 채(XML-RPC `!rclpy.ok()` fault) 살아남아 `ros2 topic list` 전부 실패 → smoke 가 `/clock` 대기에서 멈춤. 수정: smoke 시작부에 `ros2 daemon stop` 리셋 추가(다음 CLI 호출이 새로 띄움) — 반복 런 강건성 확보.
+
+### 1.24 🟡 ✅ 층 전환 시 로봇 위치 연속성 — tolerance 주차가 F2 출구를 봉쇄
+
+> 상태: ✅ done (스폰 정렬 + costmap 클리어) · 담당: Lee · 완료: 2026-08-17
+
+- (a) **증상**: F2 전환(맵+월드+팔) 성공 직후 f2_corridor 가 `no valid path found` ABORT — 로봇이 엘리베이터에서 못 나옴.
+- (b) **원인**: `elevator_inside` goal 이 xy tolerance 한계(실측 0.5m 오프셋, (-0.2,-0.49))로 SUCCEEDED 한 채 전환되면 orchestrator 가 initialpose 를 스폰 좌표 (0,0) 으로 시딩 → belief-실위치 오프셋 상태에서 스캔의 엘베 벽이 belief 좌표계의 문 통로 위에 마킹 → costmap 출구 봉쇄.
+- (c) **수정 (완주로 검증)**: smoke 에 `align_robot_to_spawn` — 전환 검증 후 `set_entity_state` 로 로봇을 스폰 (0,0) 에 정렬 + 양쪽 costmap 클리어. 실물 엘리베이터는 물리적 연속이라 없는 문제 — 시뮬 world-swap 전용 부기.
+- (d) **후속 후보**: 정렬을 smoke 가 아닌 `gazebo_world_swap_pkg`(world_swap 노드) 책임으로 이동하면 smoke 외 사용처에서도 안전 — 회의 안건.
+
+### 1.25 🟡 ✅ 산발 주행 봉쇄 4종 — 문폭 wedging·전복·belief 드리프트·footprint 간섭
+
+> 상태: ✅ done (원인 4종 전부 참값 스냅샷으로 확정·수정·재검증) · 담당: Lee · 완료: 2026-08-18
+> 최종 실증: 데스크톱 왕복 10/10 연속 PASS + 분산(Jetson) 왕복 3/3 완주 — 회복 스택(REALIGN 0.974m 흡수 포함) 실전 검증
+
+- (a) **증상**: 왕복 반복 런 run_05(1/7 빈도) — F2 전환 직후 f2_corridor 3회 시도 전부 실패. nav2 로그에 collision-ahead 약 450초 연속 + spin/backup 회복 전부 봉쇄(사방 lethal). align 텔레포트 success=True·costmap 클리어 정상이라 §1.24(belief 오프셋)와 다른 결함.
+- (b) **가설 2개 (사후 로그로 판별 불가)**: ① 보행자 `set_entity_state` call_async 결과 미확인 → 조용한 실패 누적 시 보행자가 통로에 프리즈(450s+ 정지 장애물과 정합) ② 떠난 장애물의 stale lethal 마크 잔존.
+- (c) **완화 (적용)**: send_nav_goal 재시도 전 양쪽 costmap 클리어(② 대응) + pedestrians.py에 set_entity_state 실패 누적 감지 ERROR 로그(① 재현 시 즉시 판별).
+- (d) **후속**: 반복 런에서 재발 시 pedestrians 로그의 실패 누적 여부로 가설 확정 → ①이면 동기 재시도/큐 제한, ②면 costmap 파라미터(observation persistence) 튜닝.
+- (e) **2차 재현 (3차 반복 런 run_08, F1 alcove 출구)**: f1_parcel_pickup 재시도 후 f1_parcel_exit 376s 연속 collision-ahead. 프리즈 감지 로그 침묵 + costmap 클리어 무효 → 유력 가설 재편: **좁은 alcove 재시도/회복기동으로 AMCL belief 오프셋 → 잘못된 좌표계에 스캔 벽이 문 위에 재마킹되는 자기강화 봉쇄**(클리어해도 즉시 재마킹 — 관측 정합). 단, 기존 감지기는 무응답(콜백 미발화) 모드를 못 잡는 맹점 확인.
+- (f) **완화 2차 (적용)**: ① 픽업 도킹 재정위 — pickup 성공 직후 알려진 도킹 좌표로 initialpose 재발행(실기 도킹 재정위와 동일 패턴) ② 실패 시 `dump_world_state` 스냅샷(전 모델 참값 pose + AMCL belief) — 다음 재현에서 가설 확정 가능 ③ 프리즈 감지 v2(무응답 timeout 기반).
+- (g) **원인 확정 2건 (스냅샷 판독, 2026-08-18)**: ① F1 alcove 출구 — 로봇이 0.9m 문 동측 jamb 에 물리적으로 낌(2회 스냅샷 좌표 소수 4자리 동일). 수정: 택배존 문폭 0.9→1.0m(실측 전 가정치 조정, 엘베 문으로 통과성 검증된 폭) ② 분산 run2 — **로봇 참값 z=0.23m 공중 부양**: 보행자 set_entity_state 텔레포트가 로봇과 겹치는 순간 Gazebo 관통 해소 충격량으로 로봇이 올라탐/전복. 수정: 보행자 근접 일시정지(로봇 belief 0.7m 이내 위치 갱신 보류 — 사람이 로봇을 뚫고 걷지 않게).
+- (h) **드리프트 재정위 실증**: 5차 반복 run_01 에서 belief 드리프트 0.716m 실측 → REALIGN 발화 → 런 PASS. 데스크톱 10/10 연속 PASS 달성(repeat_20260817_133709).
+- (i) **4번째 원인 + 최종 완결 (2026-08-18)**: 분산 run3 — 택배 확장 footprint 노즈 0.40m 가 1.6m 엘베 포켓의 벽 inflation 과 겹쳐 collision-ahead patience 초과(성공 21회/실패 1회 산발). 노즈 0.35m 로 조정(택배 크기 실측 전 가정치). 이후 분산 3/3 완주 — 마지막 런에서 REALIGN 이 0.974m 드리프트를 흡수하고 재시도 1회로 완주(회복 스택 실전 검증). 잔여 과제: mu2=1.0 방향 분리의 실기 파라미터 무관성 확인(시뮬 전용 값), Fast DDS Discovery Server 전환(§1.23).
+
+### 1.26 🔴 ✅ 바퀴 마찰 방향(fdir1) 퇴화 + 무마찰 캐스터 크리프 — 정지 중 자발 회전·6mm/s 활주의 진짜 원인
+
+> 상태: ✅ done (표준 ODE 하네스 + 스택 검증) · 담당: Lee · 완료: 2026-08-21
+> 근거: docs/session_wiki/2026-08-20_review_followup/journal.md §2 (실험 전수), 적대 리뷰 findings #2/#11
+
+- (a) **발단**: 2026-08-20 적대 리뷰 D — `fdir1="1 0 0"` 은 collision 프레임 기준이라 바퀴와 함께 회전(θ≈90° 마다 마찰축이 접지 법선과 겹치는 퇴화 창), "mu2=1.0 횡력 캡으로 전복 불가(1.8배)" 는 COM 산술 오류(마스트·LiDAR 누락, 실제 1.465g). 끊긴 후속 세션이 `fdir1="0 0 1"` 로 바꿨으나 check_idle_drift 가 0.54m/90s FAIL 인 채 남았다(주석은 해소됐다고 기재 — 거짓).
+- (b) **실험 1 (표준 ODE 하네스, 바퀴 고정·중력 0.03g 기울임·바퀴각 0/45/80/90°)**: `0 0 1`(차축) 전 각도 0 이동 / `1 0 0` θ90 yaw 1.59 rad / 커밋본(`1 0 0`, mu2 1) θ0 에서도 yaw 0.1 + θ80~90 yaw 1.4~2.3 / `0 1 0` θ0 퇴화 → Gazebo 11 소스로 "fdir1 은 collision WorldPose 회전" 확인. 스택 stop_probe: `1 0 0` 은 주행 후 정지 30s 에 −0.63m 이동·이후 전진 명령에 후진(정지 중 yaw 반전).
+- (c) **실험 2 (활주 원인 분리)**: `0 0 1` 의 6.1mm/s 등속 활주는 플러그인(diff_drive/jsp/LiDAR/리프트)·ROS·월드(ground mu2, gazebo_ros_state, RTF)·팩토리 스폰 전부 무관, 순수 gzserver 최소 월드에서 결정적 재현. 하네스 로봇과의 유일한 차이 = **캐스터 마찰**(하네스는 regex 사고로 캐스터에 mu 100). 캐스터 mu 스윕: 0 → 6.1mm/s, 0.05 → 5.0, 0.3/1.0/3.0 → 0. 속도 보고값이 ~0 인데 위치만 증가(운동학적 양상)·바퀴 접선력 0 — 무마찰 고정 구 캐스터 + 차축 fdir1 조합에서 ODE 가 만드는 아티팩트.
+- (d) **수정**: `delivery_robot.urdf.xacro` — 바퀴 `fdir1 0 0 1`, mu 100/100, **캐스터 mu 0.5**(스키드 드래그 ~12N ≈ 구동 여유 1%, 파킹 브레이크). 검증: check_idle_drift **0.0000m/90s**(이전 0.5425), 주행 후 정지 0.0m/30s ×2, 후진·회전 없음. contract 테스트로 고정(fdir1 차축·`1 0 0` 금지·캐스터 mu≥0.3). §1.22 의 "2.4mm/90s" 는 스폰 직후(`1 0 0`, θ=0) 한정 측정이었고 "0.3~0.7cm/s" 가 일반 상태였다 — §1.25h/i 의 belief 드리프트 0.7~1.0m(REALIGN 발화)은 이 활주가 근원일 가능성이 높다(odom 불변 활주 = AMCL 갱신 트리거 없음).
+- (e) **잔여**: 캐스터 마찰은 시뮬 전용 근사(실물 볼 캐스터는 구름). 실기 §1.15 와 무관. 반복 캠페인에서 REALIGN 발화 빈도 변화로 (d) 의 가설 확인.
+
+### 1.27 🟡 ✅ 적대 리뷰(2026-08-20) 핫픽스 묶음 — 스모크/보행자/리프트/정적 장애물
+
+> 상태: ✅ done (최종 스택 재검증 완료; 미해결 MED 는 (c) 에 기록) · 담당: Lee · 완료: 2026-08-21
+> 진척: (a) 핫픽스 반영·정적 검증 ✅ / (b) 단발 스모크(전 옵션) ✅ run4 무결점 / (c) 반복 캠페인 ✅ **10/10 연속 PASS(전 회차 재시도 0·REALIGN 0·응답유실 0, 278~348s)** + 선행 4/4 / (d) Jetson 분산 원커맨드 ✅ **3/3**(11 goal 1차, mem 2.5/6.8GB, cpu peak 89~94%, missed 23~29 → 분산 게이트 60)
+> 단발 스모크 run1~3 에서 잡은 결함: lift frame_id 빈값(플러그인 abort) / F2 출구 corner-cut collision-ahead → 스테이징 goal / inflation 0.30 밴드 3cm → 0.55/3.0 / goal 응답 유실(실행 안 됨) → 빠른 재전송 / finalize ls|wc pipefail rc=2 / 정적 장애물 +4m 오프셋 / 보행자↔로봇 교착 → yield(4s 후 0.8m 후퇴·퇴장)
+
+- (a) **반영 (review_report §3 findings)**: #1 pedestrians init 복원+근접 판정 참값(model_states)화 / #3 프로파일 flush 후 아카이브 / #4 request_switch `success=True` 본문 판정 / #5 INT/TERM trap rc 보존 / #9·#10 노즈 0.40 복원 + 몸통 polygon 반폭 0.27(내접 결함) / #12 missed-rate fail-closed·finalize 이전 / #13 trap 멱등 finalize / #14 wait_for_* timeout 랩 / #15 재시도 전 cancel_goal / #16 realign 수치 검증 / #17 RUN_DIR 계약 / #19 armed 앵커 / #20 팔 완료 층별 쌍 판정 / #23 실패 attempt 로그 보존 / H9 cgroup OOM(v1/v2) / M11 KEEP_RUNNING 차단 / 최적화 (a)-1 SKIP_BUILD(2회차부터). 신규: 정적 장애물 경로 위 배치(static=true, 레인 간격 단위 테스트), 리프트 mock(joint_pose_trajectory + lift_joint 자기잠금 friction 20, /joint_states 검증), 기동 레이스 방지(gzserver 완전 종료 대기).
+- (b) **검증**: 오프라인 28/28(신규 행위 테스트 2종 + AST 가드), 실패 경로 아티팩트 보존 실증, TERM 143 실증. 문서 사실오류(#28: 로봇 폭 0.5382/포켓 1.48/yaml 0.9 stale)와 통계 표현(#8)은 이 항목에서 계속.
+- (c) **미해결(기록)**: #18 문폭 1.0 가정치(실측 대기, 회의 안건) / #21 kill_matching 과잉(GAZEBO_REMOTE 데스크톱 동시 실행 시) / #22 latest/ 무잠금 / #24 cpu_pct 시스템 전체 / #25 fastdds IP 하드코딩 / #29 contract 문자열 검사(행위 테스트로 점진 대체).
 
 아직 없음 (완료 항목은 분기말에 이 절로 이동).

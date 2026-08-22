@@ -87,6 +87,10 @@ docs/**
 !docs/simulation_test/**
 !docs/deployment/
 !docs/deployment/**
+!docs/superpowers/
+!docs/superpowers/**
+!docs/handover/
+!docs/handover/**
 !docs/_style/
 !docs/_style/**
 !docs/.notion_sync.json
@@ -98,3 +102,10 @@ docs/capstone/
 *.ppt
 *.pptx
 *.xlsx
+
+# Local-only: personal submission drafts, scratch workspace, slide-tool deps (2026-08-22)
+/Learning_Sharing/
+/_workspace/
+/node_modules/
+/package.json
+/package-lock.json

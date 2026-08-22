@@ -1,0 +1,18 @@
+# PackagU 장치 고정 별칭 (스펙 §5.4). 설치: sudo bash scripts/udev/install_udev_rules.sh
+# 확인: udevadm info -a -n /dev/ttyUSB0 | grep -E 'idVendor|idProduct|serial'
+
+# RPLiDAR A1m8 — Silicon Labs CP210x USB-UART
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar", MODE="0666"
+
+# OpenCR 1.0 — STM32 Virtual COM (ROBOTIS)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", SYMLINK+="opencr", MODE="0666"
+
+# 로봇팔 서보 드라이버 HPRO-0098 (ZX Serial Bus Servo, USB-TTL)
+# 2026-08-17 Jetson 벤치 실측: QinHeng CH340(HL-340) 1a86:7523.
+# 주의: Arduino Nano 클론도 CH340 이 흔함 — motor_nano 도입 시 VID/PID 가 겹치면
+# 이 줄과 아래 줄을 KERNELS(물리 포트 경로) 고정으로 분리할 것 (CH340 은 serial attr 없음).
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="arm_servo", MODE="0666"
+
+# TODO(R1A 벤치에서 idVendor/idProduct 실측 후 주석 해제 — 스펙 §5.4):
+# Arduino Nano (모터 제어 보조 — hardware_spec §1.1 표기 준수)
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="____", ATTRS{idProduct}=="____", SYMLINK+="motor_nano", MODE="0666"

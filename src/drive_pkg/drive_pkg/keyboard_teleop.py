@@ -2,6 +2,7 @@
 import select
 import sys
 import termios
+import time
 import tty
 
 import rclpy
@@ -35,6 +36,21 @@ MOVE_BINDINGS = {
     "k": (0.0, 0.0),
     " ": (0.0, 0.0),
 }
+
+DEADMAN_TIMEOUT_SEC = 0.5
+
+
+def apply_deadman(command, idle_seconds, timeout=DEADMAN_TIMEOUT_SEC):
+    """마지막 키 입력 후 timeout 초과 시 정지 명령으로 대체.
+
+    latch 방식(키 안 눌러도 마지막 명령 유지)의 안전장치 — SSH 끊김/키 미수신 시
+    로봇이 계속 달리는 것을 방지 (스펙 §5.4 teleop 안전화).
+    """
+    linear_x, angular_z = command
+    moving = linear_x != 0.0 or angular_z != 0.0
+    if moving and idle_seconds > timeout:
+        return (0.0, 0.0), True
+    return command, False
 
 
 def motion_label_for_key(key):
@@ -124,17 +140,27 @@ def main():
     print(HELP)
     print(f"speed: linear={linear_speed:.2f} m/s angular={angular_speed:.2f} rad/s")
 
+    last_key_time = time.monotonic()
     try:
         while rclpy.ok():
             key = read_key(settings)
             if key == "\x03":
                 break
+            if key:
+                last_key_time = time.monotonic()
             current_binding, linear_speed, angular_speed, command, changed_label = process_key(
                 key,
                 current_binding,
                 linear_speed,
                 angular_speed,
             )
+            command, deadman_stopped = apply_deadman(
+                command, time.monotonic() - last_key_time,
+            )
+            if deadman_stopped:
+                current_binding = (0.0, 0.0)
+                print("deadman stop: no key for "
+                      f"{DEADMAN_TIMEOUT_SEC:.1f}s -> cmd_vel=(0.00, 0.00)")
             linear_x, angular_z = command
             if changed_label:
                 print(

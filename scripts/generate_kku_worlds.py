@@ -23,7 +23,11 @@ ELEV_DOOR_HALF = 0.5
 ROOM_HALF_ALONG = 1.25
 ROOM_DEPTH = 3.0
 ROOM_DOOR_HALF = 0.45
-PARCEL_DOOR_HALF = 0.45
+# 0.45(0.9m 문)에서 0.5(1.0m 문)로 확대 — 실측 전 가정치 조정 (2026-08-18).
+# 근거: 반복 검증에서 로봇(폭 0.52m)+inflation 이 0.9m 문에서 산발 wedging
+# (참값 스냅샷으로 확정, improvement_report §1.25). 1.0m 는 엘베 문으로 통과성 검증됨.
+# 실측 후 hardware_spec §3 값으로 대체.
+PARCEL_DOOR_HALF = 0.5
 
 
 @dataclass(frozen=True)

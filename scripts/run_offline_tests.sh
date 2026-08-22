@@ -19,7 +19,14 @@ ROS_MODULE_PATTERN='ModuleNotFoundError.*(rclpy|launch|launch_ros|ament_index_py
 
 PY_TESTS=(
   scripts/test_wasd_teleop.py
+  scripts/test_opencr_protocol.py
+  scripts/test_diff_drive_odometry.py
+  scripts/test_opencr_bridge_dryrun.py
+  scripts/test_field_mapping_launch.py
+  scripts/test_field_scripts_contract.py
+  scripts/test_udev_contract.py
   scripts/test_kku_navigation_launch.py
+  scripts/test_arm_sequence.py
   scripts/check_portability.py
   test_workspace/elevator_mission/scripts/test_behaviors_dryrun.py
   test_workspace/elevator_mission/scripts/test_point_registry.py
@@ -36,6 +43,8 @@ PY_TESTS=(
   test_workspace/gazebo_world_swap/scripts/test_gazebo_launch_spawn_point.py
   test_workspace/gazebo_world_swap/scripts/test_package_metadata.py
   test_workspace/gazebo_world_swap/scripts/test_smoke_scripts_contract.py
+  test_workspace/gazebo_world_swap/scripts/test_pedestrians_stub.py
+  test_workspace/gazebo_world_swap/scripts/test_static_obstacles_layout.py
 )
 
 pass=0
