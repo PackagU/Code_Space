@@ -83,6 +83,7 @@ docs/**
 !docs/improvement_report.md
 !docs/hardware_spec.md
 !docs/opencr_dynamixel_wheel_test.md
+!docs/opencr_replacement_options.md
 !docs/simulation_test/
 !docs/simulation_test/**
 !docs/deployment/

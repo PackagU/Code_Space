@@ -208,9 +208,10 @@
 > 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-08-10
 > 진척: (a) 원인 확정 ✅ — GHCR 패키지 `ros2-humble-slam`이 `ros2-humble-slam-docker` repo에만 연결되어 Code_Space 워크플로우 GITHUB_TOKEN push가 403 (repo 이관 후 Code_Space publish-ghcr는 한 번도 성공한 적 없음, run 31289125731에서 최초 발현) / (b) 인터림 우회 ✅ — 옛 publish repo에 jetson 잡 동기화 후 그쪽 CI로 publish (Dockerfile 헤더에 명시된 기존 동기화 절차) / (c) 정식 해결 미착수 — **패키지 설정 Manage Actions access에 `PackagU/Code_Space`(Write) 추가** 후 Code_Space publish-ghcr 재검증, 이후 publish 경로 일원화 결정(회의).
 
-### 1.20 🔴 OpenCR 쇼트 사망 — 오도메트리/구동 계통 블로커
+### 1.20 🔴 [40%] OpenCR 쇼트 사망 — 오도메트리/구동 계통 블로커
 
-> 상태: 신규 · 담당: Lee(보고)/Han(구동부) · 업데이트: 2026-08-17
+> 상태: 🔄 in-progress · 담당: Lee(보고)/Han(구동부) · 업데이트: 2026-08-27
+> 진척: (a) 수리 견적 접수 ✅ — 18만원 (2026-08-26) / (b) 대체안 조사 ✅ — [opencr_replacement_options.md](./opencr_replacement_options.md) (신품 24.2만 vs 1순위 OpenRB-150+IMU 3.2만~ vs 2순위 U2D2+PHB 5.8만~, 수리·STM32 자작·OpenCM9.04 비권장/탈락) / (c) 보드·바퀴 모터 발주 결정 회의 대기 — XL430 공식몰 배송지연 20일이라 모터 미확보 시 모터가 크리티컬 패스
 
 - (a) **하드웨어**: OpenCR 1.0 쇼트로 사용 불가 (2026-08-17 Jetson 세팅 중 확인). 재구매 vs 수리 vs 대체 보드(예: OpenCR 재구매, 또는 IMU+모터 드라이버 분리 구성) — 회의 안건.
 - (b) **실측 매핑 영향**: 2026-08-09 구축한 OpenCR 브리지→오도메트리 체인 사용 불가. LiDAR 단독(스캔매칭 only) 매핑은 가능하나 품질 저하 가능 — `run_field_mapping.sh` 오도메트리 없는 경로 검증 필요.
