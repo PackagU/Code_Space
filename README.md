@@ -19,13 +19,14 @@ ROS2 Humble · SLAM Toolbox · Nav2 · Gazebo Classic — 시뮬레이션에서 
 전 과정이 **명령 한 번**으로 자동 진행되고, 목표 도달 여부도 스크립트가 자동 판정한다
 (동적 보행자 · 경로 위 정적 장애물 · Z축 리프트 · 로봇팔 옵션 포함).
 
-## 현재 상태 (2026-08-21)
+## 현재 상태 (2026-09-08)
 
 | 항목 | 결과 |
 |------|------|
 | 왕복 배달 체인 시뮬 (데스크톱) | 보행자 + 정적 장애물 + 리프트 + 팔 전 옵션 **10/10 연속 PASS** (재시도 0, 회차당 278~348 s) |
 | 분산 E2E (데스크톱 Gazebo + Jetson 실전 스택) | 왕복 **3/3 완주** — Jetson Xavier NX CPU avg 48 % · mem 2.5 GB / 6.8 GB |
-| 오프라인 테스트 · CI | 28종 PASS (`scripts/run_offline_tests.sh`, GitHub Actions 동일) · 이식성 검사 112 files PASS |
+| 로봇팔 버튼 제어 | Kim 실측 PWM 기반 기동 homing + 버튼 위치별 press cycle 3종 + host 직결 원커맨드 실행기 |
+| 오프라인 테스트 · CI | 29종 PASS (`scripts/run_offline_tests.sh`, GitHub Actions 동일) · 이식성 검사 114 files PASS |
 | 실기 준비 | OpenCR 시리얼 브리지(`/cmd_vel` → 모터, 오도메트리/IMU → ROS) · 실기 매핑 launch · 현장 실측 원커맨드 · Jetson arm64 이미지 |
 | 다음 관문 | 신공학관 복도·엘리베이터 **실측 → 실맵 재생성 → RPLiDAR 실기 주행** |
 
@@ -76,6 +77,9 @@ bash scripts/bootstrap_workspace.sh        # 월드/맵 생성물 생성 (최초
 ```bash
 # 오프라인 테스트 (host/CI, ROS 불필요) + 이식성 검사
 bash scripts/run_offline_tests.sh && python3 scripts/check_portability.py
+
+# 로봇팔 벤치 실행기 안전 점검 (시리얼 전송 없음)
+python3 scripts/run_arm_press.py 1 --dry-run
 
 # 왕복 배달 체인 E2E smoke (컨테이너 안) — 보행자·정적 장애물·리프트·팔 포함
 WITH_RETURN=1 WITH_PEDESTRIAN=1 WITH_STATIC_OBSTACLE=1 WITH_LIFT=1 WITH_ARM=1 \
