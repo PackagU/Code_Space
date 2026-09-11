@@ -32,7 +32,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG="/ros2_ws/logs/handheld_mapping_${STAMP}.log"
 PID_FILE="/ros2_ws/logs/handheld_mapping.pid"
 
-nohup ros2 launch slam_pkg handheld_mapping.launch.py serial_port:=/dev/rplidar \
+nohup setsid ros2 launch slam_pkg handheld_mapping.launch.py serial_port:=/dev/rplidar \
     >"${LOG}" 2>&1 &
 PID=$!
 echo "${PID}" >"${PID_FILE}"
@@ -42,5 +42,16 @@ if ! kill -0 "${PID}" 2>/dev/null; then
     tail -80 "${LOG}" >&2
     exit 1
 fi
+
+SCAN_SAMPLE="/tmp/handheld_mapping_scan_${PID}.txt"
+if ! timeout 12 ros2 topic echo /scan --once --qos-reliability best_effort \
+        >"${SCAN_SAMPLE}" 2>&1; then
+    echo "ERROR: no /scan received; stopping incomplete launch" >&2
+    kill -INT -- "-${PID}" 2>/dev/null || true
+    sleep 3
+    tail -80 "${LOG}" >&2
+    exit 1
+fi
+rm -f "${SCAN_SAMPLE}"
 
 echo "handheld_mapping_started pid=${PID} log=${LOG}"
