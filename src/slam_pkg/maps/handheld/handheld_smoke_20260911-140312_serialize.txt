@@ -1,0 +1,6 @@
+waiting for service to become available...
+requester: making request: slam_toolbox.srv.SerializePoseGraph_Request(filename='/ros2_ws/maps/handheld/handheld_smoke_20260911-140312')
+
+response:
+slam_toolbox.srv.SerializePoseGraph_Response(result=0)
+
