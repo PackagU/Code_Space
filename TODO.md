@@ -7,7 +7,7 @@
 ---
 
 ## 🔒 현재 편집 중
-- Codex: P04 주행 프로토콜·정지·오류 입력 작업 (2026-09-11 KST)
+- Codex: P05 팔 시작·완료·취소 계약 작업 (2026-09-11 KST)
 
 ---
 
@@ -15,6 +15,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-09-11 (Codex P04): **주행 정지·오류 입력 계약 오프라인 검증 완료.** 유효 피드백 전 정지, command/feedback timeout, NaN/Inf, 속도·RPM·가속 한계, 손상 피드백, 시각 역행/큰 점프, 큐 적체, serial read/write 예외, `/drive/ready`와 종료 0 프레임을 FakeSerial로 검증했다. 전체 오프라인 31개 PASS. 실제 MCU firmware watchdog·E-Stop·바퀴 정지는 H01 전까지 미확인. 로컬 근거: `logs/pre_hw/20260911-222428_P04/`.
 - 2026-09-11 (Codex P03): **무동작/라이다 전용 프로파일과 DDS 계약 검증 완료.** safe overlay는 직렬 장치 4개를 모두 `/dev/null`, lidar overlay는 `/dev/rplidar`만 실제 전달한다. 운영 컨테이너 lidar preflight와 임시 safe preflight PASS; 잘못된 network/IPC/domain/device 구성은 4건으로 FAIL 보고. 격리 domain 223에서 late subscriber·service·sensor QoS·transient-local tf_static/map, donor 재생성 후 sidecar 재합류, UDP-only 모두 PASS. 전체 오프라인 30개 PASS. 로컬 근거: `logs/pre_hw/20260911-221045_P03/`.
 - 2026-09-11 (Codex P02): **재현 가능한 Jetson Docker 배포 오프라인 검증 완료.** `docker/Dockerfile.jetson`에서 arm64 이미지 `packagu/ros2-humble-slam:humble-jetson-p02`(ID `f2358e90…`, 2,339,392,107 B)를 생성했다. RViz2·OpenCV·NumPy·PyYAML을 선언하고, source/maps/logs/floor data 마운트 가드와 선택형 `camera` 프로파일을 추가했다. 새 이미지에서 ROS 4패키지 빌드, 전체 오프라인 29개, floor reader 3개 PASS. handheld launch의 `/ros2_ws` 고정 경로와 floor reader UID/GID 접근 문제도 수정·재검증했다. 운영 `ros2_humble`은 기존 `f77e790a…` 이미지로 유지했으며 실장치 동작은 이 단계에서 미확인. 로컬 근거: `logs/pre_hw/20260911-215223_P02/`.
 - 2026-08-22 (L&S 제출 준비): **README 외부 독자용 개편**(히어로 이미지 `assets/readme/sim_nav2_gazebo_f1.png`, 현재 상태표·로드맵 진행·검증 원커맨드·저장소 안내) + 로컬 전용 폴더 gitignore(`Learning_Sharing/`, `_workspace/`, node_modules, `verification/dist_*`) + PR #5(lee/hw-design-review→dev) 머지·dev→main 머지로 기본 브랜치 최신화. 오프라인 28/28 PASS·portability 112 PASS 재확인.
