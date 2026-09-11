@@ -10,6 +10,7 @@ PWM/포즈 값은 조립 후 관절별 실측으로 갱신한다 (Kim 벤치 값
 from __future__ import annotations
 
 import re
+import time
 
 SERVO_IDS = ("000", "001", "002", "003")
 
@@ -133,6 +134,74 @@ def read_position_command(servo_id):
 def parse_position(servo_id, response):
     match = re.search(rf"#{servo_id}P(\d+)\!", response or "")
     return int(match.group(1)) if match else None
+
+
+def positions_reached(positions, target, tolerance_pwm):
+    """모든 관절 실측 PWM이 목표 허용오차 안인지 판정한다."""
+    if tolerance_pwm < 0:
+        raise ValueError("position tolerance must be non-negative")
+    if set(positions) != set(SERVO_IDS) or set(target) != set(SERVO_IDS):
+        return False
+    return all(abs(int(positions[sid]) - int(target[sid])) <= tolerance_pwm for sid in SERVO_IDS)
+
+
+class SerialPoseDriver:
+    """Serial backend that requires parseable position feedback from every servo."""
+
+    def __init__(self, port, baud=115200, timeout=0.1, serial_module=None, logger=None):
+        if serial_module is None:
+            import serial as serial_module  # type: ignore[no-redef]
+
+        self._conn = serial_module.Serial(port, baud, timeout=timeout)
+        self._timeout = float(timeout)
+        self._logger = logger
+        if logger is not None:
+            logger.info(f"arm serial open: {port} @ {baud}")
+
+    def send_pose(self, pose_name, duration_ms, poses=POSES):
+        payload = pose_command(pose_name, duration_ms, poses).encode("ascii")
+        written = self._conn.write(payload)
+        if written is not None and written != len(payload):
+            raise IOError(f"short serial write: {written}/{len(payload)}")
+        if hasattr(self._conn, "flush"):
+            self._conn.flush()
+
+    def read_positions(self):
+        positions = {}
+        for servo_id in SERVO_IDS:
+            payload = read_position_command(servo_id).encode("ascii")
+            written = self._conn.write(payload)
+            if written is not None and written != len(payload):
+                raise IOError(f"short serial write: {written}/{len(payload)}")
+            if hasattr(self._conn, "flush"):
+                self._conn.flush()
+            deadline = time.monotonic() + max(self._timeout, 0.05)
+            response = b""
+            position = None
+            while time.monotonic() < deadline:
+                chunk = self._conn.read_until(b"!")
+                if chunk:
+                    response += chunk
+                    position = parse_position(servo_id, response.decode("ascii", errors="ignore"))
+                    if position is not None:
+                        break
+            if position is None:
+                raise TimeoutError(f"missing position feedback for servo {servo_id}")
+            check_pwm(servo_id, position)
+            positions[servo_id] = position
+        return positions
+
+    def stop_all(self):
+        for servo_id in SERVO_IDS:
+            payload = stop_command(servo_id).encode("ascii")
+            written = self._conn.write(payload)
+            if written is not None and written != len(payload):
+                raise IOError(f"short serial write: {written}/{len(payload)}")
+        if hasattr(self._conn, "flush"):
+            self._conn.flush()
+
+    def close(self):
+        self._conn.close()
 
 
 def get_cycle(cycle_id):

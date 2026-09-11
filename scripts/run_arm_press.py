@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""로봇팔 버튼 누르기 원커맨드 벤치 실행 (ROS/Docker 불필요, host 직결 시리얼).
+"""Explicit arm bench command with measured feedback; never auto-selects a USB port.
 
-사용법 (VSCode 터미널 한 줄):
-    python3 scripts/run_arm_press.py 2                    # cycle 2, 포트 /dev/arm_servo
-    python3 scripts/run_arm_press.py 3 --port /dev/ttyUSB0
-    python3 scripts/run_arm_press.py 1 --dry-run          # 하드웨어 없이 명령 문자열만 출력
-
-포즈/사이클 값은 src/robot_arm_pkg/robot_arm_pkg/servo_protocol.py 가 SSOT —
-여기서는 그대로 읽어 쓰기만 한다(튜닝은 그 파일에서).
-⚠ 실행 전 팔 주변 공간 확보. Ctrl+C 시 전 모터 정지 명령 전송 후 종료.
+This script is not part of normal startup.  Real execution requires the exact arm
+udev alias and an explicit ``--execute`` flag.  ``--dry-run`` only prints protocol
+payloads and reports SIMULATED, never physical completion.
 """
+
 import argparse
-import glob
 import importlib.util
 import sys
 import time
@@ -19,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PKG = ROOT / "src" / "robot_arm_pkg" / "robot_arm_pkg"
+DEFAULT_PORT = "/dev/arm_servo"
 
 
 def load_servo_protocol():
@@ -28,113 +24,87 @@ def load_servo_protocol():
     return module
 
 
-class DryRunConn:
-    """--dry-run 백엔드 — 전송 대신 명령 문자열을 출력한다."""
-
-    def write(self, data):
-        print(f"  [dry-run] {data.decode('ascii')}")
-
-    def close(self):
-        pass
-
-
-DEFAULT_PORT = "/dev/arm_servo"
-
-
-def resolve_port(port):
-    """포트 자동 탐지 — 기본 포트(/dev/arm_servo)가 없으면 연결된 USB-시리얼을 찾는다."""
-    if Path(port).exists():
-        return port
-    candidates = sorted(glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*"))
-    if port != DEFAULT_PORT:  # 사용자가 직접 지정한 포트는 대체하지 않는다
-        sys.exit(f"지정한 포트 {port} 없음 — 연결된 시리얼: {candidates or '없음'}")
-    if len(candidates) == 1:
-        print(f"{DEFAULT_PORT} 없음 → 자동 탐지: {candidates[0]}")
-        return candidates[0]
-    if not candidates:
-        sys.exit(
-            "서보 컨트롤러가 이 PC에 연결돼 있지 않습니다 (USB-시리얼 장치 없음).\n"
-            "  1) 컨트롤러 USB 케이블을 이 PC에 연결\n"
-            "  2) ls /dev/ttyUSB* /dev/ttyACM* 로 포트 생성 확인\n"
-            "  3) 다시 실행 (자동 탐지됨). 하드웨어 없이 확인만 하려면 --dry-run"
-        )
-    sys.exit(f"USB-시리얼이 여러 개 감지됨: {candidates} — --port 로 하나를 지정하세요")
-
-
-def open_serial(port, baud):
+def stop_unverified(driver):
     try:
-        import serial
-    except ImportError:
-        sys.exit("pyserial 미설치 — pip install pyserial 후 재실행 (또는 --dry-run)")
-    try:
-        return serial.Serial(port, baud, timeout=0.1)
+        driver.stop_all()
     except Exception as exc:  # noqa: BLE001
-        if "Permission denied" in str(exc) or "Errno 13" in str(exc):
-            sys.exit(f"권한 없음: {port} — sudo usermod -aG dialout $USER 후 재로그인, 또는 sudo chmod 666 {port}")
-        sys.exit(f"시리얼 열기 실패: {port} ({exc})")
+        print(f"정지 명령 실패: {type(exc).__name__}: {exc}", file=sys.stderr)
+    print("요청 중단: 정지 명령은 전송했지만 기계적 정지는 별도 확인 필요", file=sys.stderr)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="로봇팔 버튼 누르기 사이클 1회 실행")
-    parser.add_argument("cycle", nargs="?", type=int, default=1, help="press cycle 번호 1~3 (기본 1)")
-    parser.add_argument("--port", default="/dev/arm_servo", help="서보 컨트롤러 시리얼 포트")
+    parser = argparse.ArgumentParser(description="로봇팔 버튼 누르기 실물 벤치 명령")
+    parser.add_argument("cycle", nargs="?", type=int, default=1)
+    parser.add_argument("--port", default=DEFAULT_PORT)
     parser.add_argument("--baud", type=int, default=115200)
-    parser.add_argument("--skip-home", action="store_true", help="기동 homing 생략 (이미 home 자세일 때)")
-    parser.add_argument("--countdown", type=int, default=3, help="시작 전 카운트다운 초 (기본 3, 0=즉시)")
-    parser.add_argument("--dry-run", action="store_true", help="전송 없이 명령 문자열만 출력")
+    parser.add_argument("--execute", action="store_true", help="현장 승인 후 실물 명령 허용")
+    parser.add_argument("--dry-run", action="store_true", help="전송 없이 payload만 출력")
+    parser.add_argument("--tolerance-pwm", type=int, default=30)
+    parser.add_argument("--feedback-timeout", type=float, default=1.0)
+    parser.add_argument("--countdown", type=int, default=3)
     args = parser.parse_args()
+    if args.execute == args.dry_run:
+        parser.error("--execute 또는 --dry-run 중 정확히 하나를 지정해야 합니다")
+    if args.feedback_timeout <= 0:
+        parser.error("--feedback-timeout은 양수여야 합니다")
 
     sp = load_servo_protocol()
-    try:
-        cycle = sp.get_cycle(args.cycle)
-        poses = sp.get_poses(args.cycle)
-    except ValueError as exc:
-        sys.exit(str(exc))
-
-    # 포트 확인·오픈을 카운트다운보다 먼저 — 3초 기다린 뒤 실패하는 일이 없게
+    cycle = sp.get_cycle(args.cycle)
+    poses = sp.get_poses(args.cycle)
     if args.dry_run:
-        conn, port = DryRunConn(), args.port
-    else:
-        port = resolve_port(args.port)
-        conn = open_serial(port, args.baud)
+        print(sp.homing_command())
+        for pose_name, duration_ms, send in cycle:
+            if send:
+                print(sp.pose_command(pose_name, duration_ms, poses))
+        print("SIMULATED: 명령 문자열만 생성함; 위치 도달·완료는 미확인")
+        return
 
-    total_s = sp.cycle_duration_ms(cycle) / 1000.0
-    print(f"press cycle #{args.cycle} — {len(cycle)} steps, {total_s:.1f}s, port={port}"
-          f"{' (dry-run)' if args.dry_run else ''}")
+    port_path = Path(args.port)
+    if args.port != DEFAULT_PORT:
+        sys.exit("실물 실행은 고정 udev 별칭 /dev/arm_servo만 허용합니다")
+    if not port_path.exists() or not port_path.is_char_device():
+        sys.exit("/dev/arm_servo 실장치가 없습니다; ttyUSB 자동 대체는 안전상 금지합니다")
 
-    if not args.dry_run and args.countdown > 0:
-        print(f"⚠ 팔 주변 공간 확보! {args.countdown}초 후 시작 (중단: Ctrl+C)")
-        try:
-            for remaining in range(args.countdown, 0, -1):
-                print(f"  {remaining}...")
-                time.sleep(1)
-        except KeyboardInterrupt:
-            conn.close()
-            sys.exit("\n시작 전 중단 — 명령 미전송")
+    if args.countdown > 0:
+        print(f"현장 승인·팔 주변 공간·E-Stop 확인: {args.countdown}초 후 시작")
+        for remaining in range(args.countdown, 0, -1):
+            print(remaining)
+            time.sleep(1)
 
-    def sleep_ms(duration_ms):
-        if not args.dry_run:
-            time.sleep(duration_ms / 1000.0)
+    driver = sp.SerialPoseDriver(args.port, args.baud)
+
+    def wait_and_measure(pose_name, duration_ms, pose_table):
+        driver.send_pose(pose_name, duration_ms, pose_table)
+        time.sleep(duration_ms / 1000.0)
+        deadline = time.monotonic() + args.feedback_timeout
+        last = None
+        while time.monotonic() < deadline:
+            last = driver.read_positions()
+            if sp.positions_reached(last, pose_table[pose_name], args.tolerance_pwm):
+                return last
+        raise TimeoutError(f"{pose_name} feedback timeout; last={last}")
 
     try:
-        if not args.skip_home:
-            print(f"homing: 중립(1500) → home {sp.HOMING_DURATION_MS / 1000.0:.1f}s")
-            conn.write(sp.homing_command().encode("ascii"))
-            sleep_ms(sp.HOMING_DURATION_MS)
-
+        measured = wait_and_measure(sp.HOME_POSE, sp.HOMING_DURATION_MS, {sp.HOME_POSE: sp.HOME})
+        print(f"home measured: {measured}")
         for index, (pose_name, duration_ms, send) in enumerate(cycle, start=1):
-            action = pose_name if send else f"{pose_name} (유지)"
-            print(f"step {index}/{len(cycle)}: {action} {duration_ms / 1000.0:.1f}s")
             if send:
-                conn.write(sp.pose_command(pose_name, duration_ms, poses).encode("ascii"))
-            sleep_ms(duration_ms)
-        print("사이클 완료 — home 대기 자세")
+                measured = wait_and_measure(pose_name, duration_ms, poses)
+            else:
+                time.sleep(duration_ms / 1000.0)
+                measured = driver.read_positions()
+                if not sp.positions_reached(measured, poses[pose_name], args.tolerance_pwm):
+                    raise TimeoutError(f"hold feedback mismatch: {measured}")
+            print(f"step {index}/{len(cycle)} measured: {pose_name} {measured}")
+        print("COMPLETED: 모든 단계와 최종 home을 위치 피드백으로 확인함")
     except KeyboardInterrupt:
-        print("\n중단 — 전 모터 정지 명령 전송")
-        for servo_id in sp.SERVO_IDS:
-            conn.write(sp.stop_command(servo_id).encode("ascii"))
+        stop_unverified(driver)
+        raise SystemExit(130)
+    except Exception as exc:  # noqa: BLE001
+        stop_unverified(driver)
+        raise SystemExit(f"FAILED: {type(exc).__name__}: {exc}")
     finally:
-        conn.close()
+        driver.close()
 
 
 if __name__ == "__main__":

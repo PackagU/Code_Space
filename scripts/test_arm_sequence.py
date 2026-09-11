@@ -33,6 +33,15 @@ def main():
     seq = load_module("arm_sequence")
     sp = load_module("servo_protocol")
 
+    # 명시적 mission 명령: 호출/목적층 버튼과 home/cancel을 구분한다.
+    assert seq.parse_arm_command(
+        '{"request_id":"p1","action":"press","target":"call","button":"UP","press_cycle":1}'
+    )["target"] == "call"
+    assert seq.parse_arm_command('{"request_id":"h1","action":"home"}')["action"] == "home"
+    assert seq.parse_arm_command(
+        '{"request_id":"c1","action":"cancel","target_request_id":"p1"}'
+    )["target_request_id"] == "p1"
+
     # 1) 트리거: ready+맵로드+층 변경에서만 1회 발동
     trigger = seq.FloorReadyTrigger("F1")
     assert trigger.observe("not json") is None
@@ -85,6 +94,9 @@ def main():
     assert sp.parse_position("000", "#000P1500!") == 1500
     assert sp.parse_position("000", "garbage") is None
     assert sp.parse_position("000", None) is None
+    assert sp.positions_reached(dict(sp.HOME), dict(sp.HOME), 0)
+    assert not sp.positions_reached({"000": 1500}, dict(sp.HOME), 30)
+    expect_raise(sp.positions_reached, dict(sp.HOME), dict(sp.HOME), -1)
 
     # 5) 기준 사이클(1번): run_press_cycle 과 동일 구성 (총 9초, hold 는 재전송 없음)
     assert sp.PRESS_CYCLE is sp.PRESS_CYCLE_1 and sp.get_cycle(1) is sp.PRESS_CYCLE_1
