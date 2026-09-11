@@ -38,6 +38,17 @@ def main():
     assert proto.parse_feedback_line("HELLO opencr 1.0") is None
     assert proto.parse_feedback_line("F 1.0 2.0") is None
     assert proto.parse_feedback_line("F a b c d e f g h i j k l") is None
+    assert proto.parse_feedback_line("F nan 0 0 0 0 0 0 0 1 0 0 0") is None
+    assert proto.parse_feedback_line("F inf 0 0 0 0 0 0 0 1 0 0 0") is None
+    assert proto.parse_feedback_line("F 121 0 0 0 0 0 0 0 1 0 0 0", max_abs_rpm=120) is None
+    assert proto.parse_feedback_line("F 0 0 0 0 0 0 0 0 0 0 0 0") is None
+    for bad in ((float("nan"), 0.0), (0.0, float("inf"))):
+        try:
+            proto.encode_velocity_command(*bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("non-finite command must be rejected")
 
     # twist -> rpm: 바퀴 1rev/s(=60rpm)가 되는 전진 속도에서 양쪽 동일 rpm
     r, L = 0.033, 0.51324
@@ -50,6 +61,14 @@ def main():
     left, right = proto.twist_to_wheel_rpm(0.0, 1.0, r, L)
     approx(left, -right)
     assert right > 0, "left turn must spin right wheel forward"
+
+    for args in ((float("nan"), 0.0, r, L), (0.0, 0.0, 0.0, L)):
+        try:
+            proto.twist_to_wheel_rpm(*args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid twist/geometry must be rejected")
 
     print("opencr_protocol tests passed")
 

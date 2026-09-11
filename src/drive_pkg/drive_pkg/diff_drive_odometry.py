@@ -21,6 +21,10 @@ class DiffDriveOdometry:
         self.w = 0.0
 
     def update(self, left_rpm, right_rpm, dt):
+        if not all(math.isfinite(value) for value in (left_rpm, right_rpm, dt)):
+            raise ValueError("odometry inputs must be finite")
+        if dt < 0.0:
+            raise ValueError("odometry dt must be non-negative")
         left = self.left_sign * left_rpm * RPM_TO_RAD_S * self.wheel_radius
         right = self.right_sign * right_rpm * RPM_TO_RAD_S * self.wheel_radius
         self.v = (left + right) / 2.0

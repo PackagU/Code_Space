@@ -56,6 +56,17 @@ def main():
     approx(qz, math.sin(math.pi / 4.0), 1e-9, "qz")
     approx(qw, math.cos(math.pi / 4.0), 1e-9, "qw")
 
+    # 5) 유한하지 않은 입력과 시각 역행은 pose를 바꾸기 전에 거절한다.
+    x_before = odo.x
+    for args in ((float("nan"), 0.0, 0.02), (0.0, 0.0, -0.01)):
+        try:
+            odo.update(*args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid odometry input must be rejected")
+    approx(odo.x, x_before, 1e-12, "invalid input keeps pose")
+
     print("diff_drive_odometry tests passed")
 
 

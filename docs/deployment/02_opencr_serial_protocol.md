@@ -37,14 +37,37 @@ F <left_rpm> <right_rpm> <gx> <gy> <gz> <ax> <ay> <az> <qw> <qx> <qy> <qz>\n
 
 ## 4. 안전 규약 (watchdog)
 
-- 펌웨어: `V` 프레임 500ms 미수신 -> 모터 정지 (필수, Han)
-- 브리지: `/cmd_vel` 500ms 미수신 -> `V 0.00 0.00` 송신 (이중 안전)
+- 펌웨어: `V` 프레임 `[제안값]` 500ms 미수신 -> 모터 정지 (필수, Han). **현재 실제 펌웨어 구현·버전·실물 정지는 ⚠️미확인**이다.
+- 브리지: `/cmd_vel` `[제안값]` 500ms 미수신 -> `V 0.00 0.00` 송신 (이중 안전).
+- 브리지는 첫 유효 `F` 피드백 전, 피드백 timeout, 시각 역행/큰 점프, 직렬 read/write 예외, 비유한·범위 밖 명령/피드백에서 `/drive/ready=false`와 0속도 상태로 간다.
+- 정지 경로는 가속 제한을 우회해 즉시 0을 쓴다. 정상 명령만 `[제안값]` RPM 변화율 제한을 받는다.
+- 종료 시 0속도 프레임을 3회 시도하지만, 케이블 단절·브리지 강제 종료에는 전달되지 않을 수 있다. 따라서 MCU 독립 watchdog과 물리 E-Stop을 대신하지 않는다.
 
-## 5. 부팅/에러 (선택 구현)
+`drive_calib.yaml`의 timeout·최대 선속도/각속도·RPM·RPM 변화율은 H01/H02 전 `[제안값]`이다. 실제 하중의 바퀴 들림 시험과 저속 지면 시험 전에는 확정값으로 쓰지 않는다.
+
+## 5. 오류 입력과 준비 상태
+
+| 입력/상태 | 브리지 동작 | 실물 한계 |
+|---|---|---|
+| NaN/Inf, 선·각속도 범위 초과 | 명령 폐기, 즉시 0, ready=false | MCU가 직전 명령을 유지하지 않는지는 watchdog 실측 필요 |
+| NaN/Inf, 비정상 quaternion, RPM 범위 초과 피드백 | odom/imu 미갱신, ready=false | 센서 자체 고장 진단은 별도 |
+| 피드백 큐 적체 | 한 tick에서 읽은 최신 유효 프레임만 적분 | v0.1에는 sequence·센서 시각이 없어 오래된 프레임의 절대 나이는 판별 불가 |
+| 호스트 시각 역행 또는 큰 dt | 해당 프레임 적분 안 함, ready=false | 다음 정상 프레임에서만 복구 |
+| serial read/write 예외 | ready=false, 비영(非零) 성공으로 보고하지 않음 | 물리 모터 정지는 MCU/E-Stop 근거 필요 |
+
+현재 v0.1 프레임에는 firmware version 응답의 강제 확인, sensor timestamp, sequence, checksum, MCU watchdog 상태 필드가 없다. v1.0 합의 시 추가하고 양측을 동시에 갱신해야 한다.
+
+## 6. 부팅/에러 (선택 구현)
 
 ```text
 HELLO opencr <fw_version>\n
 E <code> <message...>\n
 ```
 
-브리지는 `V`/`F` 이외 라인을 로그만 남기고 무시한다 (전방 호환).
+`HELLO`·`E`와 손상 프레임은 피드백 준비 상태를 해제한다. 이후 정상 `F` 프레임이 들어와야 ready가 복구된다. firmware version 문자열의 일치 검사는 v0.1에 아직 없다.
+
+## 7. odom/IMU 발행 책임
+
+- EKF를 쓰지 않는 현재 실기 구성에서는 bridge가 `odom -> base_footprint` TF의 단일 발행자다.
+- SLAM Toolbox 또는 AMCL이 `map -> odom`을 담당하며 둘을 동시에 실행하지 않는다.
+- 코드의 odom/IMU covariance는 센서 보정 전 `[제안값]`이다. H02에서 실제 직진·회전·정지 분산을 측정해 갱신한다.
