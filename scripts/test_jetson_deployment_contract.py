@@ -44,6 +44,7 @@ def main():
         "${FLOOR_READER_HOST:-127.0.0.1}",
         "${PACKAGU_FLOOR_READER:-../../../floor_reader}:/opt/floor_reader:ro",
         "${PACKAGU_FLOOR_DATA:-../../../floor_reader/data}:/opt/floor_reader/data:rw",
+        'user: "${PACKAGU_UID:-1000}:${PACKAGU_GID:-1000}"',
         "PACKAGU_REQUIRED_READABLE_MOUNTS",
         "PACKAGU_REQUIRED_WRITABLE_MOUNTS",
         "${RPLIDAR_DEVICE:-/dev/null}",

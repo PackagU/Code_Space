@@ -48,6 +48,9 @@ services:
     profiles: [camera]
     image: ${PACKAGU_JETSON_IMAGE:-ghcr.io/packagu/ros2-humble-slam:humble-jetson}
     container_name: packagu_floor_reader
+    # 호스트 폴더가 0700이어도 읽을 수 있고 data/ 결과가 호스트 사용자 소유로
+    # 남도록 Jetson 로그인 사용자와 같은 UID/GID로 실행한다.
+    user: "${PACKAGU_UID:-1000}:${PACKAGU_GID:-1000}"
     command:
       - python3
       - /opt/floor_reader/app.py
