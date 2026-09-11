@@ -1,0 +1,13 @@
+# P03 라이다 전용 overlay: RPLiDAR만 전달하고 구동부·팔 장치는 차단한다.
+# 호스트에서 /dev/rplidar 식별을 끝낸 뒤 사용한다.
+# 사용:
+#   docker compose -f docker-compose.jetson.yml -f docker-compose.jetson.lidar.yml up -d ros2
+services:
+  ros2:
+    environment:
+      PACKAGU_DEPLOYMENT_MODE: lidar
+    devices:
+      - ${RPLIDAR_DEVICE:-/dev/rplidar}:/dev/rplidar
+      - /dev/null:/dev/opencr
+      - /dev/null:/dev/arm_servo
+      - /dev/null:/dev/motor_nano

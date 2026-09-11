@@ -1,0 +1,12 @@
+# P03 무동작 overlay: 호스트 .env와 무관하게 모든 직렬 장치를 /dev/null로 고정한다.
+# 사용:
+#   docker compose -f docker-compose.jetson.yml -f docker-compose.jetson.safe.yml up -d ros2
+services:
+  ros2:
+    environment:
+      PACKAGU_DEPLOYMENT_MODE: safe
+    devices:
+      - /dev/null:/dev/rplidar
+      - /dev/null:/dev/opencr
+      - /dev/null:/dev/arm_servo
+      - /dev/null:/dev/motor_nano

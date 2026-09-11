@@ -26,6 +26,7 @@ PY_TESTS=(
   scripts/test_field_scripts_contract.py
   scripts/test_udev_contract.py
   scripts/test_jetson_deployment_contract.py
+  scripts/test_jetson_safe_profiles.py
   scripts/test_kku_navigation_launch.py
   scripts/test_arm_sequence.py
   scripts/check_portability.py

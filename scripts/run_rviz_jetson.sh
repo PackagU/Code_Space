@@ -14,9 +14,10 @@
 
 set -euo pipefail
 
-IMAGE="${PACKAGU_RVIZ_IMAGE:-ghcr.io/packagu/ros2-humble-slam:humble-jetson-rviz}"
+IMAGE="${PACKAGU_RVIZ_IMAGE:-packagu/ros2-humble-slam:humble-jetson-p02}"
 NAME="packagu_rviz"
 CONFIG="${1:-}"
+REQUIRED_TOPIC="${PACKAGU_RVIZ_REQUIRED_TOPIC:-}"
 
 # 로컬 X 세션이 있어야 한다 (젯슨에 모니터가 붙어 있고 로그인된 상태)
 if [ ! -S /tmp/.X11-unix/X0 ]; then
@@ -26,8 +27,13 @@ fi
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "오류: 이미지 $IMAGE 가 없다." >&2
-  echo "      humble-jetson 컨테이너에서 'apt-get install -y ros-humble-rviz2' 후" >&2
-  echo "      'docker commit ros2_humble $IMAGE' 로 다시 만들 것." >&2
+  echo "      docker/Dockerfile.jetson 으로 재현 이미지를 먼저 빌드할 것." >&2
+  exit 1
+fi
+
+if ! docker inspect ros2_humble >/dev/null 2>&1 ||
+   [ "$(docker inspect -f '{{.State.Running}}' ros2_humble)" != "true" ]; then
+  echo "오류: donor 컨테이너 ros2_humble 이 실행 중이 아니다." >&2
   exit 1
 fi
 
@@ -47,6 +53,7 @@ fi
 IPC_ARGS=()
 DDS_ARGS=()
 DONOR_IPC="$(docker inspect -f '{{.HostConfig.IpcMode}}' ros2_humble 2>/dev/null || true)"
+DONOR_ID="$(docker inspect -f '{{.Id}}' ros2_humble)"
 if [ "$DONOR_IPC" = "shareable" ]; then
   IPC_ARGS=(--ipc=container:ros2_humble)
   echo "DDS 전송: 공유 메모리 (ros2_humble IPC 합류)"
@@ -75,6 +82,7 @@ echo "RViz2 기동 중... (이미지: $IMAGE)"
 docker run -d --rm --name "$NAME" \
   --network host \
   "${IPC_ARGS[@]}" "${DDS_ARGS[@]}" \
+  --label "packagu.donor_id=${DONOR_ID}" \
   -v "$HOME/Code_Space/scripts:/ros2_ws/scripts:ro" \
   -e DISPLAY=:0 \
   -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
@@ -89,6 +97,22 @@ docker run -d --rm --name "$NAME" \
 sleep 8
 if docker ps --filter "name=$NAME" --format '{{.Names}}' | grep -q "$NAME"; then
   echo "기동됨. 젯슨 화면을 확인할 것."
+  if [ -n "$REQUIRED_TOPIC" ]; then
+    if [[ ! "$REQUIRED_TOPIC" =~ ^/[A-Za-z0-9_/]+$ ]]; then
+      echo "오류: PACKAGU_RVIZ_REQUIRED_TOPIC 형식이 잘못됐다: $REQUIRED_TOPIC" >&2
+      docker stop "$NAME" >/dev/null
+      exit 1
+    fi
+    echo "수신 검사: ${REQUIRED_TOPIC} (최대 12초)"
+    if ! docker exec "$NAME" bash -lc \
+      "source /opt/ros/humble/setup.bash && timeout 12 ros2 topic echo '$REQUIRED_TOPIC' --once" \
+      >/dev/null 2>&1; then
+      echo "오류: ${REQUIRED_TOPIC} 메시지를 받지 못했다. IPC/domain/QoS와 donor 상태를 확인할 것." >&2
+      docker stop "$NAME" >/dev/null
+      exit 1
+    fi
+    echo "수신 확인: ${REQUIRED_TOPIC}"
+  fi
   echo "로그:  docker logs -f $NAME"
   echo "종료:  docker stop $NAME"
 else
