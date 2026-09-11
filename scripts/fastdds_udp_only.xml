@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Fast DDS 참가자를 UDPv4 전송만 쓰도록 강제한다. 2026-09-10 작성.
+
+  왜 필요한가:
+    ros2_humble 과 사이드카 컨테이너(RViz 등)는 둘 다 host 네트워크를 쓰므로
+    호스트명이 같다. Fast DDS 는 이를 보고 "같은 기계" 로 판단해 공유 메모리(SHM)
+    전송을 고른다. 그런데 Docker 는 컨테이너마다 /dev/shm 을 따로 주므로 상대가
+    만든 세그먼트를 열 수 없다.
+    증상: "노드 목록에는 다 보이는데 토픽/TF 가 한 건도 안 온다" (RViz No tf data)
+
+  더 나은 영구 해결책:
+    docker-compose.jetson.yml 의 ros2 서비스에 `ipc: shareable` 을 넣고
+    사이드카를 `ipc=container:ros2_humble` 로 띄우면 SHM 을 정상 공유한다.
+    그쪽이 빠르지만 ros2_humble 재생성이 필요하다. 이 파일은 재생성 없이
+    쓰는 우회로다.
+
+  적용: 컨테이너에 FASTRTPS_DEFAULT_PROFILES_FILE 로 이 파일 경로를 넘긴다.
+-->
+<dds xmlns="http://www.eprosima.com">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>udp_only_transport</transport_id>
+        <type>UDPv4</type>
+      </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="udp_only_participant" is_default_profile="true">
+      <rtps>
+        <userTransports>
+          <transport_id>udp_only_transport</transport_id>
+        </userTransports>
+        <!-- 기본 전송(SHM 포함)을 쓰지 않는다 -->
+        <useBuiltinTransports>false</useBuiltinTransports>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>

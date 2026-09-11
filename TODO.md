@@ -7,7 +7,7 @@
 ---
 
 ## 🔒 현재 편집 중
-- (없음)
+- Codex: P02 Dockerfile/Jetson compose/entrypoint 재현성 작업 (2026-09-10 KST)
 
 ---
 

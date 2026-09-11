@@ -9,6 +9,8 @@ services:
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - PACKAGU_REQUIRED_READABLE_MOUNTS=/ros2_ws/src,/ros2_ws/test_workspace,/ros2_ws/scripts
+      - PACKAGU_REQUIRED_WRITABLE_MOUNTS=/ros2_ws/maps,/ros2_ws/logs
     volumes:
       - ${PACKAGU_SRC:-../../src}:/ros2_ws/src:rw
       - ${PACKAGU_MAPS:-../../src/slam_pkg/maps}:/ros2_ws/maps:rw
@@ -16,6 +18,12 @@ services:
       - ${PACKAGU_SCRIPTS:-../../scripts}:/ros2_ws/scripts:ro
       - ${PACKAGU_LOGS:-../../logs}:/ros2_ws/logs:rw   # rosbag 영속화 (스펙 §6.3)
     network_mode: host
+    # 사이드카 컨테이너(RViz, rosbag 등)와 /dev/shm 을 공유하기 위해 shareable 로 둔다.
+    # 2026-09-10: 기본값 private 이면 Fast DDS 가 host 네트워크를 보고 SHM 전송을
+    # 고르는데 /dev/shm 이 분리돼 있어 데이터가 한 건도 안 건너온다.
+    # 증상은 "ros2 node list 에는 보이는데 토픽/TF 가 안 온다" 였다.
+    # 사이드카는 --ipc=container:ros2_humble 로 붙인다 (scripts/run_rviz_jetson.sh 참조).
+    ipc: shareable
     # privileged 대신 최소 권한: 시리얼은 devices로, RT(chrt/SCHED_RR)는 SYS_NICE로.
     # udev 별칭이 컨테이너에서 안 보이면 B-1 체크리스트의 'ls -l /dev/rplidar' 절차 참조.
     # (문제 지속 시 임시 복구: privileged: true 재활성 — 사유를 세션 일지에 기록)
@@ -32,4 +40,37 @@ services:
       - SYS_NICE
     stdin_open: true
     tty: true
+    restart: unless-stopped
+
+  # C02 전까지는 카메라 backend가 확정되지 않았으므로 기본 기동하지 않는다.
+  # profile을 명시해도 FLOOR_READER_SOURCE 기본값은 disabled라 영상 성공을 뜻하지 않는다.
+  floor_reader:
+    profiles: [camera]
+    image: ${PACKAGU_JETSON_IMAGE:-ghcr.io/packagu/ros2-humble-slam:humble-jetson}
+    container_name: packagu_floor_reader
+    command:
+      - python3
+      - /opt/floor_reader/app.py
+      - --source
+      - ${FLOOR_READER_SOURCE:-disabled}
+      - --host
+      - ${FLOOR_READER_HOST:-127.0.0.1}
+      - --port
+      - ${FLOOR_READER_PORT:-8765}
+    environment:
+      - PACKAGU_REQUIRED_READABLE_MOUNTS=/opt/floor_reader
+      - PACKAGU_REQUIRED_WRITABLE_MOUNTS=/opt/floor_reader/data
+    volumes:
+      - ${PACKAGU_FLOOR_READER:-../../../floor_reader}:/opt/floor_reader:ro
+      - ${PACKAGU_FLOOR_DATA:-../../../floor_reader/data}:/opt/floor_reader/data:rw
+    network_mode: host
+    ipc: private
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
     restart: unless-stopped

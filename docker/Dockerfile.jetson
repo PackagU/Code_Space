@@ -1,8 +1,8 @@
-# PackagU Jetson Xavier NX 배포용 이미지 (aarch64 런타임: GUI/Gazebo 제외)
+# PackagU Jetson Xavier NX 배포용 이미지 (aarch64 런타임: Gazebo 제외)
 #
 # 왜 별도 이미지인가:
 # - Jetson(JetPack)은 Ubuntu 20.04 기반이라 ROS2 Humble 을 직접 못 올린다 -> 컨테이너 필수.
-# - 실기에는 Gazebo/RViz 가 필요 없다. desktop-full 은 aarch64 에서 무겁고 느리다.
+# - Gazebo는 제외하지만 현장 매핑 관찰용 RViz2와 floor reader 런타임은 포함한다.
 # - SLAM/Nav2 는 CPU 스택이라 CUDA/L4T 베이스 없이 공식 multi-arch ros 이미지로 충분.
 #
 # 빌드 (x86 데스크톱에서 크로스 빌드):
@@ -17,7 +17,7 @@ FROM ros:humble-ros-base
 ARG DEBIAN_FRONTEND=noninteractive
 
 LABEL org.opencontainers.image.source="https://github.com/PackagU/Code_Space"
-LABEL org.opencontainers.image.description="PackagU ROS2 Humble runtime image for Jetson Xavier NX (no GUI)"
+LABEL org.opencontainers.image.description="PackagU ROS2 Humble runtime image for Jetson Xavier NX"
 LABEL org.opencontainers.image.licenses="MIT"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -29,9 +29,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nano \
     net-tools \
     python3-colcon-common-extensions \
+    python3-numpy \
+    python3-opencv \
     python3-pip \
     python3-rosdep \
     python3-serial \
+    python3-yaml \
     # gazebo-msgs 는 메시지 정의만 (Gazebo 런타임 아님) — 분산 시뮬 검증(§4.5)에서
     # 원격 Gazebo 서비스(GetModelList 등) 호출에 필요. 시뮬 의존 금지 원칙 위반 아님.
     ros-humble-gazebo-msgs \
@@ -39,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-humble-nav2-map-server \
     ros-humble-robot-state-publisher \
     ros-humble-rplidar-ros \
+    ros-humble-rviz2 \
     ros-humble-slam-toolbox \
     ros-humble-teleop-twist-keyboard \
     ros-humble-tf2-tools \
@@ -48,7 +52,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN rosdep init 2>/dev/null || true && rosdep update
 
-RUN mkdir -p /ros2_ws/src /ros2_ws/maps
+RUN mkdir -p \
+    /ros2_ws/src \
+    /ros2_ws/maps \
+    /ros2_ws/logs \
+    /ros2_ws/test_workspace \
+    /ros2_ws/scripts \
+    /opt/floor_reader/data
 WORKDIR /ros2_ws
 
 ENV ROS_DOMAIN_ID=0

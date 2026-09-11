@@ -1,0 +1,41 @@
+# 핸드헬드 매핑 전용 파라미터. 2026-09-10 작성.
+#
+# 용도: 구동부(OpenCR/바퀴) 없이 라이다만 손에 들고 걸어다니며 지도를 만든다.
+#       odom -> base_footprint 는 static_transform_publisher 가 항등으로 고정하므로
+#       odom 이 영원히 움직이지 않는다.
+#
+# 원본(slam_toolbox_params.yaml)과의 차이는 아래 두 줄뿐이다:
+#   minimum_travel_distance: 0.5 -> 0.0
+#   minimum_travel_heading:  0.5 -> 0.0
+# 이유: slam_toolbox 는 odom 위치가 이 값 이상 변했을 때만 새 스캔을 받아들인다.
+#       항등 odom 에서는 조건이 영원히 안 맞아 첫 스캔 하나만 들어가고 지도가 멈춘다.
+#
+# !!! 실기(바퀴 오도메트리) 매핑에는 이 파일을 쓰지 말 것 — 원본을 쓴다.
+#     0.0 은 5.5Hz 스캔을 전부 처리해 CPU 를 크게 먹고 posegraph 도 불필요하게 커진다.
+
+slam_toolbox:
+  ros__parameters:
+    mode: mapping
+
+    resolution: 0.05
+    max_laser_range: 8.0
+    minimum_travel_distance: 0.0   # [핸드헬드] 항등 odom 대응 — 원본은 0.5
+    minimum_travel_heading: 0.0    # [핸드헬드] 항등 odom 대응 — 원본은 0.5
+
+    loop_search_maximum_distance: 3.0
+    do_loop_closing: true
+    loop_match_minimum_response_fine: 0.1
+
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan
+
+    use_scan_matching: true
+    use_scan_barycenter: true
+
+    map_start_at_dock: false
+
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI

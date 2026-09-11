@@ -6,8 +6,16 @@ slam_toolbox:
     # 맵 파라미터 (RPLiDAR A1m8 기준)
     resolution: 0.05         # 맵 해상도 [m/cell]. 성능 문제 시 0.1 시도
     max_laser_range: 8.0     # RPLiDAR A1 최대 12m, 실내 8m 권장
-    minimum_travel_distance: 0.5   # 새 스캔 추가 최소 이동거리 [m]
-    minimum_travel_heading: 0.5    # 새 스캔 추가 최소 회전량 [rad]
+    # 2026-09-10 하향 (0.5 -> 0.2). 0.5m 간격은 복도 매핑에서 노드가 너무 성글어
+    # 디테일이 뭉개지고 루프 클로저가 잡을 후보도 적어진다. TurtleBot3 기본값이 0.2다.
+    minimum_travel_distance: 0.2   # 새 스캔 추가 최소 이동거리 [m]
+    minimum_travel_heading: 0.2    # 새 스캔 추가 최소 회전량 [rad]
+
+    # 2026-09-10 추가. 실측 라이다(A1m8 FW1.29)가 range_min 0.15m 를 보고하는데
+    # 이 값이 없으면 slam_toolbox 가 0.0 으로 두고 다음 경고를 낸다:
+    #   minimum laser range setting (0.0 m) exceeds the capabilities of the used Lidar (0.2 m)
+    # 로봇 본체에 반사된 근거리 오검출을 걸러내는 효과도 있다.
+    min_laser_range: 0.2     # [m]
 
     # 루프 클로저
     loop_search_maximum_distance: 3.0
