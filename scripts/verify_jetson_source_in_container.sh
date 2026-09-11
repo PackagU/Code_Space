@@ -8,6 +8,12 @@ rm -rf "${VERIFY_ROOT}"
 mkdir -p "${VERIFY_ROOT}/build" "${VERIFY_ROOT}/install" "${VERIFY_ROOT}/log"
 
 cd /ros2_ws
+# 호스트 사용자 소유 저장소를 root 컨테이너에서 읽을 때 Git의 소유권 보호를
+# 이 검증 프로세스에만 한정해 해제한다. 전역 Git 설정은 변경하지 않는다.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0=/ros2_ws
+
 colcon --log-base "${VERIFY_ROOT}/log" build \
     --base-paths src \
     --build-base "${VERIFY_ROOT}/build" \
