@@ -7,7 +7,7 @@
 ---
 
 ## 🔒 현재 편집 중
-- Codex: P02 Dockerfile/Jetson compose/entrypoint 재현성 작업 (2026-09-10 KST)
+- Codex: P03 무동작 프로파일·장치·DDS 작업 (2026-09-11 KST)
 
 ---
 
@@ -15,6 +15,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-09-11 (Codex P02): **재현 가능한 Jetson Docker 배포 오프라인 검증 완료.** `docker/Dockerfile.jetson`에서 arm64 이미지 `packagu/ros2-humble-slam:humble-jetson-p02`(ID `f2358e90…`, 2,339,392,107 B)를 생성했다. RViz2·OpenCV·NumPy·PyYAML을 선언하고, source/maps/logs/floor data 마운트 가드와 선택형 `camera` 프로파일을 추가했다. 새 이미지에서 ROS 4패키지 빌드, 전체 오프라인 29개, floor reader 3개 PASS. handheld launch의 `/ros2_ws` 고정 경로와 floor reader UID/GID 접근 문제도 수정·재검증했다. 운영 `ros2_humble`은 기존 `f77e790a…` 이미지로 유지했으며 실장치 동작은 이 단계에서 미확인. 로컬 근거: `logs/pre_hw/20260911-215223_P02/`.
 - 2026-08-22 (L&S 제출 준비): **README 외부 독자용 개편**(히어로 이미지 `assets/readme/sim_nav2_gazebo_f1.png`, 현재 상태표·로드맵 진행·검증 원커맨드·저장소 안내) + 로컬 전용 폴더 gitignore(`Learning_Sharing/`, `_workspace/`, node_modules, `verification/dist_*`) + PR #5(lee/hw-design-review→dev) 머지·dev→main 머지로 기본 브랜치 최신화. 오프라인 28/28 PASS·portability 112 PASS 재확인.
 - 2026-08-21 (야간 자율, 적대 리뷰 후속): **리뷰 29건 반영 + 최종 스택 재검증 — 데스크톱 전 옵션(왕복+동적 보행자+정적 장애물 2개+리프트+팔) 10/10 연속 무결점(재시도 0·REALIGN 0, 278~348s) + 선행 4/4, Jetson 분산 원커맨드 3/3 완주(mem 2.5/6.8GB, cpu peak 89~94%, missed 23~29 → 분산 게이트 60).** 핵심 근본 원인 2건 확정(§1.26): ① `fdir1 "1 0 0"` 은 collision 프레임 회전으로 θ≈90° 퇴화(정지 중 자발 yaw) → 차축 `0 0 1` ② 무마찰 캐스터 + 차축 fdir1 = 6mm/s 등속 크리프(odom 불변 활주 = belief 드리프트·REALIGN 의 근원) → 캐스터 mu 0.5 → check_idle_drift 0.54m→0.0000m/90s. 스모크 핫픽스 12건 + 신규: 정적 장애물(경로 위, 템플릿 pose 오프셋 버그 수정), 리프트 mock(frame_id world + 자기잠금), F2 출구 스테이징, inflation 0.55/3.0, goal 응답 유실 서버증거/빠른 재전송, finalize pipefail 버그, 보행자 yield(교착 해소), 분산 원커맨드 `scripts/run_distributed_e2e.sh`(스폰 확인 자동). 행위 테스트 2종 + contract 확장(오프라인 28/28). 일지: `docs/session_wiki/2026-08-20_review_followup/journal.md`. 다음: 고장 주입 5종, 실측 맵, RPLiDAR 실기 주행, missed-rate 실기 임계(Jetson 23 vs 데스크톱 0~3), CycloneDDS 전환 검토(rmw 응답 유실 계열 근절), 문폭 1.0 가정치 회의.
 - 2026-08-18 (야간 자율): **왕복 배달 체인 완성 — 데스크톱 10/10 연속 + Jetson 분산 3/3 완주.** `WITH_RETURN=1` 게이트로 F2→F1 역전환+충전소 복귀 구현(역방향은 기존 orchestrator/world-swap 재사용 — swap_trigger 방향 무관), `run_roundtrip_repeat.sh` 반복 판정기(REPEAT_N, OOM 가드, 회차 집계) 신설. **격파한 산발 결함 6종(전부 참값 스냅샷 증거 기반, §1.25 완결)**: ① daemon 오염 → 매 런 daemon 리셋 ② 빈 ARM_SERIAL_PORT rcl 즉사 → 조건부 전달 ③ request_switch half-hang 데스크톱 재현 → armed 증거 판정 헬퍼 ④ 택배존 0.9m 문 wedging → 1.0m(실측 전 가정치) ⑤ 로봇 90° 전복(보행자 텔레포트 관통 + mu100 그립) → 보행자 근접 0.7m 일시정지 + **마찰 방향 분리 mu1=100/mu2=1**(A/B: mu30 활주 재발 0.55m/90s, 분리 9.5mm/90s) ⑥ footprint 노즈 0.40 엘베 inflation 간섭 → 0.35. **회복 스택 상설화**: 재시도 시 costmap 클리어 + belief-참값 드리프트 >0.3m 자동 재정위(분산 3회차에서 0.974m 실전 흡수) + 실패 시 `dump_world_state` 전 모델 참값 스냅샷. **compose 장치 env 화** — 라이다/팔 USB 제거 상태에서 docker restart 실패(실측) 해소, 기본 /dev/null, 장착 시 `.env`(절차 docs/deployment/03_hw_update_checklist.md 신설). 분산 부하: cpu_peak 67~87%/600%, mem 2.4~2.8GB. Roadmap 04 85%/05 70%/06 90%/07 75%. §4.5 왕복 기준 갱신(retries=2). 브리핑: `docs/session_wiki/2026-08-18_overnight_roundtrip/briefing.md`. 다음: 신공학관 실측(가정치→실측값), RPLiDAR 실기 주행, missed-rate 임계, 고장 주입 5종.
