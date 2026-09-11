@@ -3,7 +3,7 @@
 set -euo pipefail
 
 IMAGE="${PACKAGU_JETSON_IMAGE:-packagu/ros2-humble-slam:humble-jetson-p02}"
-DOMAIN_ID="${P03_ROS_DOMAIN_ID:-243}"
+DOMAIN_ID="${P03_ROS_DOMAIN_ID:-223}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DONOR="packagu_p03_donor_$$"
 UDP_DONOR="packagu_p03_udp_donor_$$"
