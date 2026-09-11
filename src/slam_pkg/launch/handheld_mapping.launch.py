@@ -12,7 +12,7 @@
   실기 매핑에는 이 파일을 쓰지 말 것. 원본 slam_toolbox.launch.py 를 쓴다.
 
 사용 (컨테이너 안):
-  ros2 launch /ros2_ws/src/slam_pkg/launch/handheld_mapping.launch.py
+  ros2 launch slam_pkg handheld_mapping.launch.py
 
   포트 바꾸기:   serial_port:=/dev/ttyUSB0
   라이다 없이:   enable_lidar:=false      (노드 기동만 확인)
@@ -30,12 +30,13 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     pkg_common = get_package_share_directory("common_pkg")
+    pkg_slam = get_package_share_directory("slam_pkg")
     urdf_file = os.path.join(pkg_common, "urdf", "delivery_robot.urdf.xacro")
     robot_desc = xacro.process_file(urdf_file).toxml()
 
-    # 원본 config 디렉터리 옆에 두고 소스 경로로 직접 읽는다.
-    # (symlink install 이라 새 파일은 install 쪽에 심볼릭 링크가 없다)
-    handheld_params = "/ros2_ws/src/slam_pkg/config/slam_toolbox_handheld_params.yaml"
+    handheld_params = os.path.join(
+        pkg_slam, "config", "slam_toolbox_handheld_params.yaml"
+    )
 
     serial_port = LaunchConfiguration("serial_port")
     enable_lidar = LaunchConfiguration("enable_lidar")
