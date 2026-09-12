@@ -1,16 +1,28 @@
 # 2026-09-12 실차 LiDAR 매핑 → 저장 지도 Nav2 가이드
 
-기준일: 2026-09-11 KST
+기준일: 2026-09-12 KST
 
 ## 현재 판정
 
 - LiDAR 단독 스캔과 핸드헬드 SLAM: **실물 검증**. 2026-09-11 저장 지도는 SLAM 동작 증명용이며 실차 주행용이 아니다.
-- 실차 베이스·매핑·Nav2 분리 실행 코드: **코드 존재 / 오프라인 검증 예정**.
+- 실차 베이스·매핑·Nav2 분리 실행 코드: **오프라인 검증**.
 - OpenCR Jetson 브리지 펌웨어: **코드 존재**. 실제 OpenCR 컴파일·업로드·watchdog 정지는 ⚠️미확인.
 - 실제 wheel odom, LiDAR 장착 TF, AMCL 위치추정, Nav2 주행: **⚠️미확인**.
 - 이 프로필은 로봇팔·리프트 노드를 시작하지 않으며 Docker에서도 관련 포트를 `/dev/null`로 막는다.
 
-## 내일 필요한 사람과 안전 조건
+## 0. 현장 연결 구조
+
+```text
+노트북 ── Wi-Fi/SSH ──> Jetson
+                          ├─ USB ──> OpenCR ──> Dynamixel 바퀴
+                          └─ USB ──> LiDAR
+```
+
+노트북은 OpenCR에 직접 연결하지 않는다. 매핑 중에는 SSH 터미널의 텔레옵 노드가 `/cmd_vel`을 발행하고, 저장 지도 주행 중에는 Jetson의 Nav2가 같은 토픽을 발행한다. 두 경우 모두 `nav_safety_gate`를 지난 `/cmd_vel_safe`만 OpenCR 브리지에 전달된다. SSH 또는 Wi-Fi가 끊겨 새 명령이 오지 않으면 소프트웨어 gate와 OpenCR의 500 ms watchdog이 각각 정지 명령을 만든다. 물리 E-Stop은 별도로 필요하다.
+
+현재 벤치용 `w/a/s/d/q` 펌웨어만 올라가 있다면 SSH로 문자 제어는 가능해도 wheel odom 피드백이 없어 이 구성의 SLAM/Nav2에는 쓸 수 없다. 아래 브리지 펌웨어를 먼저 올려야 한다. 펌웨어 업로드가 끝난 뒤에는 OpenCR USB를 Jetson에 계속 연결한다.
+
+## 오늘 필요한 사람과 안전 조건
 
 실제 바퀴가 움직이는 단계부터는 두 사람이 있는 것을 권장한다. 한 명은 노트북/Jetson, 한 명은 물리 E-Stop과 로봇을 담당한다.
 
@@ -37,7 +49,7 @@
 
 기존 `w/a/s/d/q` 벤치 코드는 Jetson 명령 `V left_rpm right_rpm`과 실측 RPM 피드백 `F left_rpm right_rpm`이 없으므로 실차 wheel odom에 사용할 수 없다.
 
-내일 현장 승인 후 Arduino IDE에서 다음 스케치를 연다.
+현장 승인 후 Arduino IDE에서 다음 스케치를 연다.
 
 ```text
 /home/hsm/Code_Space/src/drive_pkg/firmware/opencr/opencr_drive_bridge.ino
@@ -47,7 +59,7 @@
 
 업로드 전 상태는 **코드 존재**일 뿐이다. 바퀴를 띄운 상태에서 명령 두절 500 ms 뒤 정지와 좌우 방향을 확인하기 전에는 지면 주행으로 넘어가지 않는다.
 
-## 3. Jetson 접속과 장치 전달
+## 3. 노트북에서 Jetson 접속과 장치 전달
 
 ```bash
 ssh hsm@192.168.0.7
@@ -177,6 +189,8 @@ FLOOR=F1 ./scripts/start_field_navigation.sh \
 ## 9. 종료
 
 Nav2 터미널 Ctrl+C → 텔레옵 `k` 확인 → 베이스 터미널 Ctrl+C 순서다. 비정상 시에는 순서보다 물리 E-Stop이 우선이다.
+
+매핑 중 센서·TF 기록, motion-safe 재생, 30분 부하 측정과 복구 절차는 [05_record_replay_recovery.md](05_record_replay_recovery.md)를 따른다. 기본 재생은 `/cmd_vel`, 팔, 리프트, goal 토픽을 제외하고 실제 graph와 다른 ROS domain만 사용한다.
 
 ## 내일 성공 판정
 

@@ -26,6 +26,9 @@ PY_TESTS=(
   scripts/test_opencr_safety_contract.py
   scripts/test_nav_safety_gate.py
   scripts/test_map_contract.py
+  scripts/test_bag_contract.py
+  scripts/test_field_topic_metrics.py
+  scripts/test_p07_scripts_contract.py
   scripts/test_field_mapping_launch.py
   scripts/test_field_scripts_contract.py
   scripts/test_udev_contract.py
@@ -103,6 +106,15 @@ if [[ ${HAVE_ROS} -eq 1 ]]; then
     echo "FAIL scripts/test_arm_node_safe_runtime.sh"
     fail=$((fail + 1))
     failed_tests+=(scripts/test_arm_node_safe_runtime.sh)
+  fi
+
+  if timeout 35 bash scripts/test_p07_rosbag_runtime.sh >/dev/null 2>&1; then
+    echo "PASS scripts/test_p07_rosbag_runtime.sh"
+    pass=$((pass + 1))
+  else
+    echo "FAIL scripts/test_p07_rosbag_runtime.sh"
+    fail=$((fail + 1))
+    failed_tests+=(scripts/test_p07_rosbag_runtime.sh)
   fi
 fi
 
