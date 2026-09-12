@@ -23,8 +23,12 @@ docker ps --format '{{.Names}}' | grep -Fxq "${CONTAINER_NAME}" || { echo "error
 
 output_dir="${ROOT_DIR}/logs/field_load/${LABEL}"
 [[ ! -e "${output_dir}" ]] || { echo "error: refusing to overwrite ${output_dir}" >&2; exit 1; }
-mkdir -p "${output_dir}"
 container_output="/ros2_ws/logs/field_load/${LABEL}/topic_metrics.json"
+host_uid="$(id -u)"
+host_gid="$(id -g)"
+docker exec -i "${CONTAINER_NAME}" mkdir -p "/ros2_ws/logs/field_load/${LABEL}"
+docker exec -i "${CONTAINER_NAME}" chown "${host_uid}:${host_gid}" "/ros2_ws/logs/field_load/${LABEL}"
+[[ -d "${output_dir}" && -w "${output_dir}" ]] || { echo "error: persistent output directory is not writable" >&2; exit 1; }
 topics="/scan,/odom"
 topic_list="$(docker exec -i "${CONTAINER_NAME}" bash -lc "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && export ROS_DOMAIN_ID='${MONITOR_DOMAIN_ID}' && ros2 topic list")"
 grep -Fxq /scan <<<"${topic_list}" || { echo "error: /scan missing" >&2; exit 1; }

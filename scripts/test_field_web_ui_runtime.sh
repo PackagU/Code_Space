@@ -16,20 +16,20 @@ COUNTS="${OUTPUT_ROOT}/cmd_counts.json"
 mkdir -p "${OUTPUT_ROOT}"
 
 cleanup() {
-  [[ -n "${web_pid:-}" ]] && kill -INT "${web_pid}" 2>/dev/null || true
-  [[ -n "${fixture_pid:-}" ]] && kill -INT "${fixture_pid}" 2>/dev/null || true
+  [[ -n "${web_pid:-}" ]] && kill -INT -- "-${web_pid}" 2>/dev/null || true
+  [[ -n "${fixture_pid:-}" ]] && kill -INT -- "-${fixture_pid}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-ROS_DOMAIN_ID="${TEST_DOMAIN_ID}" python3 scripts/field_web_ui_fixture.py \
+setsid env ROS_DOMAIN_ID="${TEST_DOMAIN_ID}" python3 scripts/field_web_ui_fixture.py \
   --duration-sec 8 --output "${COUNTS}" > "${OUTPUT_ROOT}/fixture.log" 2>&1 &
 fixture_pid=$!
-ROS_DOMAIN_ID="${TEST_DOMAIN_ID}" ros2 run slam_pkg field_web_ui --ros-args \
+setsid env ROS_DOMAIN_ID="${TEST_DOMAIN_ID}" ros2 run slam_pkg field_web_ui --ros-args \
   -p port:="${TEST_PORT}" > "${OUTPUT_ROOT}/web.log" 2>&1 &
 web_pid=$!
 
 for _ in $(seq 1 30); do
-  curl -fsS "http://127.0.0.1:${TEST_PORT}/" > "${OUTPUT_ROOT}/index.html" && break
+  curl -fsS "http://127.0.0.1:${TEST_PORT}/" > "${OUTPUT_ROOT}/index.html" 2>/dev/null && break
   sleep 0.2
 done
 [[ -s "${OUTPUT_ROOT}/index.html" ]] || { echo "error: web UI did not start" >&2; exit 1; }
@@ -48,7 +48,12 @@ curl -fsS -H "X-Packagu-Token: ${token}" -H 'Content-Type: application/json' \
 
 wait "${fixture_pid}"
 unset fixture_pid
-kill -INT "${web_pid}" 2>/dev/null || true
+kill -INT -- "-${web_pid}" 2>/dev/null || true
+for _ in $(seq 1 30); do
+  kill -0 "${web_pid}" 2>/dev/null || break
+  sleep 0.1
+done
+kill -TERM -- "-${web_pid}" 2>/dev/null || true
 wait "${web_pid}" || true
 unset web_pid
 
