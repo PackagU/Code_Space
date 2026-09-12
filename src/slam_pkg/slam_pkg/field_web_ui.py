@@ -254,9 +254,15 @@ class FieldWebNode(Node):
 
     def _command_tick(self):
         with self._lock:
-            command = self._command if self._now() <= self._command_expiry else (0.0, 0.0)
+            previous = self._command
+            command = previous if self._now() <= self._command_expiry else (0.0, 0.0)
+            expired_motion = previous != (0.0, 0.0) and command == (0.0, 0.0)
             if command == (0.0, 0.0):
                 self._command = command
+                # Nav2 owns cmd_vel while manual control is idle.
+                # Still emit one zero at manual timeout and honor software stop.
+                if self._process_running("navigation") and not self._software_stop and not expired_motion:
+                    return
         msg = Twist()
         msg.linear.x, msg.angular.z = command
         self.cmd_pub.publish(msg)
