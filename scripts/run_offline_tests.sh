@@ -30,6 +30,7 @@ PY_TESTS=(
   scripts/test_field_topic_metrics.py
   scripts/test_p07_scripts_contract.py
   scripts/test_field_web_ui_contract.py
+  scripts/test_integration_safety_contract.py
   scripts/test_field_mapping_launch.py
   scripts/test_field_scripts_contract.py
   scripts/test_udev_contract.py
