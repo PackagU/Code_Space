@@ -126,6 +126,15 @@ if [[ ${HAVE_ROS} -eq 1 ]]; then
     fail=$((fail + 1))
     failed_tests+=(scripts/test_field_web_ui_runtime.sh)
   fi
+
+  if timeout 45 bash scripts/test_field_web_workflow_runtime.sh >/dev/null 2>&1; then
+    echo "PASS scripts/test_field_web_workflow_runtime.sh"
+    pass=$((pass + 1))
+  else
+    echo "FAIL scripts/test_field_web_workflow_runtime.sh"
+    fail=$((fail + 1))
+    failed_tests+=(scripts/test_field_web_workflow_runtime.sh)
+  fi
 fi
 
 echo ""

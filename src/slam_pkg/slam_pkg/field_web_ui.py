@@ -34,8 +34,8 @@ from tf2_ros import Buffer, TransformListener
 from slam_pkg.map_contract import MapContractError, validate_map_yaml
 
 
-MAP_ROOT = Path("/ros2_ws/maps/field")
-LOG_ROOT = Path("/ros2_ws/logs/web_ui")
+DEFAULT_MAP_ROOT = Path("maps/field")
+DEFAULT_LOG_ROOT = Path("logs/web_ui")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 MAP_QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST,
@@ -59,7 +59,8 @@ class FieldWebNode(Node):
         self.declare_parameter("angular_speed", 0.35)
         self.declare_parameter("command_deadman_sec", 0.30)
         self.declare_parameter("sensor_timeout_sec", 0.50)
-        self.declare_parameter("map_root", str(MAP_ROOT))
+        self.declare_parameter("map_root", str(DEFAULT_MAP_ROOT))
+        self.declare_parameter("log_root", str(DEFAULT_LOG_ROOT))
 
         self.bind_host = str(self.get_parameter("bind_host").value)
         self.port = int(self.get_parameter("port").value)
@@ -68,6 +69,7 @@ class FieldWebNode(Node):
         self.deadman_sec = float(self.get_parameter("command_deadman_sec").value)
         self.sensor_timeout = float(self.get_parameter("sensor_timeout_sec").value)
         self.map_root = Path(str(self.get_parameter("map_root").value)).resolve()
+        self.log_root = Path(str(self.get_parameter("log_root").value)).resolve()
         if self.bind_host not in ("127.0.0.1", "::1"):
             raise ValueError("field web UI must bind to loopback; use an SSH tunnel")
         if not 1024 <= self.port <= 65535:
@@ -281,8 +283,8 @@ class FieldWebNode(Node):
         self._set_message("소프트 정지를 해제했습니다. 센서와 구동 준비를 다시 확인하세요.")
 
     def _start_process(self, kind, command):
-        LOG_ROOT.mkdir(parents=True, exist_ok=True)
-        log_path = LOG_ROOT / f"{time.strftime('%Y%m%d_%H%M%S')}_{kind}.log"
+        self.log_root.mkdir(parents=True, exist_ok=True)
+        log_path = self.log_root / f"{time.strftime('%Y%m%d_%H%M%S')}_{kind}.log"
         log_handle = log_path.open("ab", buffering=0)
         try:
             process = subprocess.Popen(

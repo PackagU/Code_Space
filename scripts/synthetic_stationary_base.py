@@ -10,7 +10,7 @@ from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
-from tf2_ros import TransformBroadcaster
+from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 
 
 def main():
@@ -23,6 +23,15 @@ def main():
     drive_ready_pub = drive.create_publisher(Bool, "/drive/ready", 10)
     safety_ready_pub = safety.create_publisher(Bool, "/nav_safety/ready", 10)
     tf_broadcaster = TransformBroadcaster(drive)
+    static_broadcaster = StaticTransformBroadcaster(drive)
+
+    static = TransformStamped()
+    static.header.stamp = drive.get_clock().now().to_msg()
+    static.header.frame_id = "base_footprint"
+    static.child_frame_id = "laser"
+    static.transform.translation.z = 0.5
+    static.transform.rotation.w = 1.0
+    static_broadcaster.sendTransform(static)
 
     def publish_stationary_state():
         stamp = drive.get_clock().now().to_msg()
