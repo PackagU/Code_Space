@@ -114,7 +114,7 @@ def main():
 
         # 큐에 쌓인 피드백은 마지막 프레임 하나만 반영한다.
         fake.lines.extend((
-            b"F 60 60 0 0 0 0 0 9.81 1 0 0 0\n",
+            b"F 30 30 0 0 0 0 0 9.81 1 0 0 0\n",
             VALID_STOPPED,
         ))
         x_before = node.odometry.x

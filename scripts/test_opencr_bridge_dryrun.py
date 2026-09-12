@@ -40,13 +40,13 @@ def main():
     rclpy.init()
     fake = FakeSerial([
         b"HELLO opencr 0.2-minimal\n",                         # 무시되어야 함
-        b"F 60.0 60.0 0.0 0.0 0.0 0.0 0.0 9.81 1.0 0.0 0.0 0.0\n",
+        b"F 30.0 30.0 0.0 0.0 0.0 0.0 0.0 9.81 1.0 0.0 0.0 0.0\n",
     ])
     node = OpencrBridgeNode(transport=fake)
     try:
         # 1) 유효 피드백 전에는 신선한 cmd_vel도 움직임을 허용하지 않는다.
         twist = Twist()
-        twist.linear.x = 0.2
+        twist.linear.x = 0.1
         node.on_cmd_vel(twist)
         node.send_command_tick()
         assert node.last_command_bytes == b"V 0.00 0.00\n", "motion before feedback"
@@ -68,9 +68,9 @@ def main():
         assert not node.motion_ready, "watchdog must clear ready"
 
         # 4) 정상 피드백의 odom/imu와 명시적 covariance 확인.
-        fake.lines.append(b"F 60.0 60.0 0.0 0.0 0.0 0.0 0.0 9.81 1.0 0.0 0.0 0.0\n")
+        fake.lines.append(b"F 30.0 30.0 0.0 0.0 0.0 0.0 0.0 9.81 1.0 0.0 0.0 0.0\n")
         node.poll_feedback_tick(dt_override=0.02)
-        v_expected = 60.0 * 2.0 * math.pi / 60.0 * 0.033
+        v_expected = 30.0 * 2.0 * math.pi / 60.0 * 0.033
         assert node.last_odom_msg is not None, "odom not published"
         approx(node.last_odom_msg.pose.pose.position.x, v_expected * 0.04, 1e-6, "odom x")
         approx(node.last_odom_msg.twist.twist.linear.x, v_expected, 1e-6, "odom v")

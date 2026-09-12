@@ -10,7 +10,9 @@
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>nav2_msgs</depend>
   <depend>slam_toolbox</depend>
   <depend>rplidar_ros</depend>
   <depend>robot_state_publisher</depend>
@@ -22,6 +24,7 @@
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>drive_pkg</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>

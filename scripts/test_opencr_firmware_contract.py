@@ -15,7 +15,7 @@ def main():
         "DXL_BAUDRATE = 1000000", "HOST_BAUDRATE = 115200",
         'sscanf(line, "V %f %f %c"', "COMMAND_TIMEOUT_MS = 500",
         "stopWheels();", 'HOST_SERIAL.print("F ")', "getPresentVelocity",
-        "MAX_ABS_RPM = 60.0", "HELLO opencr 0.2-minimal",
+        "MAX_ABS_RPM = 30.0", "HELLO opencr 0.2-minimal",
     ):
         assert needle in source, f"firmware missing {needle!r}"
     for forbidden in ("case 'w'", "case 'a'", "case 's'", "case 'd'"):

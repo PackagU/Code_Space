@@ -14,7 +14,7 @@ const uint8_t RIGHT_ID = 2;
 const float DXL_PROTOCOL_VERSION = 2.0;
 const uint32_t DXL_BAUDRATE = 1000000;  // 사용자가 2026-09-11 구동 확인한 값
 const uint32_t HOST_BAUDRATE = 115200;
-const float MAX_ABS_RPM = 60.0;         // H01 전 [제안값]
+const float MAX_ABS_RPM = 30.0;         // 사용자 지정 현장 상한, 2026-09-12
 const uint32_t COMMAND_TIMEOUT_MS = 500;
 const uint32_t FEEDBACK_PERIOD_MS = 20;
 

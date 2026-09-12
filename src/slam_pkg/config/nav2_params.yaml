@@ -150,8 +150,8 @@ controller_server:
     # 곡률/비용 기반 감속이 좁은 코너·벽 근처에서 자동 감속해 벽 충돌을 줄인다.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      # H01/H02 실차 검증 전 저속 [제안값]. safety gate와 같은 상한.
-      desired_linear_vel: 0.10
+      # 30rpm wheel limit에서 곡선 주행 여유를 남긴 현장 저속 [제안값].
+      desired_linear_vel: 0.05
       # lookahead: 속도에 비례한 가변 전방주시(코너에선 짧게->정확, 직선에선 길게->부드럽게)
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.5
@@ -177,7 +177,7 @@ controller_server:
       # 차동 구동: 경로 시작/목표에서 헤딩 정렬을 위해 제자리 회전 사용(좁은 alcove 180° 대응)
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      rotate_to_heading_angular_vel: 0.35
+      rotate_to_heading_angular_vel: 0.20
       max_angular_accel: 0.6
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
@@ -341,8 +341,8 @@ behavior_server:
     transform_tolerance: 0.5  # P1: 부하 시 recovery 동작도 TF 지연 흡수
     use_sim_time: true
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.35
-    min_rotational_vel: 0.1
+    max_rotational_vel: 0.20
+    min_rotational_vel: 0.05
     rotational_acc_lim: 0.8
 
 robot_state_publisher:
@@ -366,9 +366,9 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    # H01/H02 실차 검증 전 저속 [제안값]. drive safety gate와 같은 상한.
-    max_velocity: [0.10, 0.0, 0.35]
-    min_velocity: [-0.10, 0.0, -0.35]
+    # 0.05m/s + 0.20rad/s 동시 명령도 30rpm 아래(약 29.4rpm)다.
+    max_velocity: [0.05, 0.0, 0.20]
+    min_velocity: [-0.05, 0.0, -0.20]
     max_accel: [0.3, 0.0, 0.6]
     max_decel: [-0.5, 0.0, -0.8]
     odom_topic: "odom"

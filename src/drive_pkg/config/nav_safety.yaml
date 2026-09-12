@@ -11,6 +11,7 @@ nav_safety_gate:
     drive_ready_timeout_sec: 0.5
     command_timeout_sec: 0.3
     publish_rate_hz: 20.0
-    # 두 상한을 동시에 써도 wheel command가 firmware 60rpm 아래(약 55rpm)에 남는다.
+    # 텔레옵은 직진/제자리 회전 중 하나만 사용하며 각각 firmware 30rpm 아래다.
+    # Nav2의 동시 선·각속도는 nav2_params.yaml에서 더 낮게 제한한다.
     max_linear_speed: 0.10
     max_angular_speed: 0.35

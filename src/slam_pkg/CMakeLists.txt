@@ -15,7 +15,14 @@ install(DIRECTORY
   launch
   config
   maps
+  web
   DESTINATION share/${PROJECT_NAME}/
+)
+
+install(PROGRAMS
+  slam_pkg/field_web_ui.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME field_web_ui
 )
 
 ament_package()

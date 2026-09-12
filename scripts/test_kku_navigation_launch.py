@@ -32,7 +32,7 @@ def main():
 
     params = PARAMS.read_text(encoding="utf-8")
     for needle in (
-        "desired_linear_vel: 0.10", "max_velocity: [0.10, 0.0, 0.35]",
+        "desired_linear_vel: 0.05", "max_velocity: [0.05, 0.0, 0.20]",
         "allow_unknown: false", "robot_base_frame: base_footprint",
     ):
         require(needle in params, f"safe Nav2 params missing {needle!r}")
