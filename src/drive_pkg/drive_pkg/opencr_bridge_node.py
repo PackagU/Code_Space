@@ -36,6 +36,7 @@ class OpencrBridgeNode(Node):
         self.declare_parameter("right_sign", 1.0)
         self.declare_parameter("cmd_timeout_sec", 0.5)
         self.declare_parameter("cmd_rate_hz", 20.0)
+        self.declare_parameter("feedback_poll_hz", 50.0)
         self.declare_parameter("feedback_timeout_sec", 0.5)
         self.declare_parameter("max_feedback_dt_sec", 0.25)
         self.declare_parameter("max_linear_speed", 0.25)
@@ -55,6 +56,9 @@ class OpencrBridgeNode(Node):
         self.right_sign = p("right_sign").value
         self.cmd_timeout = p("cmd_timeout_sec").value
         self.cmd_rate_hz = p("cmd_rate_hz").value
+        self.feedback_poll_hz = p("feedback_poll_hz").value
+        if not (self.feedback_poll_hz and self.feedback_poll_hz > 0.0):
+            raise ValueError("feedback_poll_hz must be positive")
         self.feedback_timeout = p("feedback_timeout_sec").value
         self.max_feedback_dt = p("max_feedback_dt_sec").value
         self.max_linear_speed = p("max_linear_speed").value
@@ -72,6 +76,7 @@ class OpencrBridgeNode(Node):
             "wheel_separation": self.wheel_separation,
             "cmd_timeout_sec": self.cmd_timeout,
             "cmd_rate_hz": self.cmd_rate_hz,
+            "feedback_poll_hz": self.feedback_poll_hz,
             "feedback_timeout_sec": self.feedback_timeout,
             "max_feedback_dt_sec": self.max_feedback_dt,
             "max_linear_speed": self.max_linear_speed,
@@ -119,7 +124,10 @@ class OpencrBridgeNode(Node):
 
         cmd_period = 1.0 / self.cmd_rate_hz
         self.create_timer(cmd_period, self.send_command_tick)
-        self.create_timer(0.01, self.poll_feedback_tick)  # 100Hz 폴링
+        # 2026-09-12: 고정 100Hz -> 파라미터화. 펌웨어 FEEDBACK_PERIOD_MS=20 (50Hz) 이라
+        # 100Hz 폴링은 절반이 빈 깨움이었다. 기본 [제안값] 50Hz.
+        # poll_feedback_tick 은 버퍼에 쌓인 줄을 모두 비우므로 느린 폴링에서도 프레임을 잃지 않는다.
+        self.create_timer(1.0 / self.feedback_poll_hz, self.poll_feedback_tick)
         self._publish_ready()
 
     def _open_serial(self):

@@ -195,7 +195,7 @@ local_costmap:
       height: 3
       resolution: 0.05
       robot_radius: 0.28
-      plugins: ["voxel_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         # 2026-08-21: 0.30/5.0 -> 0.55/3.0 (적대 리뷰 C 대안 D). footprint 내접 0.27 로 정정한 뒤
@@ -205,15 +205,13 @@ local_costmap:
         # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
         cost_scaling_factor: 3.0
         inflation_radius: 0.55
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
+      # 2026-09-12: VoxelLayer -> ObstacleLayer. 센서가 2D LaserScan 하나뿐인데
+      # z_voxels 16 짜리 3D 복셀 그리드를 매 주기 갱신하느라 CPU 를 낭비했다.
+      # global_costmap 은 원래부터 ObstacleLayer 다. 관측 계약은 그대로 유지한다.
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
         max_obstacle_height: 2.0
-        mark_threshold: 0
         observation_sources: scan
         scan:
           topic: /scan
@@ -228,7 +226,8 @@ local_costmap:
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
-      always_send_full_costmap: True
+      # 2026-09-12: True -> False. 매 주기 전체 코스트맵 재전송 대신 변경분만 보낸다.
+      always_send_full_costmap: False
 
 global_costmap:
   global_costmap:
@@ -268,7 +267,8 @@ global_costmap:
         # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
         cost_scaling_factor: 3.0
         inflation_radius: 0.55
-      always_send_full_costmap: True
+      # 2026-09-12: True -> False. 매 주기 전체 코스트맵 재전송 대신 변경분만 보낸다.
+      always_send_full_costmap: False
 
 map_server:
   ros__parameters:
