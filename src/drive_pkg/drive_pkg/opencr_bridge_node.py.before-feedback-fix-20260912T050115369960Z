@@ -112,10 +112,6 @@ class OpencrBridgeNode(Node):
         self.last_command_bytes = b""
         self.last_odom_msg = None
         self.last_imu_msg = None
-        # Buffered nonblocking feedback; readiness heartbeat.
-        self._rx_buf = bytearray()
-        self._rx_started_at = None
-        self._rx_discarding = False
 
         cmd_period = 1.0 / self.cmd_rate_hz
         self.create_timer(cmd_period, self.send_command_tick)
@@ -224,55 +220,13 @@ class OpencrBridgeNode(Node):
             self._last_sent_right_rpm = 0.0
             self._set_motion_ready(False, f"serial write failed: {exc}")
 
-        # Heartbeat after freshness checks and the serial write attempt.
-        self._publish_ready()
-
-    def _read_feedback_line(self):
-        # readline() can return a fragment with timeout=0. Keep it until LF.
-        now = self._now_sec()
-        if self._rx_started_at is not None:
-            age = now - self._rx_started_at
-            if not math.isfinite(age) or age < 0.0 or age > self.feedback_timeout:
-                self._rx_buf.clear()
-                self._rx_started_at = None
-                self._rx_discarding = True
-                raise ValueError("partial feedback frame expired")
-
-        raw = self.transport.readline()
-        if self._rx_discarding:
-            # readline() ends at the first LF, so this restores a boundary.
-            if raw.endswith(b"\n"):
-                self._rx_discarding = False
-            return b""
-        if not raw:
-            return b""
-        if not self._rx_buf:
-            self._rx_started_at = now
-        self._rx_buf.extend(raw)
-        if len(self._rx_buf) > 1024:  # Proposed limit; protocol frames are smaller.
-            self._rx_buf.clear()
-            self._rx_started_at = None
-            self._rx_discarding = not raw.endswith(b"\n")
-            raise ValueError("feedback frame exceeds 1024 bytes")
-        if not self._rx_buf.endswith(b"\n"):
-            return b""
-        line = bytes(self._rx_buf)
-        self._rx_buf.clear()
-        self._rx_started_at = None
-        return line
-
     def poll_feedback_tick(self, dt_override=None):
         latest_feedback = None
         for _ in range(MAX_LINES_PER_TICK):
             try:
-                raw = self._read_feedback_line()
+                raw = self.transport.readline()
             except Exception as exc:  # noqa: BLE001
-                if self._rx_buf:
-                    self._rx_discarding = True
-                self._rx_buf.clear()
-                self._rx_started_at = None
-                self._last_feedback_time = None
-                self._invalidate_command(f"serial read failed: {exc}")
+                self._set_motion_ready(False, f"serial read failed: {exc}")
                 return
             if not raw:
                 break
