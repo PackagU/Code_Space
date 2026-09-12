@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OpenCR 시리얼 브리지: /cmd_vel -> V 프레임, F 피드백 -> /odom + TF + /imu.
 
-프로토콜: docs/deployment/02_opencr_serial_protocol.md (v0.1)
+프로토콜: docs/deployment/02_opencr_serial_protocol.md (v0.2)
 테스트: scripts/test_opencr_bridge_dryrun.py (FakeSerial 주입)
 """
 import math
@@ -28,6 +28,7 @@ class OpencrBridgeNode(Node):
     def __init__(self, transport=None):
         super().__init__("packagu_opencr_bridge")
         self.declare_parameter("serial_port", "/dev/opencr")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("baudrate", 115200)
         self.declare_parameter("wheel_radius", 0.033)
         self.declare_parameter("wheel_separation", 0.51324)
@@ -96,7 +97,9 @@ class OpencrBridgeNode(Node):
         self.imu_pub = self.create_publisher(Imu, "/imu", 10)
         self.ready_pub = self.create_publisher(Bool, "/drive/ready", 10)
         self.tf_broadcaster = TransformBroadcaster(self)
-        self.create_subscription(Twist, "/cmd_vel", self.on_cmd_vel, 10)
+        self.create_subscription(
+            Twist, str(p("cmd_vel_topic").value), self.on_cmd_vel, 10
+        )
 
         self._cmd_v = 0.0
         self._cmd_w = 0.0
@@ -251,7 +254,8 @@ class OpencrBridgeNode(Node):
             return
         self.odometry.update(latest_feedback["left_rpm"], latest_feedback["right_rpm"], dt)
         self._publish_odom()
-        self._publish_imu(latest_feedback)
+        if latest_feedback["quat"] is not None:
+            self._publish_imu(latest_feedback)
         command_age = None if self._last_cmd_time is None else now - self._last_cmd_time
         if command_age is not None and 0.0 <= command_age <= self.cmd_timeout:
             self._set_motion_ready(True, "fresh command and feedback")

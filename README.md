@@ -87,8 +87,12 @@ REPEAT_N=10 bash test_workspace/gazebo_world_swap/scripts/run_roundtrip_repeat.s
 # 분산 E2E: 데스크톱 Gazebo + Jetson 실전 스택 (데스크톱에서 실행)
 bash scripts/run_distributed_e2e.sh
 
-# 현장 실측(teleop SLAM) 원커맨드 — launch → rosbag → 맵 저장 → 검증 → cleanup
-FLOOR=F1 ./scripts/run_field_mapping.sh
+# 현장 실측: 베이스 유지 → SLAM → 저장 → SLAM 종료 → 저장 지도 Nav2
+# 실제 바퀴 단계는 docs/deployment/04_field_mapping_navigation.md의 H01 이후에만 수행
+ENABLE_DRIVE=1 ./scripts/start_field_base.sh       # 터미널 A
+./scripts/start_field_mapping.sh                   # 터미널 B
+./scripts/teleop.sh                                # 터미널 C
+./scripts/save_field_map.sh F1                     # 터미널 D, SLAM 실행 중
 ```
 
 ## 저장소 안내
@@ -102,7 +106,7 @@ FLOOR=F1 ./scripts/run_field_mapping.sh
 | [scripts/](scripts/) | 원커맨드 런처(시뮬·분산 E2E·현장 실측) · 월드/맵 생성기 · 테스트 러너 · 이식성 검사 |
 | [docker/](docker/) | 컨테이너 정의 SSOT — 개발(amd64) + Jetson(aarch64) |
 | [docs/hardware_spec.md](docs/hardware_spec.md) | 하드웨어 SSOT |
-| [docs/deployment/](docs/deployment/) | 이식성 정책 · Jetson 배포 절차 · OpenCR 시리얼 프로토콜 · HW 교체 체크리스트 |
+| [docs/deployment/](docs/deployment/) | 이식성 정책 · Jetson 배포 절차 · OpenCR 시리얼 프로토콜 · 실차 매핑/Nav2 가이드 |
 | [docs/simulation_test/](docs/simulation_test/) | 시뮬 실행 가이드 (환경 → 매핑 → Nav2 → 배달 → 엘베 상태머신) |
 | [docs/improvement_report.md](docs/improvement_report.md) | 리스크/개선 추적기 (§1.1~1.27) |
 | [docs/handover/](docs/handover/) | 세션 인수인계서 · 적대적 리뷰 프롬프트 |

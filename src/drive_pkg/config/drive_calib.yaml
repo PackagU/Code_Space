@@ -13,7 +13,7 @@ packagu_opencr_bridge:
     max_feedback_dt_sec: 0.25
     max_linear_speed: 0.25
     max_angular_speed: 1.0
-    max_wheel_rpm: 120.0
-    max_wheel_accel_rpm_s: 240.0
+    max_wheel_rpm: 60.0
+    max_wheel_accel_rpm_s: 120.0
     require_feedback_before_motion: true
     publish_tf: true  # EKF를 추가하기 전에는 bridge가 odom->base_footprint 단일 발행자

@@ -1,0 +1,11 @@
+# P06 실차 매핑/Nav2 overlay: LiDAR와 OpenCR만 전달하고 팔/리프트 계통은 차단한다.
+# 사용 전 호스트 /dev/rplidar와 /dev/opencr가 실제 장치를 가리키는지 확인한다.
+services:
+  ros2:
+    environment:
+      PACKAGU_DEPLOYMENT_MODE: mapping_navigation_base_only
+    devices:
+      - ${RPLIDAR_DEVICE:-/dev/rplidar}:/dev/rplidar
+      - ${OPENCR_DEVICE:-/dev/opencr}:/dev/opencr
+      - /dev/null:/dev/arm_servo
+      - /dev/null:/dev/motor_nano

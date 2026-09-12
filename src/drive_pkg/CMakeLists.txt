@@ -20,6 +20,12 @@ install(PROGRAMS
   RENAME opencr_bridge
 )
 
+install(PROGRAMS
+  drive_pkg/nav_safety_gate.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME nav_safety_gate
+)
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/launch")
   install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
 endif()

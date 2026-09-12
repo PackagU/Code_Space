@@ -1,0 +1,16 @@
+nav_safety_gate:
+  ros__parameters:
+    input_cmd_topic: /cmd_vel
+    output_cmd_topic: /cmd_vel_safe
+    scan_topic: /scan
+    odom_topic: /odom
+    drive_ready_topic: /drive/ready
+    software_stop_topic: /nav_safety/stop
+    # H01/H02 현장 검증 전 안전 기본값은 모두 [제안값].
+    sensor_timeout_sec: 0.5
+    drive_ready_timeout_sec: 0.5
+    command_timeout_sec: 0.3
+    publish_rate_hz: 20.0
+    # 두 상한을 동시에 써도 wheel command가 firmware 60rpm 아래(약 55rpm)에 남는다.
+    max_linear_speed: 0.10
+    max_angular_speed: 0.35

@@ -1,0 +1,1 @@
+2026-09-12 04:02 KST ANOMALY heartbeat: host /dev/rplidar and /dev/ttyUSB* absent; lsusb shows no RPLIDAR USB-serial device; container /dev/rplidar is a stale 188:0 device node. max_temp=50.0C disk=25% watchdog=active lidar_holders=none drive_processes=none. ACTION: no emergency stop needed; container left idle; user notification issued.

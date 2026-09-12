@@ -1,7 +1,7 @@
-# OpenCR Serial Protocol v0.1 (draft)
+# OpenCR Serial Protocol v0.2 (draft)
 
-> Jetson(브리지) <-> OpenCR(펌웨어) 시리얼 계약. 상태: v0.1 초안 — Han 합의 후 v1.0 승격.
-> 소비자: `src/drive_pkg/drive_pkg/opencr_protocol.py`(Lee), OpenCR 펌웨어(Han).
+> Jetson(브리지) <-> OpenCR(펌웨어) 시리얼 계약. 상태: 코드 존재·오프라인 계약 검증, 실제 OpenCR 컴파일/업로드/바퀴 정지는 ⚠️미확인.
+> 소비자: `src/drive_pkg/drive_pkg/opencr_protocol.py`, `src/drive_pkg/firmware/opencr/opencr_drive_bridge.ino`.
 > 변경 절차: 이 문서 갱신 -> 양측 코드 갱신 -> 버전 문자열 동기.
 
 ## 1. 물리 계층
@@ -24,6 +24,16 @@ V <left_rpm> <right_rpm>\n
 
 ## 3. 피드백 프레임 (OpenCR -> Jetson, 50Hz)
 
+### 3.1 최소 프레임(v0.2-minimal, 내일 우선 시험)
+
+```text
+F <left_rpm> <right_rpm>\n
+```
+
+이 프레임은 Dynamixel의 실측 속도로 wheel odom만 만든다. 브리지는 `/imu`를 발행하지 않는다. 사용자가 구동 확인한 ID 1/2, Protocol 2.0, Dynamixel 1 Mbps 설정을 그대로 쓰는 펌웨어가 이 형식을 낸다.
+
+### 3.2 전체 프레임(v0.2-full, IMU 통합 후)
+
 ```text
 F <left_rpm> <right_rpm> <gx> <gy> <gz> <ax> <ay> <az> <qw> <qx> <qy> <qz>\n
 ```
@@ -37,7 +47,7 @@ F <left_rpm> <right_rpm> <gx> <gy> <gz> <ax> <ay> <az> <qw> <qx> <qy> <qz>\n
 
 ## 4. 안전 규약 (watchdog)
 
-- 펌웨어: `V` 프레임 `[제안값]` 500ms 미수신 -> 모터 정지 (필수, Han). **현재 실제 펌웨어 구현·버전·실물 정지는 ⚠️미확인**이다.
+- 펌웨어 코드: `V` 프레임 `[제안값]` 500ms 미수신 -> 모터 정지. 정적 계약 테스트는 통과했지만 실제 OpenCR 업로드와 물리 정지는 ⚠️미확인이다.
 - 브리지: `/cmd_vel` `[제안값]` 500ms 미수신 -> `V 0.00 0.00` 송신 (이중 안전).
 - 브리지는 첫 유효 `F` 피드백 전, 피드백 timeout, 시각 역행/큰 점프, 직렬 read/write 예외, 비유한·범위 밖 명령/피드백에서 `/drive/ready=false`와 0속도 상태로 간다.
 - 정지 경로는 가속 제한을 우회해 즉시 0을 쓴다. 정상 명령만 `[제안값]` RPM 변화율 제한을 받는다.
@@ -50,12 +60,12 @@ F <left_rpm> <right_rpm> <gx> <gy> <gz> <ax> <ay> <az> <qw> <qx> <qy> <qz>\n
 | 입력/상태 | 브리지 동작 | 실물 한계 |
 |---|---|---|
 | NaN/Inf, 선·각속도 범위 초과 | 명령 폐기, 즉시 0, ready=false | MCU가 직전 명령을 유지하지 않는지는 watchdog 실측 필요 |
-| NaN/Inf, 비정상 quaternion, RPM 범위 초과 피드백 | odom/imu 미갱신, ready=false | 센서 자체 고장 진단은 별도 |
+| NaN/Inf, 비정상 quaternion, RPM 범위 초과 피드백 | odom/imu 미갱신, ready=false | 최소 프레임은 quaternion 없이 odom만 발행 |
 | 피드백 큐 적체 | 한 tick에서 읽은 최신 유효 프레임만 적분 | v0.1에는 sequence·센서 시각이 없어 오래된 프레임의 절대 나이는 판별 불가 |
 | 호스트 시각 역행 또는 큰 dt | 해당 프레임 적분 안 함, ready=false | 다음 정상 프레임에서만 복구 |
 | serial read/write 예외 | ready=false, 비영(非零) 성공으로 보고하지 않음 | 물리 모터 정지는 MCU/E-Stop 근거 필요 |
 
-현재 v0.1 프레임에는 firmware version 응답의 강제 확인, sensor timestamp, sequence, checksum, MCU watchdog 상태 필드가 없다. v1.0 합의 시 추가하고 양측을 동시에 갱신해야 한다.
+현재 v0.2 프레임에는 firmware version 응답의 강제 확인, sensor timestamp, sequence, checksum, MCU watchdog 상태 필드가 없다. v1.0 합의 시 추가하고 양측을 동시에 갱신해야 한다.
 
 ## 6. 부팅/에러 (선택 구현)
 

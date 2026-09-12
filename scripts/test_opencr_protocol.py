@@ -34,9 +34,15 @@ def main():
     approx(fb["accel"][2], 9.81)
     approx(fb["quat"][0], 1.0)
 
+    # v0.2 minimal frame: wheel odom is valid and IMU publication is intentionally omitted.
+    minimal = proto.parse_feedback_line("F 12.5 -3.0", max_abs_rpm=120)
+    assert minimal is not None
+    approx(minimal["left_rpm"], 12.5)
+    assert minimal["gyro"] is None and minimal["accel"] is None and minimal["quat"] is None
+
     # parse: 불량 라인은 None (프리픽스/필드수/비숫자)
     assert proto.parse_feedback_line("HELLO opencr 1.0") is None
-    assert proto.parse_feedback_line("F 1.0 2.0") is None
+    assert proto.parse_feedback_line("F 1.0") is None
     assert proto.parse_feedback_line("F a b c d e f g h i j k l") is None
     assert proto.parse_feedback_line("F nan 0 0 0 0 0 0 0 1 0 0 0") is None
     assert proto.parse_feedback_line("F inf 0 0 0 0 0 0 0 1 0 0 0") is None

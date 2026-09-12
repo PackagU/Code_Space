@@ -72,7 +72,9 @@ cd /ros2_ws && colcon build --symlink-install && source install/setup.bash
 ```bash
 # 컨테이너 안 — 프로파일러는 test_workspace 마운트에 있음
 bash /ros2_ws/test_workspace/gazebo_world_swap/scripts/profile_resources.sh --duration 120 --out /tmp/jetson_profile &
-ros2 launch slam_pkg kku_navigation.launch.py floor:=F1 use_sim_time:=false rviz:=false
+ros2 launch slam_pkg kku_navigation.launch.py \
+  map:=/ros2_ws/install/slam_pkg/share/slam_pkg/maps/kku_virtual/f1/kku_f1.yaml \
+  use_sim_time:=false rviz:=false
 ```
 
 통과 기준(2026-06-30 부하 강건성 세션에서 정의, 상세 로그는 Notion 세션 일지):

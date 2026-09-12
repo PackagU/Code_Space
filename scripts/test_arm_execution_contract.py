@@ -228,7 +228,7 @@ def main():
     assert "glob.glob" not in bench_text and 'args.port != DEFAULT_PORT' in bench_text
     assert 'parser.add_argument("--execute"' in bench_text
 
-    print("PASS P05 arm execution contract: startup/home/busy/measured/fail/cancel/restart/sim")
+    print("PASS P05 arm execution contract: startup, home, busy, measured, fail, cancel, restart, sim")
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ def approx(a, b, tol, label):
 def main():
     rclpy.init()
     fake = FakeSerial([
-        b"HELLO opencr 0.1\n",                                 # 무시되어야 함
+        b"HELLO opencr 0.2-minimal\n",                         # 무시되어야 함
         b"F 60.0 60.0 0.0 0.0 0.0 0.0 0.0 9.81 1.0 0.0 0.0 0.0\n",
     ])
     node = OpencrBridgeNode(transport=fake)
@@ -80,6 +80,13 @@ def main():
         assert node.last_imu_msg is not None, "imu not published"
         approx(node.last_imu_msg.linear_acceleration.z, 9.81, 1e-6, "imu az")
         assert node.last_imu_msg.orientation_covariance[0] > 0.0
+
+        # 5) 최소 피드백은 odom을 갱신하지만 IMU를 꾸며내지 않는다.
+        previous_imu = node.last_imu_msg
+        fake.lines.append(b"F 10.0 10.0\n")
+        node.poll_feedback_tick(dt_override=0.02)
+        assert node.last_odom_msg is not None
+        assert node.last_imu_msg is previous_imu, "minimal frame must not publish fake IMU"
         print("opencr_bridge dry-run tests passed")
     finally:
         node.destroy_node()

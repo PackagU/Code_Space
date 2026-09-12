@@ -20,9 +20,12 @@ ROS_MODULE_PATTERN='ModuleNotFoundError.*(rclpy|launch|launch_ros|ament_index_py
 PY_TESTS=(
   scripts/test_wasd_teleop.py
   scripts/test_opencr_protocol.py
+  scripts/test_opencr_firmware_contract.py
   scripts/test_diff_drive_odometry.py
   scripts/test_opencr_bridge_dryrun.py
   scripts/test_opencr_safety_contract.py
+  scripts/test_nav_safety_gate.py
+  scripts/test_map_contract.py
   scripts/test_field_mapping_launch.py
   scripts/test_field_scripts_contract.py
   scripts/test_udev_contract.py
@@ -81,6 +84,26 @@ else
   echo "FAIL scripts/test_kku_sim_scripts.sh"
   fail=$((fail + 1))
   failed_tests+=(scripts/test_kku_sim_scripts.sh)
+fi
+
+if [[ ${HAVE_ROS} -eq 1 ]]; then
+  if timeout 20 bash scripts/test_nav_safety_gate_runtime.sh >/dev/null 2>&1; then
+    echo "PASS scripts/test_nav_safety_gate_runtime.sh"
+    pass=$((pass + 1))
+  else
+    echo "FAIL scripts/test_nav_safety_gate_runtime.sh"
+    fail=$((fail + 1))
+    failed_tests+=(scripts/test_nav_safety_gate_runtime.sh)
+  fi
+
+  if timeout 20 bash scripts/test_arm_node_safe_runtime.sh >/dev/null 2>&1; then
+    echo "PASS scripts/test_arm_node_safe_runtime.sh"
+    pass=$((pass + 1))
+  else
+    echo "FAIL scripts/test_arm_node_safe_runtime.sh"
+    fail=$((fail + 1))
+    failed_tests+=(scripts/test_arm_node_safe_runtime.sh)
+  fi
 fi
 
 echo ""

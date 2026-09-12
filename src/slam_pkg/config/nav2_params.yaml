@@ -43,7 +43,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: True
     global_frame: map
-    robot_base_frame: base_link
+    robot_base_frame: base_footprint
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -150,7 +150,8 @@ controller_server:
     # 곡률/비용 기반 감속이 좁은 코너·벽 근처에서 자동 감속해 벽 충돌을 줄인다.
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.45
+      # H01/H02 실차 검증 전 저속 [제안값]. safety gate와 같은 상한.
+      desired_linear_vel: 0.10
       # lookahead: 속도에 비례한 가변 전방주시(코너에선 짧게->정확, 직선에선 길게->부드럽게)
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.5
@@ -167,7 +168,7 @@ controller_server:
       # 곡률 기반 감속: 회전 반경이 작으면(좁은 코너) 선속도를 줄여 부드럽고 안전하게
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.9
-      regulated_linear_scaling_min_speed: 0.25
+      regulated_linear_scaling_min_speed: 0.05
       # 비용 기반 감속: 인플레이션 비용이 높은(벽 근처) 곳에서 감속 -> 벽 충돌 완화
       use_cost_regulated_linear_velocity_scaling: true
       cost_scaling_dist: 0.3
@@ -176,8 +177,8 @@ controller_server:
       # 차동 구동: 경로 시작/목표에서 헤딩 정렬을 위해 제자리 회전 사용(좁은 alcove 180° 대응)
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      rotate_to_heading_angular_vel: 1.3
-      max_angular_accel: 1.5
+      rotate_to_heading_angular_vel: 0.35
+      max_angular_accel: 0.6
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
 
@@ -187,7 +188,7 @@ local_costmap:
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: True
       rolling_window: true
       width: 3
@@ -235,7 +236,7 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: True
       robot_radius: 0.28
       resolution: 0.05
@@ -295,7 +296,7 @@ planner_server:
     GridBased:
       plugin: "nav2_smac_planner/SmacPlanner2D"
       tolerance: 0.25                 # goal 근처 이 거리 안이면 경로 성공 처리
-      allow_unknown: true             # 미탐색 영역 통과 허용(층 전이 직후 등)
+      allow_unknown: false            # 실차 기본: 매핑되지 않은 영역으로 계획 금지
       downsample_costmap: false
       downsampling_factor: 1
       max_iterations: 1000000
@@ -336,13 +337,13 @@ behavior_server:
     assisted_teleop:
       plugin: "nav2_behaviors/AssistedTeleop"
     global_frame: odom
-    robot_base_frame: base_link
+    robot_base_frame: base_footprint
     transform_tolerance: 0.5  # P1: 부하 시 recovery 동작도 TF 지연 흡수
     use_sim_time: true
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 1.8
+    max_rotational_vel: 0.35
+    min_rotational_vel: 0.1
+    rotational_acc_lim: 0.8
 
 robot_state_publisher:
   ros__parameters:
@@ -365,10 +366,11 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.45, 0.0, 1.3]
-    min_velocity: [-0.45, 0.0, -1.3]
-    max_accel: [1.0, 0.0, 1.5]
-    max_decel: [-2.0, 0.0, -2.0]
+    # H01/H02 실차 검증 전 저속 [제안값]. drive safety gate와 같은 상한.
+    max_velocity: [0.10, 0.0, 0.35]
+    min_velocity: [-0.10, 0.0, -0.35]
+    max_accel: [0.3, 0.0, 0.6]
+    max_decel: [-0.5, 0.0, -0.8]
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

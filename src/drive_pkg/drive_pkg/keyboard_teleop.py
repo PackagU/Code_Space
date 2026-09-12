@@ -38,6 +38,8 @@ MOVE_BINDINGS = {
 }
 
 DEADMAN_TIMEOUT_SEC = 0.5
+DEFAULT_LINEAR_SPEED = 0.10   # H01/H02 전 저속 [제안값]
+DEFAULT_ANGULAR_SPEED = 0.35  # safety gate 0.5rad/s 상한 아래 [제안값]
 
 
 def apply_deadman(command, idle_seconds, timeout=DEADMAN_TIMEOUT_SEC):
@@ -133,8 +135,8 @@ def main():
     node = rclpy.create_node("packagu_keyboard_teleop")
     publisher = node.create_publisher(Twist, "/cmd_vel", 10)
 
-    linear_speed = 0.25
-    angular_speed = 0.9
+    linear_speed = DEFAULT_LINEAR_SPEED
+    angular_speed = DEFAULT_ANGULAR_SPEED
     current_binding = (0.0, 0.0)
 
     print(HELP)
