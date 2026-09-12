@@ -27,6 +27,17 @@ docker ps --format '{{.Names}}' | grep -Fxq "${CONTAINER_NAME}" || {
   exit 1
 }
 
+# 2026-09-12: 중복 실행 가드. 같은 스택을 두 번 띄우면 노드가 이중으로 떠서
+# odom->base_footprint TF 를 두 발행자가 동시에 쏘고 CPU 가 포화된다.
+# [측정값] 현장에서 field_base 2벌일 때 load average 6.18 -> 13.14, map->base_footprint 조회 실패.
+_existing="$(docker exec "${CONTAINER_NAME}" pgrep -f 'field_base\.launch\.py' 2>/dev/null | tr '\n' ' ' || true)"
+if [[ -n "${_existing// /}" ]]; then
+  echo "error: field_base 가 이미 ${CONTAINER_NAME} 에서 실행 중이다 (컨테이너 PID: ${_existing})" >&2
+  echo "       먼저 정리하라: docker exec ${CONTAINER_NAME} pkill -INT -f 'field_base.launch'" >&2
+  echo "       정리 확인: docker exec ${CONTAINER_NAME} pgrep -af 'field_base.launch'" >&2
+  exit 1
+fi
+
 in_container() {
   docker exec -i -w /ros2_ws "${CONTAINER_NAME}" bash -lc \
     "source /opt/ros/humble/setup.bash && source install/setup.bash && $*"
