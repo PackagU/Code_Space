@@ -51,19 +51,22 @@ grep -Eq 'Topic: /tf_static.*Count: [1-9]' "${OUTPUT_ROOT}/bag_info.txt" || {
 safe_topics="$(python3 scripts/bag_contract.py replay-topics "${BAG_DIR}" --profile reslam)"
 grep -Eq '(^| )/cmd_vel( |$)' <<<"${safe_topics}" && { echo "error: cmd_vel selected for replay" >&2; exit 1; }
 ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" python3 scripts/p07_rosbag_fixture.py verify \
-  --duration-sec 4 --output "${VERIFY_JSON}" > "${OUTPUT_ROOT}/verifier.log" 2>&1 &
+  --duration-sec 5 --output "${VERIFY_JSON}" > "${OUTPUT_ROOT}/verifier.log" 2>&1 &
 verifier_pid=$!
 sleep 0.5
-ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" ros2 bag play "${BAG_DIR}" --clock 100 --rate 2.0 --topics ${safe_topics} \
+# The playback-side delay is DDS discovery time, not a drive/gate/watchdog timeout.
+ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" ros2 bag play "${BAG_DIR}" --delay 1.0 \
+  --clock 100 --rate 2.0 --topics ${safe_topics} \
   > "${OUTPUT_ROOT}/replay.log" 2>&1
 wait "${verifier_pid}"
 unset verifier_pid
 
 ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" python3 scripts/p07_rosbag_fixture.py verify \
-  --duration-sec 4 --output "${VERIFY_RESTART_JSON}" > "${OUTPUT_ROOT}/verifier_restart.log" 2>&1 &
+  --duration-sec 5 --output "${VERIFY_RESTART_JSON}" > "${OUTPUT_ROOT}/verifier_restart.log" 2>&1 &
 verifier_pid=$!
 sleep 0.5
-ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" ros2 bag play "${BAG_DIR}" --clock 100 --rate 2.0 --topics ${safe_topics} \
+ROS_DOMAIN_ID="${REPLAY_DOMAIN_ID}" ros2 bag play "${BAG_DIR}" --delay 1.0 \
+  --clock 100 --rate 2.0 --topics ${safe_topics} \
   > "${OUTPUT_ROOT}/replay_restart.log" 2>&1
 wait "${verifier_pid}"
 unset verifier_pid
