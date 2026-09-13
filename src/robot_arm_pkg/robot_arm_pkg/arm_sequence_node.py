@@ -153,8 +153,10 @@ class ArmSequenceNode(Node):
         self._status_pub.publish(msg)
         event = status.get("event", "")
         if event in ("failed", "rejected", "cancelled", "completed"):
-            log = self.get_logger().error if event == "failed" else self.get_logger().info
-            log(msg.data)
+            if event == "failed":
+                self.get_logger().error(msg.data)
+            else:
+                self.get_logger().info(msg.data)
         self._publish_estimate(status)
 
     def _publish_estimate(self, status):
