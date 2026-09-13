@@ -63,7 +63,7 @@ done
 
 ready=0
 for _ in $(seq 1 10); do
-  sample="$(in_container "timeout 2 ros2 topic echo --once /nav_safety/ready std_msgs/msg/Bool" 2>/dev/null || true)"
+  sample="$(in_container "timeout 8 ros2 topic echo --once /nav_safety/ready std_msgs/msg/Bool" 2>/dev/null || true)"
   if grep -Eq 'data:[[:space:]]*true' <<<"${sample}"; then ready=1; break; fi
 done
 [[ "${ready}" == "1" ]] || {
