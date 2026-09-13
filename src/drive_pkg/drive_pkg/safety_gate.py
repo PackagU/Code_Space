@@ -14,7 +14,7 @@ class GateResult:
 
 
 class SafetyGate:
-    """Fail-closed freshness and range checks independent of ROS."""
+    """Fail-closed freshness, range, and subsystem-interlock checks."""
 
     def __init__(
         self,
@@ -45,6 +45,7 @@ class SafetyGate:
         self.drive_ready_time = None
         self.drive_ready = False
         self.software_stop = False
+        self.operation_inhibit_reason = ""
 
     @staticmethod
     def _fresh(sample_time, now, timeout):
@@ -66,9 +67,19 @@ class SafetyGate:
     def set_software_stop(self, stopped):
         self.software_stop = bool(stopped)
 
+    def set_operation_inhibit(self, reason):
+        """Block all wheel motion while an arm/lift/transfer owner is active.
+
+        The ROS contract uses an empty string to clear the interlock and a
+        non-empty, request-scoped reason to assert it.
+        """
+        self.operation_inhibit_reason = str(reason).strip()
+
     def readiness(self, now):
         if self.software_stop:
             return False, "software stop asserted"
+        if self.operation_inhibit_reason:
+            return False, f"operation inhibit: {self.operation_inhibit_reason}"
         if not self._fresh(self.scan_time, now, self.sensor_timeout_sec):
             return False, "scan stale"
         if not self._fresh(self.odom_time, now, self.sensor_timeout_sec):

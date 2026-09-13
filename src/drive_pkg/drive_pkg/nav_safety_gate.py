@@ -23,6 +23,7 @@ class NavSafetyGateNode(Node):
         self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("drive_ready_topic", "/drive/ready")
         self.declare_parameter("software_stop_topic", "/nav_safety/stop")
+        self.declare_parameter("operation_inhibit_topic", "/mission/drive_inhibit")
         self.declare_parameter("sensor_timeout_sec", 0.5)
         self.declare_parameter("drive_ready_timeout_sec", 0.5)
         self.declare_parameter("command_timeout_sec", 0.3)
@@ -79,6 +80,12 @@ class NavSafetyGateNode(Node):
             self._on_software_stop,
             10,
         )
+        self.create_subscription(
+            String,
+            str(p("operation_inhibit_topic").value),
+            self._on_operation_inhibit,
+            state_qos,
+        )
         self.create_timer(1.0 / publish_rate, self._tick)
 
     def _now(self):
@@ -90,6 +97,9 @@ class NavSafetyGateNode(Node):
 
     def _on_software_stop(self, msg):
         self.gate.set_software_stop(msg.data)
+
+    def _on_operation_inhibit(self, msg):
+        self.gate.set_operation_inhibit(msg.data)
 
     def _tick(self):
         result = self.gate.filter_command(
