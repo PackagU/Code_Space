@@ -22,6 +22,10 @@ def _launch_setup(context, *args, **kwargs):
     if _boolean(context, "use_sim_time"):
         raise RuntimeError("field_base.launch.py is physical-only; use_sim_time must be false")
 
+    profile = LaunchConfiguration("odometry_profile").perform(context).strip()
+    if profile not in ("wheel_only", "wheel_imu"):
+        raise RuntimeError("odometry_profile must be wheel_only or wheel_imu")
+
     pkg_common = get_package_share_directory("common_pkg")
     pkg_drive = get_package_share_directory("drive_pkg")
     urdf_file = os.path.join(pkg_common, "urdf", "delivery_robot.urdf.xacro")
@@ -58,15 +62,33 @@ def _launch_setup(context, *args, **kwargs):
             )
         )
     if _boolean(context, "enable_drive"):
+        drive_launch = "drive_bringup.launch.py"
+        drive_arguments = {
+            "serial_port": LaunchConfiguration("opencr_port"),
+            "cmd_vel_topic": "/cmd_vel_safe",
+        }
+        if profile == "wheel_imu":
+            if not _boolean(context, "imu_mount_verified"):
+                raise RuntimeError(
+                    "wheel_imu requires imu_mount_verified:=true after xyz/rpy and axis checks"
+                )
+            mount = {
+                key: LaunchConfiguration(key).perform(context).strip()
+                for key in ("imu_x", "imu_y", "imu_z", "imu_roll", "imu_pitch", "imu_yaw")
+            }
+            for key, value in mount.items():
+                try:
+                    float(value)
+                except ValueError as exc:
+                    raise RuntimeError(f"{key} must be a measured decimal value") from exc
+            drive_launch = "drive_imu_bringup.launch.py"
+            drive_arguments.update({key: LaunchConfiguration(key) for key in mount})
         actions.extend([
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(pkg_drive, "launch", "drive_bringup.launch.py")
+                    os.path.join(pkg_drive, "launch", drive_launch)
                 ),
-                launch_arguments={
-                    "serial_port": LaunchConfiguration("opencr_port"),
-                    "cmd_vel_topic": "/cmd_vel_safe",
-                }.items(),
+                launch_arguments=drive_arguments.items(),
             ),
             Node(
                 package="drive_pkg",
@@ -94,6 +116,14 @@ def generate_launch_description():
         DeclareLaunchArgument("lidar_port", default_value="/dev/rplidar"),
         DeclareLaunchArgument("opencr_port", default_value="/dev/opencr"),
         DeclareLaunchArgument("cmd_vel_input_topic", default_value="/cmd_vel"),
+        DeclareLaunchArgument("odometry_profile", default_value="wheel_only"),
+        DeclareLaunchArgument("imu_mount_verified", default_value="false"),
+        DeclareLaunchArgument("imu_x", default_value="UNSET"),
+        DeclareLaunchArgument("imu_y", default_value="UNSET"),
+        DeclareLaunchArgument("imu_z", default_value="UNSET"),
+        DeclareLaunchArgument("imu_roll", default_value="UNSET"),
+        DeclareLaunchArgument("imu_pitch", default_value="UNSET"),
+        DeclareLaunchArgument("imu_yaw", default_value="UNSET"),
         DeclareLaunchArgument("laser_x", default_value="-0.1015"),
         DeclareLaunchArgument("laser_y", default_value="0.0"),
         DeclareLaunchArgument("laser_z", default_value="0.750"),

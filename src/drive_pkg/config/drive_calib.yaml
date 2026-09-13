@@ -10,6 +10,7 @@ packagu_opencr_bridge:
     cmd_rate_hz: 20.0
     # 아래 안전 한계와 covariance는 H01/H02 실측 전 [제안값].
     feedback_timeout_sec: 0.5
+    imu_timeout_sec: 0.5
     max_feedback_dt_sec: 0.25
     max_linear_speed: 0.25
     max_angular_speed: 1.0
@@ -20,4 +21,5 @@ packagu_opencr_bridge:
     # [제안값] 33.0으로 A/B한다. 명령 상한 max_wheel_rpm과 펌웨어 MAX_ABS_RPM 30은 바꾸지 않는다.
     feedback_max_abs_rpm: 0.0
     require_feedback_before_motion: true
+    imu_frame: imu_link
     publish_tf: true  # EKF를 추가하기 전에는 bridge가 odom->base_footprint 단일 발행자

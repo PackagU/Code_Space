@@ -139,6 +139,33 @@ def main():
         node.poll_feedback_tick(dt_override=0.02)
         assert node.odometry.x == x_before
 
+        # 센서 전용 I/G 프레임은 wheel freshness나 odom을 위조하지 않는다.
+        node._last_feedback_time = None
+        odom_before = node.last_odom_msg
+        fake.lines.append(b"I 0.1 0.2 0.3 0 0 9.81 1 0 0 0\n")
+        node.poll_feedback_tick(dt_override=0.02)
+        assert node.last_odom_msg is odom_before
+        assert node._last_feedback_time is None and node.imu_ready
+        assert node.last_imu_msg.header.frame_id == "imu_link"
+        assert node.last_imu_msg.orientation.w == 1.0
+
+        fake.lines.append(b"G 0 0 0.4\n")
+        node.poll_feedback_tick(dt_override=0.02)
+        assert node.last_odom_msg is odom_before
+        assert node.last_imu_msg.orientation_covariance[0] == -1.0
+        assert node.last_imu_msg.linear_acceleration_covariance[0] == -1.0
+        assert node.last_imu_msg.angular_velocity.z == 0.4
+
+        # 잘못된 IMU 프레임은 IMU만 not-ready로 만들고 drive 상태 이유는 덮지 않는다.
+        feed_valid(node, fake)
+        command(node)
+        node.send_command_tick()
+        drive_reason = node._ready_reason
+        fake.lines.append(b"I 0 0\n")
+        node.poll_feedback_tick(dt_override=0.02)
+        assert not node.imu_ready
+        assert node._ready_reason == drive_reason
+
         # read/write 예외는 process 성공이나 ready로 바뀌지 않는다.
         fake.fail_read = True
         node.poll_feedback_tick()

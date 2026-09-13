@@ -1,14 +1,22 @@
-"""OpenCR 시리얼 프로토콜 v0.2 인코더/디코더 + 차동구동 변환.
+"""OpenCR 시리얼 프로토콜 인코더/디코더 + 차동구동 변환.
 
 계약 문서: docs/deployment/02_opencr_serial_protocol.md
 순수 파이썬 (ROS 비의존) — 오프라인 테스트: scripts/test_opencr_protocol.py
+
+수신 호환성:
+- v0.2 ``F left right``: 휠 피드백만
+- legacy full ``F left right gx gy gz ax ay az qw qx qy qz``
+- v0.3 ``I gx gy gz ax ay az qw qx qy qz``: IMU 단독(USB-only 포함)
+- v0.3 ``G gx gy gz``: 유효 quaternion이 없을 때 gyro-only
 """
 import math
 import re
 
 FULL_FEEDBACK_FIELD_COUNT = 13  # "F" + 12 floats
 MINIMAL_FEEDBACK_FIELD_COUNT = 3  # "F" + left/right rpm
-PROTOCOL_VERSION = "0.2"
+FULL_IMU_FIELD_COUNT = 11  # "I" + gyro(3) + accel(3) + quat wxyz(4)
+GYRO_ONLY_FIELD_COUNT = 4  # "G" + gyro(3)
+PROTOCOL_VERSION = "0.3-imu"
 _FIRMWARE_ERROR_TOKEN = re.compile(r"^[A-Za-z_]{1,32}$")
 
 
@@ -42,15 +50,45 @@ def parse_feedback_line(line, max_abs_rpm=None):
         "quat": None,
     }
     if len(tokens) == FULL_FEEDBACK_FIELD_COUNT:
-        quat_norm = math.sqrt(sum(value * value for value in values[8:12]))
-        if not 0.5 <= quat_norm <= 1.5:
+        imu = _imu_fields(values[2:12])
+        if imu is None:
             return None
-        feedback.update({
-            "gyro": tuple(values[2:5]),
-            "accel": tuple(values[5:8]),
-            "quat": tuple(values[8:12]),
-        })
+        feedback.update(imu)
     return feedback
+
+
+def parse_imu_line(line):
+    """Parse an independent IMU frame without asserting wheel validity."""
+    tokens = line.strip().split()
+    if len(tokens) == FULL_IMU_FIELD_COUNT and tokens[0] == "I":
+        try:
+            values = [float(token) for token in tokens[1:]]
+        except ValueError:
+            return None
+        return _imu_fields(values)
+    if len(tokens) == GYRO_ONLY_FIELD_COUNT and tokens[0] == "G":
+        try:
+            gyro = tuple(float(token) for token in tokens[1:])
+        except ValueError:
+            return None
+        if not all(math.isfinite(value) for value in gyro):
+            return None
+        return {"gyro": gyro, "accel": None, "quat": None}
+    return None
+
+
+def _imu_fields(values):
+    if len(values) != 10 or not all(math.isfinite(value) for value in values):
+        return None
+    quat = tuple(values[6:10])
+    quat_norm = math.sqrt(sum(value * value for value in quat))
+    if not 0.5 <= quat_norm <= 1.5:
+        return None
+    return {
+        "gyro": tuple(values[0:3]),
+        "accel": tuple(values[3:6]),
+        "quat": quat,
+    }
 
 
 def classify_rejected_feedback(line, max_abs_rpm=None):
@@ -71,6 +109,13 @@ def classify_rejected_feedback(line, max_abs_rpm=None):
     if max_abs_rpm is not None and parse_feedback_line(line) is not None:
         return "feedback rpm over limit"
     return "invalid feedback frame"
+
+
+def classify_rejected_imu(line):
+    tokens = line.strip().split()
+    if tokens and tokens[0] in ("I", "G"):
+        return "invalid imu frame"
+    return None
 
 
 def twist_to_wheel_rpm(v, w, wheel_radius, wheel_separation):

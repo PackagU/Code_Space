@@ -23,6 +23,7 @@ ROS_MODULE_PATTERN='ModuleNotFoundError.*(rclpy|launch|launch_ros|ament_index_py
 PY_TESTS=(
   scripts/test_wasd_teleop.py
   scripts/test_opencr_protocol.py
+  scripts/test_opencr_imu_profile.py
   scripts/test_opencr_firmware_contract.py
   scripts/test_diff_drive_odometry.py
   scripts/test_opencr_bridge_dryrun.py

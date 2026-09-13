@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""OpenCR 시리얼 브리지: /cmd_vel -> V 프레임, F 피드백 -> /odom + TF + /imu.
+"""OpenCR 시리얼 브리지: /cmd_vel -> V, wheel/IMU feedback -> ROS topics.
 
-프로토콜: docs/deployment/02_opencr_serial_protocol.md (v0.2)
+v0.2 wheel-only와 v0.3 IMU/gyro-only 프레임을 함께 수용한다.
 테스트: scripts/test_opencr_bridge_dryrun.py (FakeSerial 주입)
 """
 import math
@@ -16,8 +16,10 @@ from tf2_ros import TransformBroadcaster
 
 from drive_pkg.opencr_protocol import (
     classify_rejected_feedback,
+    classify_rejected_imu,
     encode_velocity_command,
     parse_feedback_line,
+    parse_imu_line,
     twist_to_wheel_rpm,
 )
 from drive_pkg.diff_drive_odometry import DiffDriveOdometry, yaw_to_quaternion
@@ -43,6 +45,7 @@ class OpencrBridgeNode(Node):
         self.declare_parameter("cmd_rate_hz", 20.0)
         self.declare_parameter("feedback_poll_hz", 50.0)
         self.declare_parameter("feedback_timeout_sec", 0.5)
+        self.declare_parameter("imu_timeout_sec", 0.5)
         self.declare_parameter("max_feedback_dt_sec", 0.25)
         self.declare_parameter("max_linear_speed", 0.25)
         self.declare_parameter("max_angular_speed", 1.0)
@@ -53,7 +56,7 @@ class OpencrBridgeNode(Node):
         self.declare_parameter("require_feedback_before_motion", True)
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_footprint")
-        self.declare_parameter("imu_frame", "base_link")
+        self.declare_parameter("imu_frame", "imu_link")
         self.declare_parameter("publish_tf", True)
 
         p = self.get_parameter
@@ -67,6 +70,7 @@ class OpencrBridgeNode(Node):
         if not (self.feedback_poll_hz and self.feedback_poll_hz > 0.0):
             raise ValueError("feedback_poll_hz must be positive")
         self.feedback_timeout = p("feedback_timeout_sec").value
+        self.imu_timeout = p("imu_timeout_sec").value
         self.max_feedback_dt = p("max_feedback_dt_sec").value
         self.max_linear_speed = p("max_linear_speed").value
         self.max_angular_speed = p("max_angular_speed").value
@@ -85,6 +89,7 @@ class OpencrBridgeNode(Node):
             "cmd_rate_hz": self.cmd_rate_hz,
             "feedback_poll_hz": self.feedback_poll_hz,
             "feedback_timeout_sec": self.feedback_timeout,
+            "imu_timeout_sec": self.imu_timeout,
             "max_feedback_dt_sec": self.max_feedback_dt,
             "max_linear_speed": self.max_linear_speed,
             "max_angular_speed": self.max_angular_speed,
@@ -118,6 +123,7 @@ class OpencrBridgeNode(Node):
         self.odom_pub = self.create_publisher(Odometry, "/odom", 10)
         self.imu_pub = self.create_publisher(Imu, "/imu", 10)
         self.ready_pub = self.create_publisher(Bool, "/drive/ready", 10)
+        self.imu_ready_pub = self.create_publisher(Bool, "/imu/ready", 10)
         self.tf_broadcaster = TransformBroadcaster(self)
         self.create_subscription(
             Twist, str(p("cmd_vel_topic").value), self.on_cmd_vel, 10
@@ -127,9 +133,11 @@ class OpencrBridgeNode(Node):
         self._cmd_w = 0.0
         self._last_cmd_time = None
         self._last_feedback_time = None
+        self._last_imu_time = None
         self._last_sent_left_rpm = 0.0
         self._last_sent_right_rpm = 0.0
         self.motion_ready = False
+        self.imu_ready = False
         self._ready_reason = "startup"
         self.last_command_bytes = b""
         self.last_odom_msg = None
@@ -149,6 +157,7 @@ class OpencrBridgeNode(Node):
         # poll_feedback_tick 은 버퍼에 쌓인 줄을 모두 비우므로 느린 폴링에서도 프레임을 잃지 않는다.
         self.create_timer(1.0 / self.feedback_poll_hz, self.poll_feedback_tick)
         self._publish_ready()
+        self._publish_imu_ready()
 
     def _open_serial(self):
         import serial  # 지연 import: 오프라인 테스트는 transport 주입으로 우회
@@ -194,6 +203,31 @@ class OpencrBridgeNode(Node):
             else:
                 self.get_logger().warning(f"drive ready=False: {reason}")
             self._publish_ready()
+
+    def _publish_imu_ready(self):
+        msg = Bool()
+        msg.data = self.imu_ready
+        self.imu_ready_pub.publish(msg)
+
+    def _set_imu_ready(self, ready, reason):
+        changed = ready != self.imu_ready
+        self.imu_ready = ready
+        if changed:
+            if ready:
+                self.get_logger().info(f"imu ready=True: {reason}")
+            else:
+                self.get_logger().warning(f"imu ready=False: {reason}")
+        self._publish_imu_ready()
+
+    def _refresh_imu_ready(self, now=None):
+        now = self._now_sec() if now is None else now
+        stale = (
+            self._last_imu_time is None
+            or (now - self._last_imu_time) < 0.0
+            or (now - self._last_imu_time) > self.imu_timeout
+        )
+        if stale:
+            self._set_imu_ready(False, "imu stale")
 
     @staticmethod
     def _slew(current, target, max_step):
@@ -291,6 +325,7 @@ class OpencrBridgeNode(Node):
 
     def poll_feedback_tick(self, dt_override=None):
         latest_feedback = None
+        latest_imu = None
         for _ in range(MAX_LINES_PER_TICK):
             try:
                 raw = self._read_feedback_line()
@@ -306,16 +341,40 @@ class OpencrBridgeNode(Node):
                 break
             text = raw.decode("ascii", errors="replace")
             feedback = parse_feedback_line(text, max_abs_rpm=self.feedback_max_abs_rpm)
-            if feedback is None:
-                reason = classify_rejected_feedback(text, max_abs_rpm=self.feedback_max_abs_rpm)
-                self._note_rejected_feedback(reason, text)
-                self._set_motion_ready(False, reason)
+            if feedback is not None:
+                latest_feedback = feedback
+                if feedback["gyro"] is not None:
+                    latest_imu = feedback
                 continue
-            latest_feedback = feedback
-        if latest_feedback is None:
-            return
+
+            imu = parse_imu_line(text)
+            if imu is not None:
+                latest_imu = imu
+                continue
+
+            imu_reason = classify_rejected_imu(text)
+            stripped = text.strip()
+            if imu_reason is not None or stripped.startswith("E imu_"):
+                reason = imu_reason or classify_rejected_feedback(text)
+                self._note_rejected_feedback(reason, text)
+                self._last_imu_time = None
+                self._set_imu_ready(False, reason)
+                continue
+
+            reason = classify_rejected_feedback(text, max_abs_rpm=self.feedback_max_abs_rpm)
+            self._note_rejected_feedback(reason, text)
+            self._set_motion_ready(False, reason)
 
         now = self._now_sec()
+        if latest_imu is not None:
+            self._publish_imu(latest_imu)
+            self._last_imu_time = now
+            self._set_imu_ready(True, "fresh valid imu frame")
+        else:
+            self._refresh_imu_ready(now)
+
+        if latest_feedback is None:
+            return
         if dt_override is not None:
             dt = dt_override
         elif self._last_feedback_time is None:
@@ -328,8 +387,6 @@ class OpencrBridgeNode(Node):
             return
         self.odometry.update(latest_feedback["left_rpm"], latest_feedback["right_rpm"], dt)
         self._publish_odom()
-        if latest_feedback["quat"] is not None:
-            self._publish_imu(latest_feedback)
         command_age = None if self._last_cmd_time is None else now - self._last_cmd_time
         if command_age is not None and 0.0 <= command_age <= self.cmd_timeout:
             self._set_motion_ready(True, "fresh command and feedback")
@@ -387,19 +444,26 @@ class OpencrBridgeNode(Node):
         msg = Imu()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.imu_frame
-        msg.orientation.w = feedback["quat"][0]
-        msg.orientation.x = feedback["quat"][1]
-        msg.orientation.y = feedback["quat"][2]
-        msg.orientation.z = feedback["quat"][3]
+        if feedback["quat"] is not None:
+            msg.orientation.w = feedback["quat"][0]
+            msg.orientation.x = feedback["quat"][1]
+            msg.orientation.y = feedback["quat"][2]
+            msg.orientation.z = feedback["quat"][3]
+            msg.orientation_covariance = _diagonal_covariance((0.10, 0.10, 0.20), 3)
+        else:
+            # REP-145/SensorMsgs convention: first element -1 means no estimate.
+            msg.orientation_covariance[0] = -1.0
         msg.angular_velocity.x = feedback["gyro"][0]
         msg.angular_velocity.y = feedback["gyro"][1]
         msg.angular_velocity.z = feedback["gyro"][2]
-        msg.linear_acceleration.x = feedback["accel"][0]
-        msg.linear_acceleration.y = feedback["accel"][1]
-        msg.linear_acceleration.z = feedback["accel"][2]
-        msg.orientation_covariance = _diagonal_covariance((0.10, 0.10, 0.20), 3)
+        if feedback["accel"] is not None:
+            msg.linear_acceleration.x = feedback["accel"][0]
+            msg.linear_acceleration.y = feedback["accel"][1]
+            msg.linear_acceleration.z = feedback["accel"][2]
+            msg.linear_acceleration_covariance = _diagonal_covariance((0.10, 0.10, 0.10), 3)
+        else:
+            msg.linear_acceleration_covariance[0] = -1.0
         msg.angular_velocity_covariance = _diagonal_covariance((0.02, 0.02, 0.02), 3)
-        msg.linear_acceleration_covariance = _diagonal_covariance((0.10, 0.10, 0.10), 3)
         self.imu_pub.publish(msg)
         self.last_imu_msg = msg
 

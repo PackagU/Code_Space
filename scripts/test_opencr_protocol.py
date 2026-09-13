@@ -40,6 +40,28 @@ def main():
     approx(minimal["left_rpm"], 12.5)
     assert minimal["gyro"] is None and minimal["accel"] is None and minimal["quat"] is None
 
+    # v0.3 independent IMU frame: USB-only mode must not fabricate wheel feedback.
+    imu = proto.parse_imu_line("I 0.1 0.2 0.3 0.0 0.0 9.81 1.0 0.0 0.0 0.0")
+    assert imu is not None
+    approx(imu["gyro"][2], 0.3)
+    approx(imu["accel"][2], 9.81)
+    assert imu["quat"] == (1.0, 0.0, 0.0, 0.0)
+
+    # Gyro-only has explicit unavailable orientation/acceleration, not fake identity data.
+    gyro_only = proto.parse_imu_line("G -0.1 0.0 0.2")
+    assert gyro_only == {"gyro": (-0.1, 0.0, 0.2), "accel": None, "quat": None}
+    for bad_imu in (
+        "I 0 0 0 0 0 9.81 0 0 0 0",
+        "I nan 0 0 0 0 9.81 1 0 0 0",
+        "I 0 0 0 0 0 9.81 1 0 0",
+        "G 0 inf 0",
+        "G 0 0",
+    ):
+        assert proto.parse_imu_line(bad_imu) is None, bad_imu
+    assert proto.classify_rejected_imu("I 0 0") == "invalid imu frame"
+    assert proto.classify_rejected_imu("G nan 0 0") == "invalid imu frame"
+    assert proto.classify_rejected_imu("F 0 0") is None
+
     # parse: 불량 라인은 None (프리픽스/필드수/비숫자)
     assert proto.parse_feedback_line("HELLO opencr 1.0") is None
     assert proto.parse_feedback_line("F 1.0") is None

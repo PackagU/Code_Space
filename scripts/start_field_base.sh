@@ -5,6 +5,14 @@ CONTAINER_NAME="${PACKAGU_CONTAINER_NAME:-ros2_humble}"
 ENABLE_DRIVE="${ENABLE_DRIVE:-0}"
 LIDAR_PORT="${LIDAR_PORT:-/dev/rplidar}"
 OPENCR_PORT="${OPENCR_PORT:-/dev/opencr}"
+ODOMETRY_PROFILE="${ODOMETRY_PROFILE:-wheel_only}"
+IMU_MOUNT_VERIFIED="${IMU_MOUNT_VERIFIED:-0}"
+IMU_X="${IMU_X:-UNSET}"
+IMU_Y="${IMU_Y:-UNSET}"
+IMU_Z="${IMU_Z:-UNSET}"
+IMU_ROLL="${IMU_ROLL:-UNSET}"
+IMU_PITCH="${IMU_PITCH:-UNSET}"
+IMU_YAW="${IMU_YAW:-UNSET}"
 LASER_X="${LASER_X:--0.1015}"
 LASER_Y="${LASER_Y:-0.0}"
 LASER_Z="${LASER_Z:-0.750}"
@@ -16,6 +24,22 @@ LASER_YAW="${LASER_YAW:-0.0}"
   echo "error: ENABLE_DRIVE must be 0 or 1" >&2
   exit 2
 }
+[[ "${ODOMETRY_PROFILE}" == "wheel_only" || "${ODOMETRY_PROFILE}" == "wheel_imu" ]] || {
+  echo "error: ODOMETRY_PROFILE must be wheel_only or wheel_imu" >&2
+  exit 2
+}
+if [[ "${ODOMETRY_PROFILE}" == "wheel_imu" ]]; then
+  [[ "${IMU_MOUNT_VERIFIED}" == "1" ]] || {
+    echo "error: wheel_imu requires IMU_MOUNT_VERIFIED=1 after xyz/rpy and axis checks" >&2
+    exit 2
+  }
+  for value in "${IMU_X}" "${IMU_Y}" "${IMU_Z}" "${IMU_ROLL}" "${IMU_PITCH}" "${IMU_YAW}"; do
+    [[ "${value}" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || {
+      echo "error: all IMU mount xyz/rpy values must be measured decimal numbers" >&2
+      exit 2
+    }
+  done
+fi
 for value in "${LASER_X}" "${LASER_Y}" "${LASER_Z}" "${LASER_ROLL}" "${LASER_PITCH}" "${LASER_YAW}"; do
   [[ "${value}" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || {
     echo "error: LiDAR pose values must be decimal numbers" >&2
@@ -54,8 +78,8 @@ if [[ "${ENABLE_DRIVE}" == "1" ]]; then
   }
 fi
 
-echo "[field-base] LiDAR=${LIDAR_PORT}; drive=${ENABLE_DRIVE}; arm/lift excluded"
+echo "[field-base] LiDAR=${LIDAR_PORT}; drive=${ENABLE_DRIVE}; odometry=${ODOMETRY_PROFILE}; arm/lift excluded"
 echo "[field-base] laser xyz=${LASER_X},${LASER_Y},${LASER_Z} rpy=${LASER_ROLL},${LASER_PITCH},${LASER_YAW}"
 enable_drive_arg=false
 [[ "${ENABLE_DRIVE}" == "1" ]] && enable_drive_arg=true
-in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}'"
+in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} odometry_profile:='${ODOMETRY_PROFILE}' imu_mount_verified:='$([[ "${IMU_MOUNT_VERIFIED}" == "1" ]] && echo true || echo false)' imu_x:='${IMU_X}' imu_y:='${IMU_Y}' imu_z:='${IMU_Z}' imu_roll:='${IMU_ROLL}' imu_pitch:='${IMU_PITCH}' imu_yaw:='${IMU_YAW}' lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}'"
