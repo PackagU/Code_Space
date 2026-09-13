@@ -20,7 +20,7 @@ packagu_opencr_bridge:
     # 2026-09-13: 0.0 = max_wheel_rpm과 같다(현행 동작). 측정 RPM이 30을 조금 넘는 피드백 줄을 버려
     # drive ready가 끊기는 'feedback rpm over limit'이 H2 계측으로 확인된 뒤에만, 승인받고
     # [제안값] 33.0으로 A/B한다. 명령 상한 max_wheel_rpm과 펌웨어 MAX_ABS_RPM 30은 바꾸지 않는다.
-    feedback_max_abs_rpm: 0.0
+    feedback_max_abs_rpm: 56.0  # 2026-09-13 받침대 44 rpm 명령에서 F 48.548 오버슈트로 drive ready 끊김 → 명령 상한 48 유지, 피드백 타당성만 56
     require_feedback_before_motion: true
     imu_frame: imu_link
     publish_tf: true  # EKF를 추가하기 전에는 bridge가 odom->base_footprint 단일 발행자
