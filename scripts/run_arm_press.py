@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Explicit arm bench command with measured feedback; never auto-selects a USB port.
+"""Explicit arm bench command with PRAD response checks; no USB auto-selection.
 
 This script is not part of normal startup.  Real execution requires the exact arm
 udev alias and an explicit ``--execute`` flag.  ``--dry-run`` only prints protocol
-payloads and reports SIMULATED, never physical completion.
+payloads and reports SIMULATED, never physical completion. PRAD encoder-vs-echo
+semantics remain field-unverified.
 """
 
 import argparse

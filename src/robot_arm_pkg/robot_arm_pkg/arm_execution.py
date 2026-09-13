@@ -1,7 +1,8 @@
-"""Feedback-gated robot-arm execution contract with no ROS dependency.
+"""Controller-response-gated robot-arm execution contract with no ROS dependency.
 
-Time passing is never treated as physical completion.  A real command completes only
-after all four controller positions match the commanded PWM values.  ``cancelled``
+Time passing is never treated as physical completion. A command completes only after
+all four PRAD responses match the commanded PWM values; whether PRAD is a physical
+encoder or target echo remains unverified. ``cancelled``
 means the request lifecycle ended; the protocol cannot independently prove zero
 mechanical motion, so ``physical_stop_verified`` remains false.
 """

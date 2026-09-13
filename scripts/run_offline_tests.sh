@@ -30,6 +30,7 @@ PY_TESTS=(
   scripts/test_opencr_safety_contract.py
   scripts/test_nav_safety_gate.py
   scripts/test_map_contract.py
+  scripts/test_map_cleanup_review.py
   scripts/test_bag_contract.py
   scripts/test_field_topic_metrics.py
   scripts/test_field_cmd_chain_probe.py

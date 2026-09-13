@@ -235,7 +235,7 @@ def main():
     assert "press-cycle-6" in menu_text and "press-cycle-7" in menu_text
     assert 'if __name__ == "__main__"' in menu_text
 
-    print("PASS P05 arm execution contract: startup, home, busy, measured, fail, cancel, restart, sim")
+    print("PASS arm contract: startup, stow, busy, controller_response, fail, cancel, restart, sim")
 
 
 if __name__ == "__main__":

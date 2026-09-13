@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mission-commanded arm node with measured completion and explicit cancellation.
+"""Mission-commanded arm node with controller-response gating and cancellation.
 
 The safe default opens no serial port, performs no startup homing, and ignores the
-legacy floor-ready trigger.  Physical success is published only after controller
-position feedback reaches every commanded pose.  The optional simulation mode is
-reported as ``simulated_complete`` and cannot be confused with measured completion.
+legacy floor-ready trigger. Completion means only that four PRAD responses matched
+each commanded pose; it is not a physical-success claim. The optional simulation
+mode is reported as ``simulated_complete``.
 """
 
 import json
