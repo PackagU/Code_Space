@@ -4,7 +4,7 @@
 packagu_opencr_bridge:
   ros__parameters:
     wheel_radius: 0.033
-    wheel_separation: 0.4194
+    wheel_separation: 0.4323  # 2026-09-14 바닥 360° 시험: odom 362.46° vs 스캔매칭 실제 351.64° → 0.4194×1.0308 (실효 트랙폭, URDF 기하는 ±0.2097 유지)
     left_sign: 1.0
     right_sign: 1.0
     cmd_timeout_sec: 0.5
