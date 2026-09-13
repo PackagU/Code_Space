@@ -5,9 +5,9 @@ ROS2 Humble + SLAM Toolbox + Nav2, 실기는 Jetson Xavier NX(컨테이너 구�
 
 | 담당 | 역할 |
 |------|------|
-| Lee (JunhyungLee25) | SLAM · Nav2 · 시뮬레이션 |
-| Han (inonewater) | Fusion 모델링 · 구동부 · 리프트 |
-| Kim (DuckFrog123) | 4 DOF 로봇팔 · 비주얼 서보잉 |
+| 이준형 (JunhyungLee25) | SLAM · Nav2 · 시뮬레이션 |
+| 한수민 (inonewater) | Fusion 모델링 · 구동부 · 리프트 |
+| 이성덕 (DuckFrog123) | 4 DOF 로봇팔 · 비주얼 서보잉 |
 
 ## 퀵스타트 (Linux 데스크톱)
 
