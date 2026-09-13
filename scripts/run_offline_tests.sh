@@ -123,7 +123,9 @@ if [[ ${HAVE_ROS} -eq 1 ]]; then
     failed_tests+=(scripts/test_arm_node_safe_runtime.sh)
   fi
 
-  if timeout 35 bash scripts/test_p07_rosbag_runtime.sh >/dev/null 2>&1; then
+  # Test-harness budget only: the probe contains two DDS discovery/replay cycles.
+  # This does not change any drive sensor timeout, gate timeout, or MCU watchdog.
+  if timeout 60 bash scripts/test_p07_rosbag_runtime.sh >/dev/null 2>&1; then
     echo "PASS scripts/test_p07_rosbag_runtime.sh"
     pass=$((pass + 1))
   else
