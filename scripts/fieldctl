@@ -14,7 +14,7 @@ Packagu 현장 터미널 CLI (웹 UI 불필요)
   fieldctl mapping start F1|F2 | mapping save F1|F2 [name] | mapping stop
   fieldctl teleop
   fieldctl map snapshot | map list | map validate /ros2_ws/maps/...yaml
-  fieldctl nav start F1|F2 [/ros2_ws/maps/...yaml] | nav stop
+  fieldctl nav start F1|F2|F3 [/ros2_ws/maps/...yaml] | nav stop
   fieldctl pose set X Y YAW [--allow-origin]
   fieldctl waypoint save NAME F1|F2 X Y YAW [--replace] | waypoint list
   fieldctl goal NAME [F1|F2] | cancel [--all] | stop | resume
@@ -236,7 +236,7 @@ case "${cmd}" in
   nav)
     action="${1:-}"; shift || true
     case "${action}" in
-      start) floor="${1:-}"; shift || true; [[ "${floor}" =~ ^F[12]$ ]] || { echo "error: floor must be F1 or F2" >&2; exit 2; }; FLOOR="${floor}" exec "${ROOT_DIR}/scripts/start_field_navigation.sh" "$@" ;;
+      start) floor="${1:-}"; shift || true; [[ "${floor}" =~ ^F[123]$ ]] || { echo "error: floor must be F1, F2, or F3" >&2; exit 2; }; FLOOR="${floor}" exec "${ROOT_DIR}/scripts/start_field_navigation.sh" "$@" ;;
       stop)
         runtime_cli stop-state assert || echo "warning: gate stop acknowledgement unavailable; stopping Nav2 immediately" >&2
         runtime_cli cancel || true
