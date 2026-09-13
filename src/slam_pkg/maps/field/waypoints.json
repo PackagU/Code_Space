@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "waypoints": {
+    "f3_blue": {
+      "floor": "F3",
+      "frame_id": "map",
+      "x": 2.13,
+      "y": -0.48,
+      "yaw_rad": -0.41,
+      "source": "user-supplied field coordinate"
+    }
+  }
+}
