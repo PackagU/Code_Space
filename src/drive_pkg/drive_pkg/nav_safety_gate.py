@@ -7,6 +7,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, String
 
@@ -49,9 +50,15 @@ class NavSafetyGateNode(Node):
         self.command = Twist()
         self.command_time = None
         self.last_reason = None
+        state_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.command_pub = self.create_publisher(Twist, output_cmd, 10)
-        self.ready_pub = self.create_publisher(Bool, "/nav_safety/ready", 10)
-        self.status_pub = self.create_publisher(String, "/nav_safety/status", 10)
+        self.ready_pub = self.create_publisher(Bool, "/nav_safety/ready", state_qos)
+        self.stopped_pub = self.create_publisher(Bool, "/nav_safety/stopped", state_qos)
+        self.status_pub = self.create_publisher(String, "/nav_safety/status", state_qos)
 
         self.create_subscription(Twist, input_cmd, self._on_command, 10)
         self.create_subscription(
@@ -69,7 +76,7 @@ class NavSafetyGateNode(Node):
         self.create_subscription(
             Bool,
             str(p("software_stop_topic").value),
-            lambda msg: self.gate.set_software_stop(msg.data),
+            self._on_software_stop,
             10,
         )
         self.create_timer(1.0 / publish_rate, self._tick)
@@ -80,6 +87,9 @@ class NavSafetyGateNode(Node):
     def _on_command(self, msg):
         self.command = msg
         self.command_time = self._now()
+
+    def _on_software_stop(self, msg):
+        self.gate.set_software_stop(msg.data)
 
     def _tick(self):
         result = self.gate.filter_command(
@@ -96,6 +106,9 @@ class NavSafetyGateNode(Node):
         ready = Bool()
         ready.data = result.system_ready
         self.ready_pub.publish(ready)
+        stopped = Bool()
+        stopped.data = self.gate.software_stop
+        self.stopped_pub.publish(stopped)
         if result.reason != self.last_reason:
             status = String()
             status.data = result.reason

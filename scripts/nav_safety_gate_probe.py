@@ -8,8 +8,9 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 
 from drive_pkg.nav_safety_gate import NavSafetyGateNode
 
@@ -30,7 +31,16 @@ def main():
     drive_pub = probe.create_publisher(Bool, "/drive/ready", 10)
     stop_pub = probe.create_publisher(Bool, "/nav_safety/stop", 10)
     outputs = []
+    stopped_states = []
+    status_reasons = []
+    state_qos = QoSProfile(
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    )
     probe.create_subscription(Twist, "/cmd_vel_safe", lambda msg: outputs.append(msg), 10)
+    probe.create_subscription(Bool, "/nav_safety/stopped", lambda msg: stopped_states.append(msg.data), state_qos)
+    probe.create_subscription(String, "/nav_safety/status", lambda msg: status_reasons.append(msg.data), state_qos)
 
     executor = SingleThreadedExecutor()
     executor.add_node(gate)
@@ -43,6 +53,8 @@ def main():
         command_pub.publish(command)
         spin_for(executor, 0.4)
         assert outputs and outputs[-1].linear.x == 0.0, "command passed before sensors"
+        assert stopped_states and stopped_states[-1] is False, "initial stop state is not observable"
+        assert status_reasons and status_reasons[-1] == "scan stale", "initial reason is not observable"
 
         ready = Bool()
         ready.data = True
@@ -59,6 +71,8 @@ def main():
         stop_pub.publish(stopped)
         spin_for(executor, 0.15)
         assert outputs[-1].linear.x == 0.0, "software stop did not zero output"
+        assert stopped_states[-1] is True, "asserted stop state is not observable"
+        assert status_reasons[-1] == "software stop asserted", "stop reason is not observable"
         print("nav safety gate ROS runtime probe passed")
     finally:
         gate.publish_zero()

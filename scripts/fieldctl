@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONTAINER_NAME="${PACKAGU_CONTAINER_NAME:-ros2_humble}"
+STATE_DIR="${ROOT_DIR}/logs/field_execution/.fieldctl"
+
+usage() {
+  cat <<'EOF'
+Packagu 현장 터미널 CLI (웹 UI 불필요)
+
+  fieldctl status | doctor | diagnose
+  fieldctl base start --drive | base start --sensors-only | base stop
+  fieldctl mapping start F1|F2 | mapping save F1|F2 [name] | mapping stop
+  fieldctl teleop
+  fieldctl map snapshot | map list | map validate /ros2_ws/maps/...yaml
+  fieldctl nav start F1|F2 [/ros2_ws/maps/...yaml] | nav stop
+  fieldctl pose set X Y YAW [--allow-origin]
+  fieldctl waypoint save NAME F1|F2 X Y YAW [--replace] | waypoint list
+  fieldctl goal NAME [F1|F2] | cancel [--all] | stop | resume
+  fieldctl record start [name] [duration_sec] | record stop
+
+안전 계약:
+  - start/status/map 명령은 software stop을 해제하거나 goal을 보내지 않는다.
+  - --drive, teleop, goal은 별도 현장 구동 승인 후에만 실행한다.
+  - stop은 gate 정지를 먼저 확인한 뒤 저장된 goal ID만 취소한다.
+  - resume은 gate만 해제하며 이전 goal을 되살리지 않는다.
+  - 실측하지 않은 전체 0 pose/waypoint는 기본 거부한다.
+EOF
+}
+
+container_running() {
+  docker ps --format '{{.Names}}' | grep -Fxq "${CONTAINER_NAME}"
+}
+
+require_container() {
+  container_running || { echo "error: ${CONTAINER_NAME} is not running" >&2; exit 1; }
+}
+
+in_container() {
+  require_container
+  docker exec -i -w /ros2_ws "${CONTAINER_NAME}" bash -lc \
+    "source /opt/ros/humble/setup.bash && source install/setup.bash && $*"
+}
+
+has_process() {
+  docker exec "${CONTAINER_NAME}" pgrep -f -- "$1" >/dev/null 2>&1
+}
+
+stop_owned() {
+  local regex="$1" label="$2"
+  require_container
+  local pids
+  pids="$(docker exec "${CONTAINER_NAME}" pgrep -f -- "${regex}" 2>/dev/null | tr '\n' ' ' || true)"
+  if [[ -z "${pids// /}" ]]; then
+    echo "[fieldctl] ${label}: already stopped"
+    return 0
+  fi
+  echo "[fieldctl] ${label}: SIGINT -> container PID ${pids}"
+  docker exec "${CONTAINER_NAME}" kill -INT ${pids}
+  for _ in $(seq 1 30); do
+    sleep 0.2
+    if ! docker exec "${CONTAINER_NAME}" sh -c "for p in ${pids}; do kill -0 \"\$p\" 2>/dev/null && exit 0; done; exit 1"; then
+      echo "[fieldctl] ${label}: stopped and verified"
+      return 0
+    fi
+  done
+  echo "error: ${label} did not exit after SIGINT; no SIGKILL was sent" >&2
+  return 1
+}
+
+runtime_cli() {
+  require_container
+  docker exec -i -w /ros2_ws "${CONTAINER_NAME}" bash -lc \
+    'source /opt/ros/humble/setup.bash && source install/setup.bash && exec python3 /ros2_ws/scripts/field_nav_cli.py "$@"' \
+    field_nav_cli "$@"
+}
+
+show_status() {
+  require_container
+  local base=stopped mapping=stopped nav=stopped
+  has_process '[/]opt/ros/humble/bin/ros2 launch slam_pkg field_base\.launch\.py' && base=running
+  has_process '[/]opt/ros/humble/bin/ros2 launch slam_pkg field_mapping_only\.launch\.py' && mapping=running
+  has_process '[/]opt/ros/humble/bin/ros2 launch slam_pkg kku_navigation\.launch\.py' && nav=running
+  printf 'base=%s mapping=%s navigation=%s\n' "${base}" "${mapping}" "${nav}"
+  if [[ "${nav}" == running ]]; then
+    docker exec "${CONTAINER_NAME}" pgrep -af '[/]opt/ros/humble/bin/ros2 launch slam_pkg kku_navigation\.launch\.py' || true
+  fi
+  runtime_cli status || true
+  echo "registered maps:"
+  in_container "find /ros2_ws/maps/field -mindepth 2 -maxdepth 2 -type f -name '*.yaml' -print 2>/dev/null | sort" || true
+}
+
+doctor() {
+  require_container
+  local domain
+  domain="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${CONTAINER_NAME}" | sed -n 's/^ROS_DOMAIN_ID=//p' | tail -n1)"
+  domain="${domain:-0}"
+  python3 "${ROOT_DIR}/scripts/jetson_preflight.py" --mode inspect --expected-domain "${domain}"
+}
+
+diagnose() {
+  show_status
+  echo "container load snapshot:"
+  docker stats --no-stream --format 'name={{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}} pids={{.PIDs}}' "${CONTAINER_NAME}"
+  echo "ROS node names (duplicate names are faults):"
+  in_container "ros2 node list 2>/dev/null | sort | uniq -c"
+  echo "TF ownership inspection:"
+  in_container "timeout 4 ros2 run tf2_ros tf2_monitor map base_footprint 2>/dev/null" || true
+}
+
+map_snapshot() {
+  local name="snapshot_$(date '+%Y%m%d_%H%M%S')"
+  local output="/ros2_ws/logs/field_execution/map_snapshots/${name}"
+  in_container "mkdir -p /ros2_ws/logs/field_execution/map_snapshots && ros2 run nav2_map_server map_saver_cli -f '${output}'"
+  in_container "python3 -m slam_pkg.map_contract '${output}.yaml' && cd /ros2_ws/logs/field_execution/map_snapshots && sha256sum '${name}.yaml' '${name}.pgm' > '${name}.sha256'"
+  echo "SNAPSHOT_YAML=${output}.yaml (진단용이며 posegraph가 아님)"
+}
+
+record_start() {
+  local name="${1:-field_$(date '+%Y%m%d_%H%M%S')}" duration="${2:-0}"
+  [[ "${name}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "error: invalid bag name" >&2; exit 2; }
+  [[ "${duration}" =~ ^[0-9]+$ ]] || { echo "error: duration must be seconds or 0" >&2; exit 2; }
+  mkdir -p "${STATE_DIR}"
+  local pidfile="${STATE_DIR}/recorder.pid" logfile="${STATE_DIR}/${name}.log"
+  if [[ -s "${pidfile}" ]]; then
+    local oldpid
+    oldpid="$(<"${pidfile}")"
+    if [[ -r "/proc/${oldpid}/cmdline" ]] && tr '\0' ' ' < "/proc/${oldpid}/cmdline" | grep -Fq "scripts/record_field_bag.sh"; then
+      echo "error: owned recorder is already running as PID ${oldpid}" >&2
+      exit 1
+    fi
+    rm -f -- "${pidfile}"
+  fi
+  INCLUDE_CONTROL_DIAGNOSTICS=1 DURATION_SEC="${duration}" setsid nohup \
+    "${ROOT_DIR}/scripts/record_field_bag.sh" "${name}" >"${logfile}" 2>&1 &
+  local pid=$!
+  printf '%s\n' "${pid}" > "${pidfile}"
+  printf '%s\n' "${name}" > "${STATE_DIR}/recorder.name"
+  sleep 1
+  kill -0 "${pid}" 2>/dev/null || { echo "error: recorder failed; inspect ${logfile}" >&2; return 1; }
+  echo "recorder PID=${pid} log=${logfile} bag=/ros2_ws/logs/field_bags/${name}"
+  [[ "${duration}" == 0 ]] && echo "종료: fieldctl record stop"
+}
+
+record_stop() {
+  local pidfile="${STATE_DIR}/recorder.pid"
+  [[ -s "${pidfile}" ]] || { echo "[fieldctl] recorder: no owned PID"; return 0; }
+  local pid name
+  pid="$(<"${pidfile}")"
+  name="$(<"${STATE_DIR}/recorder.name")"
+  [[ "${pid}" =~ ^[0-9]+$ ]] || { echo "error: invalid recorder PID file" >&2; return 1; }
+  if [[ ! -r "/proc/${pid}/cmdline" ]] || ! tr '\0' ' ' < "/proc/${pid}/cmdline" | grep -Fq "scripts/record_field_bag.sh ${name}"; then
+    echo "error: PID ${pid} no longer belongs to the recorded command; no signal sent" >&2
+    return 1
+  fi
+  kill -INT -- "-${pid}"
+  for _ in $(seq 1 75); do
+    sleep 0.2
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      rm -f -- "${pidfile}" "${STATE_DIR}/recorder.name"
+      echo "[fieldctl] recorder stopped; verify ${STATE_DIR}/${name}.log and bag contract"
+      return 0
+    fi
+  done
+  echo "error: recorder did not exit after SIGINT; no SIGKILL was sent" >&2
+  return 1
+}
+
+cmd="${1:-help}"
+shift || true
+case "${cmd}" in
+  help|-h|--help) usage ;;
+  status) show_status ;;
+  doctor) doctor ;;
+  diagnose) diagnose ;;
+  base)
+    action="${1:-}"; mode="${2:-}"
+    case "${action}:${mode}" in
+      start:--drive) echo "[approval boundary] physical drive/OpenCR serial will be opened"; ENABLE_DRIVE=1 exec "${ROOT_DIR}/scripts/start_field_base.sh" ;;
+      start:--sensors-only) echo "[fieldctl] LiDAR motor may spin; OpenCR remains unopened"; ENABLE_DRIVE=0 exec "${ROOT_DIR}/scripts/start_field_base.sh" ;;
+      stop:)
+        require_container
+        if has_process 'field_mapping_only\.launch\.py|kku_navigation\.launch\.py'; then
+          echo "error: stop mapping/navigation before base" >&2; exit 1
+        fi
+        stop_owned '[/]opt/ros/humble/bin/ros2 launch slam_pkg field_base\.launch\.py' base ;;
+      *) usage; exit 2 ;;
+    esac ;;
+  mapping)
+    action="${1:-}"; shift || true
+    case "${action}" in
+      start) floor="${1:-}"; [[ "${floor}" =~ ^F[12]$ ]] || { echo "error: floor must be F1 or F2" >&2; exit 2; }; echo "[fieldctl] floor=${floor}; base remains separate"; exec "${ROOT_DIR}/scripts/start_field_mapping.sh" ;;
+      save) [[ "${1:-}" =~ ^F[12]$ ]] || { echo "error: floor must be F1 or F2" >&2; exit 2; }; exec "${ROOT_DIR}/scripts/save_field_map.sh" "$@" ;;
+      stop) stop_owned '[/]opt/ros/humble/bin/ros2 launch slam_pkg field_mapping_only\.launch\.py' mapping ;;
+      *) usage; exit 2 ;;
+    esac ;;
+  teleop)
+    require_container
+    has_process 'kku_navigation\.launch\.py' && { echo "error: teleop is blocked while Nav2 is running" >&2; exit 1; }
+    echo "[approval boundary] physical drive command; keys and deadman are printed by keyboard_teleop"
+    exec "${ROOT_DIR}/scripts/teleop.sh" ;;
+  map)
+    action="${1:-}"; shift || true
+    case "${action}" in
+      snapshot) map_snapshot ;;
+      list) in_container "find /ros2_ws/maps/field -mindepth 2 -maxdepth 2 -type f -name '*.yaml' -print | sort" ;;
+      validate) [[ "${1:-}" =~ ^/ros2_ws/maps/[A-Za-z0-9_./-]+\.yaml$ ]] || { echo "error: absolute map YAML path required" >&2; exit 2; }; in_container "python3 -m slam_pkg.map_contract '$1'" ;;
+      *) usage; exit 2 ;;
+    esac ;;
+  nav)
+    action="${1:-}"; shift || true
+    case "${action}" in
+      start) floor="${1:-}"; shift || true; [[ "${floor}" =~ ^F[12]$ ]] || { echo "error: floor must be F1 or F2" >&2; exit 2; }; FLOOR="${floor}" exec "${ROOT_DIR}/scripts/start_field_navigation.sh" "$@" ;;
+      stop)
+        runtime_cli stop-state assert || echo "warning: gate stop acknowledgement unavailable; stopping Nav2 immediately" >&2
+        runtime_cli cancel || true
+        stop_owned '[/]opt/ros/humble/bin/ros2 launch slam_pkg kku_navigation\.launch\.py' navigation ;;
+      *) usage; exit 2 ;;
+    esac ;;
+  pose)
+    [[ "${1:-}" == set ]] || { usage; exit 2; }; shift
+    runtime_cli pose "$@" ;;
+  waypoint)
+    action="${1:-}"; shift || true
+    case "${action}" in save) runtime_cli waypoint-save "$@" ;; list) runtime_cli waypoint-list ;; *) usage; exit 2 ;; esac ;;
+  goal)
+    name="${1:-}"; floor="${2:-}"; [[ -n "${name}" ]] || { usage; exit 2; }
+    echo "[approval boundary] NavigateToPose can move the robot"
+    if [[ -n "${floor}" ]]; then runtime_cli goal "${name}" --floor "${floor}"; else runtime_cli goal "${name}"; fi ;;
+  cancel) runtime_cli cancel "$@" ;;
+  stop)
+    runtime_cli stop-state assert
+    runtime_cli cancel || true
+    echo "gate stop is persistent until explicit resume; zero output must be physically verified" ;;
+  resume) runtime_cli stop-state release ;;
+  record)
+    action="${1:-}"; shift || true
+    case "${action}" in start) record_start "$@" ;; stop) record_stop ;; *) usage; exit 2 ;; esac ;;
+  *) usage; exit 2 ;;
+esac
