@@ -55,9 +55,9 @@ ROS2 Humble · SLAM Toolbox · Nav2 · Gazebo Classic — 시뮬레이션에서 
 
 | 담당 | 역할 |
 |------|------|
-| Lee ([JunhyungLee25](https://github.com/JunhyungLee25)) | SLAM · Nav2 · 시뮬레이션 · 통합/배포 |
-| Han ([inonewater](https://github.com/inonewater)) | Fusion 모델링 · 구동부 · 리프트 |
-| Kim ([DuckFrog123](https://github.com/DuckFrog123)) | 4 DOF 로봇팔 · 비주얼 서보잉 |
+| 이준형 ([JunhyungLee25](https://github.com/JunhyungLee25)) | SLAM · Nav2 · 시뮬레이션 · 통합/배포 |
+| 한수민 ([inonewater](https://github.com/inonewater)) | Fusion 모델링 · 구동부 · 리프트 |
+| 이성덕 ([DuckFrog123](https://github.com/DuckFrog123)) | 4 DOF 로봇팔 · 비주얼 서보잉 |
 
 ## 퀵스타트 (Linux 데스크톱)
 
