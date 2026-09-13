@@ -56,6 +56,19 @@ def main():
         else:
             raise AssertionError("non-finite command must be rejected")
 
+    # 거부 사유 분류는 수락 여부를 바꾸지 않고 현장 로그의 원인만 구분한다.
+    classify = proto.classify_rejected_feedback
+    assert classify("F 30.46 12.0", max_abs_rpm=30.0) == "feedback rpm over limit"
+    assert classify("F 999 0 0 0 0 0 0 0 1 0 0 0", max_abs_rpm=30.0) == "feedback rpm over limit"
+    assert classify("E dynamixel_write 3") == "firmware error: dynamixel_write"
+    assert classify("E command_watchdog_stop") == "firmware error: command_watchdog_stop"
+    assert classify("E $$$ 1") == "firmware error: unknown"
+    assert classify("HELLO opencr 0.2-minimal") == "firmware hello line"
+    for garbage in ("", "F nan 0", "F 0 0 0 0 0 0 0 0 0 0 0 0", "garbage"):
+        assert classify(garbage, max_abs_rpm=30.0) == "invalid feedback frame", garbage
+    assert proto.parse_feedback_line("F 30.46 12.0", max_abs_rpm=30.0) is None
+    assert proto.parse_feedback_line("F 30.46 12.0", max_abs_rpm=33.0) is not None
+
     # twist -> rpm: 바퀴 1rev/s(=60rpm)가 되는 전진 속도에서 양쪽 동일 rpm
     r, L = 0.033, 0.51324
     v = 0.033 * 2.0 * math.pi

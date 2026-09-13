@@ -19,6 +19,7 @@ Packagu 현장 터미널 CLI (웹 UI 불필요)
   fieldctl waypoint save NAME F1|F2 X Y YAW [--replace] | waypoint list
   fieldctl goal NAME [F1|F2] | cancel [--all] | stop | resume
   fieldctl record start [name] [duration_sec] | record stop
+  fieldctl probe [name] [duration_sec] | probe analyze /ros2_ws/logs/.../probes/NAME
 
 안전 계약:
   - start/status/map 명령은 software stop을 해제하거나 goal을 보내지 않는다.
@@ -105,8 +106,32 @@ diagnose() {
   docker stats --no-stream --format 'name={{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}} pids={{.PIDs}}' "${CONTAINER_NAME}"
   echo "ROS node names (duplicate names are faults):"
   in_container "ros2 node list 2>/dev/null | sort | uniq -c"
+  echo "/cmd_vel publishers (Nav2: velocity_smoother+behavior_server; manual: one teleop; web UI must be absent):"
+  in_container "ros2 topic info -v /cmd_vel 2>/dev/null | awk '/Publisher count/{p=1} /Subscription count/{p=0} p && /Publisher count|Node name/'" || true
   echo "TF ownership inspection:"
   in_container "timeout 4 ros2 run tf2_ros tf2_monitor map base_footprint 2>/dev/null" || true
+}
+
+probe_run() {
+  local name="${1:-probe_$(date '+%Y%m%d_%H%M%S')}" duration="${2:-120}"
+  [[ "${name}" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "error: invalid probe name" >&2; exit 2; }
+  [[ "${duration}" =~ ^[0-9]+$ ]] && (( duration >= 1 && duration <= 3600 )) || {
+    echo "error: duration must be 1..3600 seconds" >&2; exit 2;
+  }
+  require_container
+  local out="/ros2_ws/logs/field_execution/probes/${name}"
+  in_container "test ! -e '${out}'" || { echo "error: refusing to overwrite ${out}" >&2; exit 1; }
+  local tty_flag=-i
+  [[ -t 0 && -t 1 ]] && tty_flag=-it
+  echo "[fieldctl] probe ${duration}s -> ${out} (subscribe only; Ctrl+C ends early)"
+  set +e
+  docker exec ${tty_flag} -w /ros2_ws "${CONTAINER_NAME}" bash -lc \
+    "source /opt/ros/humble/setup.bash && source install/setup.bash && exec python3 scripts/field_cmd_chain_probe.py record --output-dir '${out}' --duration-sec ${duration}"
+  local rc=$?
+  set -e
+  [[ ${rc} -eq 0 || ${rc} -eq 130 ]] || echo "warning: probe recorder exited ${rc}; analyzing what was written" >&2
+  in_container "python3 scripts/field_cmd_chain_probe.py analyze '${out}'"
+  echo "PROBE_DIR=${out} (host: ${ROOT_DIR}/logs/field_execution/probes/${name})"
 }
 
 map_snapshot() {
@@ -237,5 +262,13 @@ case "${cmd}" in
   record)
     action="${1:-}"; shift || true
     case "${action}" in start) record_start "$@" ;; stop) record_stop ;; *) usage; exit 2 ;; esac ;;
+  probe)
+    if [[ "${1:-}" == analyze ]]; then
+      [[ "${2:-}" =~ ^/ros2_ws/logs/[A-Za-z0-9_./-]+$ ]] || { echo "error: probe directory below /ros2_ws/logs required" >&2; exit 2; }
+      require_container
+      in_container "python3 scripts/field_cmd_chain_probe.py analyze '$2'"
+    else
+      probe_run "$@"
+    fi ;;
   *) usage; exit 2 ;;
 esac

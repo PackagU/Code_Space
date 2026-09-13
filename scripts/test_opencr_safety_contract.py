@@ -102,6 +102,24 @@ def main():
         assert node.last_odom_msg is odom_before
         assert not node.motion_ready
 
+        # 기본 피드백 상한은 max_wheel_rpm 그대로이며, 거부 사유가 원인별로 남는다.
+        assert node.feedback_max_abs_rpm == node.max_wheel_rpm
+        for line, reason in (
+            (b"F 30.46 12.0\n", "feedback rpm over limit"),
+            (b"E dynamixel_write 3\n", "firmware error: dynamixel_write"),
+            (b"HELLO opencr 0.2-minimal\n", "firmware hello line"),
+        ):
+            feed_valid(node, fake)
+            command(node)
+            node.send_command_tick()
+            count_before = node.rejected_feedback_count
+            odom_before = node.last_odom_msg
+            fake.lines.append(line)
+            node.poll_feedback_tick(dt_override=0.02)
+            assert node.last_odom_msg is odom_before, line
+            assert not node.motion_ready and node._ready_reason == reason, (line, node._ready_reason)
+            assert node.rejected_feedback_count == count_before + 1
+
         # 큰 dt와 시각 역행은 적분하지 않고, 다음 정상 프레임에서 복구한다.
         x_before = node.odometry.x
         fake.lines.append(VALID_STOPPED)
@@ -138,10 +156,37 @@ def main():
         node.send_zero_command_safe()
         assert fake.written[before:] == [b"V 0.00 0.00\n"] * 3
         assert not node.motion_ready
+
+        # 현장 A/B용 피드백 타당성 상한은 명시 설정 때만 넓어지고 명령 상한은 그대로다.
+        for value, accepted in ((33.0, True), (29.0, False), (61.0, False), (math.nan, False)):
+            try:
+                wide = _bridge_with_feedback_limit(value)
+            except ValueError:
+                assert not accepted, value
+                continue
+            try:
+                assert accepted, value
+                assert wide.feedback_max_abs_rpm == value and wide.max_wheel_rpm == 30.0
+                command(wide)
+                wide.transport.lines.append(b"F 30.46 12.0\n")
+                wide.poll_feedback_tick(dt_override=0.02)
+                assert wide.last_odom_msg is not None and wide.motion_ready
+            finally:
+                wide.destroy_node()
         print("opencr_safety_contract tests passed")
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
+
+def _bridge_with_feedback_limit(limit):
+    class LimitedBridge(OpencrBridgeNode):
+        def declare_parameter(self, name, value=None, *args, **kwargs):
+            if name == "feedback_max_abs_rpm":
+                value = limit
+            return super().declare_parameter(name, value, *args, **kwargs)
+
+    return LimitedBridge(transport=FakeSerial())
 
 
 if __name__ == "__main__":

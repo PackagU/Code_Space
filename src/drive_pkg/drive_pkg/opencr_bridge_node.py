@@ -15,6 +15,7 @@ from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster
 
 from drive_pkg.opencr_protocol import (
+    classify_rejected_feedback,
     encode_velocity_command,
     parse_feedback_line,
     twist_to_wheel_rpm,
@@ -22,6 +23,10 @@ from drive_pkg.opencr_protocol import (
 from drive_pkg.diff_drive_odometry import DiffDriveOdometry, yaw_to_quaternion
 
 MAX_LINES_PER_TICK = 20
+# 2026-09-13: 관측용 로그 간격일 뿐 안전 동작과 무관하다 [제안값].
+REJECTED_FEEDBACK_LOG_PERIOD_SEC = 1.0
+# 사용자 진술(2026-09-13) 바퀴 모터 하드웨어 최대 60 rpm. 피드백 타당성 상한은 이 값을 넘지 않는다.
+FEEDBACK_PLAUSIBILITY_CEILING_RPM = 60.0
 
 
 class OpencrBridgeNode(Node):
@@ -43,6 +48,8 @@ class OpencrBridgeNode(Node):
         self.declare_parameter("max_angular_speed", 1.0)
         self.declare_parameter("max_wheel_rpm", 30.0)
         self.declare_parameter("max_wheel_accel_rpm_s", 60.0)
+        # 0.0이면 max_wheel_rpm과 같다(2026-09-12 동작 그대로). 명령 상한은 바꾸지 않는다.
+        self.declare_parameter("feedback_max_abs_rpm", 0.0)
         self.declare_parameter("require_feedback_before_motion", True)
         self.declare_parameter("odom_frame", "odom")
         self.declare_parameter("base_frame", "base_footprint")
@@ -92,6 +99,16 @@ class OpencrBridgeNode(Node):
             raise ValueError(f"parameters must be finite and positive: {invalid_parameters}")
         if not all(math.isfinite(value) and value != 0.0 for value in (self.left_sign, self.right_sign)):
             raise ValueError("left_sign and right_sign must be finite and non-zero")
+        feedback_limit = float(p("feedback_max_abs_rpm").value)
+        self.feedback_max_abs_rpm = self.max_wheel_rpm if feedback_limit == 0.0 else feedback_limit
+        if not (
+            math.isfinite(self.feedback_max_abs_rpm)
+            and self.max_wheel_rpm <= self.feedback_max_abs_rpm <= FEEDBACK_PLAUSIBILITY_CEILING_RPM
+        ):
+            raise ValueError(
+                "feedback_max_abs_rpm must be 0 or between max_wheel_rpm and "
+                f"{FEEDBACK_PLAUSIBILITY_CEILING_RPM} rpm"
+            )
 
         self.transport = transport if transport is not None else self._open_serial()
         self.odometry = DiffDriveOdometry(
@@ -117,6 +134,9 @@ class OpencrBridgeNode(Node):
         self.last_command_bytes = b""
         self.last_odom_msg = None
         self.last_imu_msg = None
+        self.rejected_feedback_count = 0
+        self.last_rejected_feedback_reason = None
+        self._last_rejected_log_time = None
         # Buffered nonblocking feedback; readiness heartbeat.
         self._rx_buf = bytearray()
         self._rx_started_at = None
@@ -284,12 +304,12 @@ class OpencrBridgeNode(Node):
                 return
             if not raw:
                 break
-            feedback = parse_feedback_line(
-                raw.decode("ascii", errors="replace"), max_abs_rpm=self.max_wheel_rpm
-            )
+            text = raw.decode("ascii", errors="replace")
+            feedback = parse_feedback_line(text, max_abs_rpm=self.feedback_max_abs_rpm)
             if feedback is None:
-                self.get_logger().debug(f"ignored line: {raw!r}")
-                self._set_motion_ready(False, "invalid feedback frame")
+                reason = classify_rejected_feedback(text, max_abs_rpm=self.feedback_max_abs_rpm)
+                self._note_rejected_feedback(reason, text)
+                self._set_motion_ready(False, reason)
                 continue
             latest_feedback = feedback
         if latest_feedback is None:
@@ -315,6 +335,19 @@ class OpencrBridgeNode(Node):
             self._set_motion_ready(True, "fresh command and feedback")
         else:
             self._set_motion_ready(False, "waiting for fresh cmd_vel")
+
+    def _note_rejected_feedback(self, reason, text):
+        """Count every rejected line and log its content at most once per period."""
+        self.rejected_feedback_count += 1
+        self.last_rejected_feedback_reason = reason
+        now = self._now_sec()
+        last = self._last_rejected_log_time
+        if last is None or now - last >= REJECTED_FEEDBACK_LOG_PERIOD_SEC or now < last:
+            self._last_rejected_log_time = now
+            self.get_logger().warning(
+                f"rejected feedback ({reason}); total={self.rejected_feedback_count}; "
+                f"line={text.strip()[:80]!r}"
+            )
 
     def _publish_odom(self):
         msg = Odometry()

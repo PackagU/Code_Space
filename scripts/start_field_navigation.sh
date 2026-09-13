@@ -47,6 +47,14 @@ if grep -Eiq '/.*(arm|lift|servo)' <<<"${nodes}"; then
   echo "error: arm/lift/servo node detected; autonomous base profile requires them stopped" >&2
   exit 1
 fi
+# 2026-09-13: teleop과 웹 UI는 idle일 때도 /cmd_vel에 0을 보낼 수 있다(웹 UI는 자기가 띄운 Nav2만 인식).
+# Nav2 smoother 출력과 0이 교대하면 주행이 끊기므로 명령 소유자를 하나로 강제한다.
+for conflicting in /packagu_keyboard_teleop /packagu_field_web_ui; do
+  if grep -Fxq "${conflicting}" <<<"${nodes}"; then
+    echo "error: ${conflicting} also publishes /cmd_vel; stop it before Nav2 (command ownership)" >&2
+    exit 1
+  fi
+done
 for required in /robot_state_publisher /rplidar /packagu_opencr_bridge /nav_safety_gate; do
   grep -Fxq "${required}" <<<"${nodes}" || {
     echo "error: required base node missing: ${required}" >&2

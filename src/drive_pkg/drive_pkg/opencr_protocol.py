@@ -4,10 +4,12 @@
 순수 파이썬 (ROS 비의존) — 오프라인 테스트: scripts/test_opencr_protocol.py
 """
 import math
+import re
 
 FULL_FEEDBACK_FIELD_COUNT = 13  # "F" + 12 floats
 MINIMAL_FEEDBACK_FIELD_COUNT = 3  # "F" + left/right rpm
 PROTOCOL_VERSION = "0.2"
+_FIRMWARE_ERROR_TOKEN = re.compile(r"^[A-Za-z_]{1,32}$")
 
 
 def encode_velocity_command(left_rpm, right_rpm):
@@ -49,6 +51,26 @@ def parse_feedback_line(line, max_abs_rpm=None):
             "quat": tuple(values[8:12]),
         })
     return feedback
+
+
+def classify_rejected_feedback(line, max_abs_rpm=None):
+    """Stable readiness reason for a line that parse_feedback_line rejected.
+
+    The reason only names the rejection so field logs can tell a measured
+    wheel speed above the parser limit from firmware error lines; it does not
+    change which lines are accepted.
+    """
+    tokens = line.strip().split()
+    if not tokens:
+        return "invalid feedback frame"
+    if tokens[0] == "E":
+        detail = tokens[1] if len(tokens) > 1 and _FIRMWARE_ERROR_TOKEN.match(tokens[1]) else "unknown"
+        return f"firmware error: {detail}"
+    if tokens[0] == "HELLO":
+        return "firmware hello line"
+    if max_abs_rpm is not None and parse_feedback_line(line) is not None:
+        return "feedback rpm over limit"
+    return "invalid feedback frame"
 
 
 def twist_to_wheel_rpm(v, w, wheel_radius, wheel_separation):

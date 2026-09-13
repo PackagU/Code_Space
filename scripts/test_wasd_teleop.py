@@ -117,6 +117,27 @@ def main():
     if stopped:
         raise AssertionError("zero command must not report stop")
 
+    # gate 한도(nav_safety.yaml 0.10 m/s, 0.35 rad/s)를 넘는 q/e 증가는 한도에 묶인다.
+    linear, angular, capped = teleop.clamp_speeds(0.11, 0.35)
+    assert_tuple((linear, angular), (0.10, 0.35))
+    if not capped:
+        raise AssertionError("over-limit linear speed must report capping")
+    linear, angular, capped = teleop.clamp_speeds(0.09, 0.3, max_linear=0.10, max_angular=0.35)
+    assert_tuple((linear, angular), (0.09, 0.3))
+    if capped:
+        raise AssertionError("in-limit speeds must stay unchanged")
+    assert teleop.FIELD_MAX_LINEAR_SPEED <= 0.10 and teleop.FIELD_MAX_ANGULAR_SPEED <= 0.35
+
+    # idle teleop은 정지 직후 짧게만 0을 보내고 이후 /cmd_vel을 비운다.
+    if not teleop.should_publish((0.10, 0.0), zero_since=None, now=5.0):
+        raise AssertionError("motion must always publish")
+    if not teleop.should_publish((0.0, 0.0), zero_since=5.0, now=5.4):
+        raise AssertionError("zero must publish during the stop hold")
+    if teleop.should_publish((0.0, 0.0), zero_since=5.0, now=5.0 + teleop.IDLE_ZERO_HOLD_SEC + 0.01):
+        raise AssertionError("idle teleop must stop mixing zero commands")
+    if teleop.should_publish((0.0, 0.0), zero_since=None, now=5.0):
+        raise AssertionError("zero without a stop transition must not publish")
+
     print("PASS: WASD teleop key mapping is correct.")
 
 

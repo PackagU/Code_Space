@@ -46,6 +46,20 @@ def main():
     for needle in ("map_contract", "/slam_toolbox", "/nav_safety/ready", "kku_navigation.launch.py"):
         require(needle in nav, f"navigation preflight missing {needle}")
     require("ros2 action send_goal" not in nav, "navigation startup must not send a goal")
+
+    # /cmd_vel has one owner: Nav2, teleop, or the web UI (which zero-publishes when idle).
+    for needle in ("/packagu_keyboard_teleop", "/packagu_field_web_ui", "command ownership"):
+        require(needle in nav, f"navigation must refuse competing /cmd_vel owner {needle}")
+    teleop = (ROOT / "scripts/teleop.sh").read_text(encoding="utf-8")
+    web_ui = (ROOT / "scripts/start_field_web_ui.sh").read_text(encoding="utf-8")
+    for path_name, text, needles in (
+        ("teleop.sh", teleop, ("/controller_server", "/packagu_field_web_ui", "/packagu_keyboard_teleop")),
+        ("start_field_web_ui.sh", web_ui, ("/controller_server", "/packagu_keyboard_teleop")),
+    ):
+        for needle in needles:
+            require(needle in text and "command ownership" in text, f"{path_name} must refuse {needle}")
+        result = subprocess.run(["bash", "-n", str(ROOT / "scripts" / path_name)], capture_output=True)
+        require(result.returncode == 0, f"{path_name} shell syntax error")
     print("field scripts contract passed")
 
 
