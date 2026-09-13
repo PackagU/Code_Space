@@ -42,9 +42,9 @@ def parse_arm_command(command_json):
     if not REQUEST_ID_PATTERN.fullmatch(request_id):
         raise ValueError("request_id must be 1-64 safe characters")
     action = str(command.get("action", "")).strip().lower()
-    if action not in ("press", "home", "cancel"):
-        raise ValueError("action must be press, home, or cancel")
-    if action == "home":
+    if action not in ("press", "home", "stow", "cancel"):
+        raise ValueError("action must be press, home, stow, or cancel")
+    if action in ("home", "stow"):
         return {"request_id": request_id, "action": action}
     if action == "cancel":
         target_request_id = str(command.get("target_request_id", "")).strip()
@@ -64,9 +64,9 @@ def parse_arm_command(command_json):
     try:
         cycle = int(command.get("press_cycle"))
     except (TypeError, ValueError) as exc:
-        raise ValueError("press_cycle must be 1, 2, or 3") from exc
-    if cycle not in (1, 2, 3):
-        raise ValueError("press_cycle must be 1, 2, or 3")
+        raise ValueError("press_cycle must be 1 (menu 6) or 2 (menu 7)") from exc
+    if cycle not in (1, 2):
+        raise ValueError("press_cycle must be 1 (menu 6) or 2 (menu 7)")
     return {
         "request_id": request_id,
         "action": action,

@@ -19,7 +19,8 @@ def generate_launch_description():
             DeclareLaunchArgument("require_homed", default_value="true"),
             DeclareLaunchArgument("feedback_timeout_sec", default_value="1.0"),
             DeclareLaunchArgument("position_tolerance_pwm", default_value="30"),
-            DeclareLaunchArgument("press_cycle", default_value="1", description="1~3 (servo_protocol.PRESS_CYCLES)"),
+            DeclareLaunchArgument("stow_verified", default_value="false"),
+            DeclareLaunchArgument("press_cycle", default_value="1", description="1=menu 6 door, 2=menu 7 left button"),
             Node(
                 package="robot_arm_pkg",
                 executable="arm_sequence",
@@ -37,6 +38,7 @@ def generate_launch_description():
                         "require_homed": LaunchConfiguration("require_homed"),
                         "feedback_timeout_sec": LaunchConfiguration("feedback_timeout_sec"),
                         "position_tolerance_pwm": LaunchConfiguration("position_tolerance_pwm"),
+                        "stow_verified": LaunchConfiguration("stow_verified"),
                         "press_cycle": LaunchConfiguration("press_cycle"),
                     }
                 ],

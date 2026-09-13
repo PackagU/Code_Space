@@ -45,6 +45,7 @@ PY_TESTS=(
   scripts/test_kku_navigation_launch.py
   scripts/test_arm_sequence.py
   scripts/test_arm_execution_contract.py
+  scripts/test_lift_uno_contract.py
   scripts/check_portability.py
   test_workspace/elevator_mission/scripts/test_behaviors_dryrun.py
   test_workspace/elevator_mission/scripts/test_point_registry.py

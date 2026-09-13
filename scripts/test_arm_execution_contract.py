@@ -88,8 +88,9 @@ def complete_home(contract, driver, request_id="home-1", start=0.0):
     status = contract.tick(start + sp.HOMING_DURATION_MS)
     assert status["event"] == "completed"
     assert status["state"] == "completed"
-    assert status["completion_basis"] == "measured_position"
-    assert status["homed"] is True and status["homing_basis"] == "measured_position"
+    assert status["completion_basis"] == "controller_position_response"
+    assert status["homed"] is True and status["homing_basis"] == "controller_position_response"
+    assert status["stow_verified"] is False
     return start + sp.HOMING_DURATION_MS
 
 
@@ -98,6 +99,7 @@ def main():
         "request_id": "h1",
         "action": "home",
     }
+    assert parse_arm_command('{"request_id":"s1","action":"stow"}')["action"] == "stow"
     assert parse_arm_command(
         '{"request_id":"p1","action":"press","target":"call",'
         '"button":"UP","press_cycle":2}'
@@ -109,7 +111,7 @@ def main():
         "not-json",
         '{"request_id":"","action":"home"}',
         '{"request_id":"p","action":"press","target":"x","button":"UP","press_cycle":1}',
-        '{"request_id":"p","action":"press","target":"call","button":"UP","press_cycle":9}',
+        '{"request_id":"p","action":"press","target":"call","button":"UP","press_cycle":3}',
     ):
         try:
             parse_arm_command(invalid)
@@ -148,7 +150,7 @@ def main():
         status = contract.tick(tick_time)
         assert status is not None, f"step {index} did not advance"
     assert status["event"] == "completed" and status["state"] == "completed"
-    assert status["completion_basis"] == "measured_position" and status["homed"]
+    assert status["completion_basis"] == "controller_position_response" and status["homed"]
 
     # Send failure is terminal, never topic-only success.
     send_driver = FakeDriver()
@@ -220,6 +222,7 @@ def main():
         encoding="utf-8"
     )
     bench_text = (ROOT / "scripts/run_arm_press.py").read_text(encoding="utf-8")
+    menu_text = (ROOT / "scripts/arm_servo_menu.py").read_text(encoding="utf-8")
     assert 'DeclareLaunchArgument("home_on_start", default_value="false")' in launch_text
     assert 'DeclareLaunchArgument("enable_floor_trigger", default_value="false")' in launch_text
     assert 'DeclareLaunchArgument("simulation_mode", default_value="false")' in launch_text
@@ -227,6 +230,10 @@ def main():
     assert "topic-only" not in node_text
     assert "glob.glob" not in bench_text and 'args.port != DEFAULT_PORT' in bench_text
     assert 'parser.add_argument("--execute"' in bench_text
+    assert "--confirm-stow" in bench_text
+    assert "No startup motion was sent" in menu_text
+    assert "press-cycle-6" in menu_text and "press-cycle-7" in menu_text
+    assert 'if __name__ == "__main__"' in menu_text
 
     print("PASS P05 arm execution contract: startup, home, busy, measured, fail, cancel, restart, sim")
 

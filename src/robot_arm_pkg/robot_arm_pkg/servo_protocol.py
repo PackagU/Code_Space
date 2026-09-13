@@ -4,7 +4,8 @@
 - 이동:   {#000P1500T2000!#001P...} — PWM 목표까지 T(ms) 동안 컨트롤러가 자체 보간
 - 위치:   #000PRAD!  ->  #000P1500!
 - 정지:   #000PDPT!
-PWM/포즈 값은 조립 후 관절별 실측으로 갱신한다 (Kim 벤치 값 그대로 유지).
+PWM/포즈 값은 사용자가 2026-09-13 제공한 최신 servo_test.py를 그대로 유지한다.
+PRAD 응답이 실제 축 엔코더인지 목표값 echo인지는 아직 ⚠️미확인이다.
 """
 
 from __future__ import annotations
@@ -16,48 +17,43 @@ SERVO_IDS = ("000", "001", "002", "003")
 
 # 조립 후 관절별로 실제 안전 범위를 측정해서 수정 (Kim)
 PWM_LIMITS = {
-    "000": (1000, 2500),
-    "001": (1000, 2500),
-    "002": (1000, 2500),
-    "003": (1000, 2500),
+    "000": (900, 2600),
+    "001": (900, 2600),
+    "002": (900, 2600),
+    "003": (900, 2600),
 }
 
-# 공용 대기 자세 — 기동 homing 과 모든 사이클의 마지막 스텝이 이 값으로 돌아온다(사이클별로 다르게 두지 않는다).
-HOME = {"000": 1500, "001": 1200, "002": 2000, "003": 1500}
+# 사용자 구현 휴지/수납 자세. 이름은 home이지만 원점 센서 homing을 뜻하지 않는다.
+HOME = {"000": 1500, "001": 1100, "002": 2400, "003": 1500}
+STOW = HOME
+STOW_USER_CONFIRMED = True
+STOW_PHYSICALLY_VERIFIED = False
 
 # 사이클별 포즈 표 — press_cycle N 은 POSES_N 의 값으로 움직인다. 튜닝은 해당 표의 숫자만 고치면 된다.
 # (PWM 은 PWM_LIMITS 안이어야 하며, 새 자세가 필요하면 그 표에 키를 추가하고 PRESS_CYCLE_N 에서 이름으로 쓴다)
-POSES_1 = {  # 기준 — Kim 벤치 실측 2026-08-22
+POSES_1 = {  # 사용자 메뉴 6: 엘리베이터 열림/닫힘 버튼
     "home": HOME,
     "press_ready": {"000": 1500, "001": 1500, "002": 1500, "003": 1500},
-    "pre_press": {"000": 1500, "001": 1600, "002": 1600, "003": 1600},
-    "press": {"000": 1500, "001": 1900, "002": 1700, "003": 1300},
-    "retreat": {"000": 1500, "001": 1600, "002": 1600, "003": 1600},
+    "pre_press": {"000": 1600, "001": 1600, "002": 1900, "003": 1500},
+    "press": {"000": 1600, "001": 1900, "002": 1800, "003": 1500},
+    "retreat": {"000": 1600, "001": 1600, "002": 1900, "003": 1500},
 }
 
-POSES_2 = {  # 베이스(000) 1700 — Jetson 벤치 2026-08-22, 나머지 관절은 1번과 동일
+POSES_2 = {  # 사용자 메뉴 7: 상단 좌측 장착 팔로 로봇 왼쪽 버튼
     "home": HOME,
-    "press_ready": {"000": 1700, "001": 1500, "002": 1500, "003": 1500},
-    "pre_press": {"000": 1700, "001": 1600, "002": 1600, "003": 1600},
-    "press": {"000": 1700, "001": 1900, "002": 1700, "003": 1300},
-    "retreat": {"000": 1700, "001": 1600, "002": 1600, "003": 1600},
+    "press_ready": {"000": 1500, "001": 1500, "002": 1500, "003": 1500},
+    "pre_press2": {"000": 1900, "001": 1600, "002": 1900, "003": 1500},
+    "press2": {"000": 1900, "001": 1900, "002": 1800, "003": 1500},
+    "retreat2": {"000": 1900, "001": 1600, "002": 1900, "003": 1500},
 }
 
-POSES_3 = {  # 베이스(000) 1300 — Jetson 벤치 2026-08-22, 나머지 관절은 1번과 동일
-    "home": HOME,
-    "press_ready": {"000": 1300, "001": 1500, "002": 1500, "003": 1500},
-    "pre_press": {"000": 1300, "001": 1600, "002": 1600, "003": 1600},
-    "press": {"000": 1300, "001": 1900, "002": 1700, "003": 1300},
-    "retreat": {"000": 1300, "001": 1600, "002": 1600, "003": 1600},
-}
-
-POSE_TABLES = {1: POSES_1, 2: POSES_2, 3: POSES_3}
+POSE_TABLES = {1: POSES_1, 2: POSES_2}
 POSES = POSES_1  # 기본 포즈 표(하위 호환 — 기존 호출부/테스트는 이 이름을 쓴다)
+CYCLE_LABELS = {1: "elevator_door_open_close", 2: "robot_left_button"}
 
-# 버튼 누르기 사이클 3종 — 각 스텝은 (pose, duration_ms, send_command).
+# 사용자 메뉴 6/7의 버튼 누르기 사이클 2종 — 각 스텝은 (pose, duration_ms, send_command).
 # send_command=False 는 '버튼 누른 상태 유지' 구간 — 재전송 없이 대기만 한다.
-# 1번 = Kim run_press_cycle 과 동일한 기준 사이클. 2·3번은 스텝 순서는 1번과 같고 포즈 값(POSES_N)만
-# 버튼 위치별로 다르게 튜닝한다. 노드는 press_cycle 파라미터(1~3)로 스텝표+포즈표를 함께 선택.
+# 1번은 메뉴 6, 2번은 메뉴 7에 대응한다. 노드는 press_cycle 1/2로 선택한다.
 PRESS_CYCLE_1 = (
     ("press_ready", 2000, True),
     ("pre_press", 1500, True),
@@ -70,29 +66,18 @@ PRESS_CYCLE_1 = (
 
 PRESS_CYCLE_2 = (  # 스텝은 1번과 동일 — 포즈 값은 POSES_2
     ("press_ready", 2000, True),
-    ("pre_press", 1500, True),
-    ("press", 1000, True),
-    ("press", 500, False),
-    ("retreat", 1000, True),
+    ("pre_press2", 1500, True),
+    ("press2", 1000, True),
+    ("press2", 500, False),
+    ("retreat2", 1000, True),
     ("press_ready", 1500, True),
     ("home", 1500, True),
 )
 
-PRESS_CYCLE_3 = (  # 스텝은 1번과 동일 — 포즈 값은 POSES_3
-    ("press_ready", 2000, True),
-    ("pre_press", 1500, True),
-    ("press", 1000, True),
-    ("press", 500, False),
-    ("retreat", 1000, True),
-    ("press_ready", 1500, True),
-    ("home", 1500, True),
-)
-
-PRESS_CYCLES = {1: PRESS_CYCLE_1, 2: PRESS_CYCLE_2, 3: PRESS_CYCLE_3}
+PRESS_CYCLES = {1: PRESS_CYCLE_1, 2: PRESS_CYCLE_2}
 PRESS_CYCLE = PRESS_CYCLE_1  # 기본 사이클(하위 호환 — 기존 호출부/테스트는 이 이름을 쓴다)
 
-# 기동 homing: 전원 인가 직후 서보는 전부 1500(중립)에 있다. 노드가 뜨면 한 번 home 으로
-# 보내 "대기 중 = home" 을 맞춘다. 사이클 마지막 스텝도 home 이라 이후 대기는 자동 유지.
+# 명시적 stow 요청용 이름. 노드는 home_on_start=false이므로 기동 시 자동 전송하지 않는다.
 HOME_POSE = "home"
 HOMING_DURATION_MS = 2000
 
@@ -119,7 +104,7 @@ def pose_command(pose_name, duration_ms, poses=POSES):
 
 
 def homing_command(duration_ms=HOMING_DURATION_MS):
-    """기동 시 1회 전송 — 전원 인가 직후(전 모터 1500) → home 대기 자세(공용 HOME)."""
+    """명시적 home/stow 요청. 원점 센서 homing을 뜻하지 않는다."""
     return pose_command(HOME_POSE, duration_ms, {HOME_POSE: HOME})
 
 
@@ -169,6 +154,11 @@ class SerialPoseDriver:
     def read_positions(self):
         positions = {}
         for servo_id in SERVO_IDS:
+            # 컨트롤러는 query ID를 되돌려주지만 시퀀스 번호가 없다. 각 query 전에
+            # 이미 도착해 있던 바이트를 버려 이전 요청 응답을 fresh 응답으로 쓰지 않는다.
+            waiting = int(getattr(self._conn, "in_waiting", 0) or 0)
+            if waiting:
+                self._conn.read(waiting)
             payload = read_position_command(servo_id).encode("ascii")
             written = self._conn.write(payload)
             if written is not None and written != len(payload):
@@ -205,7 +195,7 @@ class SerialPoseDriver:
 
 
 def get_cycle(cycle_id):
-    """press_cycle 파라미터(1~3) → 사이클 튜플. 없는 번호는 ValueError."""
+    """press_cycle 1(메뉴6)/2(메뉴7) → 사이클 튜플."""
     try:
         return PRESS_CYCLES[int(cycle_id)]
     except (KeyError, ValueError, TypeError):
@@ -213,7 +203,7 @@ def get_cycle(cycle_id):
 
 
 def get_poses(cycle_id):
-    """press_cycle 파라미터(1~3) → 그 사이클의 포즈 표. 없는 번호는 ValueError."""
+    """press_cycle 1(메뉴6)/2(메뉴7) → 그 사이클의 포즈 표."""
     try:
         return POSE_TABLES[int(cycle_id)]
     except (KeyError, ValueError, TypeError):

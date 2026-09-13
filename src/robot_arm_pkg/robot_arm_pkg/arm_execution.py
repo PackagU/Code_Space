@@ -23,6 +23,7 @@ class ArmExecutionContract:
         require_homed=True,
         feedback_timeout_ms=1000,
         position_tolerance_pwm=30,
+        stow_verified=False,
     ):
         if driver is not None and simulation_mode:
             raise ValueError("simulation_mode cannot use a physical serial driver")
@@ -35,6 +36,7 @@ class ArmExecutionContract:
         self.require_homed = bool(require_homed)
         self.feedback_timeout_ms = float(feedback_timeout_ms)
         self.position_tolerance_pwm = int(position_tolerance_pwm)
+        self.stow_verified = bool(stow_verified)
         self.state = "idle"
         self.phase = "unhomed"
         self.homed = False
@@ -64,6 +66,8 @@ class ArmExecutionContract:
             "simulation_mode": self.simulation_mode,
             "homed": self.homed,
             "homing_basis": self.homing_basis,
+            "stow_verified": self.stow_verified,
+            "feedback_semantics": "controller_position_response; encoder_vs_echo_unverified",
             "completion_basis": completion_basis,
             "physical_stop_verified": False,
             "error": error,
@@ -104,10 +108,10 @@ class ArmExecutionContract:
         if not self.hardware_connected and not self.simulation_mode:
             return self._fail("hardware_unavailable")
 
-        if command["action"] == "home":
+        if command["action"] in ("home", "stow"):
             self._cycle = ((sp.HOME_POSE, sp.HOMING_DURATION_MS, True),)
             self._poses = {sp.HOME_POSE: sp.HOME}
-            self.phase = "homing"
+            self.phase = "stowing"
         else:
             cycle_id = command["press_cycle"]
             self._cycle = sp.get_cycle(cycle_id)
@@ -197,9 +201,11 @@ class ArmExecutionContract:
         final_pose = self._cycle[-1][0]
         if final_pose == sp.HOME_POSE:
             self.homed = True
-            self.homing_basis = "simulation_timing" if self.simulation_mode else "measured_position"
+            self.homing_basis = (
+                "simulation_timing" if self.simulation_mode else "controller_position_response"
+            )
         self.state = "simulated_complete" if self.simulation_mode else "completed"
-        self.phase = "home" if self.homed else "complete"
+        self.phase = "stow" if self.homed else "complete"
         self.active = None
-        basis = "simulation_timing" if self.simulation_mode else "measured_position"
+        basis = "simulation_timing" if self.simulation_mode else "controller_position_response"
         return self.snapshot("completed", request=completed_request, completion_basis=basis)

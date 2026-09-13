@@ -39,6 +39,7 @@ class ArmSequenceNode(Node):
         self.declare_parameter("require_homed", True)
         self.declare_parameter("feedback_timeout_sec", 1.0)
         self.declare_parameter("position_tolerance_pwm", 30)
+        self.declare_parameter("stow_verified", False)
         self.declare_parameter("press_cycle", 1)
         self.declare_parameter("self_test", False)
 
@@ -79,6 +80,7 @@ class ArmSequenceNode(Node):
             feedback_timeout_ms=1000.0
             * float(self.get_parameter("feedback_timeout_sec").value),
             position_tolerance_pwm=int(self.get_parameter("position_tolerance_pwm").value),
+            stow_verified=bool(self.get_parameter("stow_verified").value),
         )
         self._driver = driver
         self._default_cycle = int(self.get_parameter("press_cycle").value)

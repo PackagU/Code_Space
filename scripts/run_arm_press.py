@@ -38,6 +38,11 @@ def main():
     parser.add_argument("--port", default=DEFAULT_PORT)
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--execute", action="store_true", help="현장 승인 후 실물 명령 허용")
+    parser.add_argument(
+        "--confirm-stow",
+        action="store_true",
+        help="초기 positions 확인 뒤 사용자 제공 stow로 이동할 것을 명시 승인",
+    )
     parser.add_argument("--dry-run", action="store_true", help="전송 없이 payload만 출력")
     parser.add_argument("--tolerance-pwm", type=int, default=30)
     parser.add_argument("--feedback-timeout", type=float, default=1.0)
@@ -47,6 +52,8 @@ def main():
         parser.error("--execute 또는 --dry-run 중 정확히 하나를 지정해야 합니다")
     if args.feedback_timeout <= 0:
         parser.error("--feedback-timeout은 양수여야 합니다")
+    if args.execute and not args.confirm_stow:
+        parser.error("실물 실행은 --confirm-stow가 필요합니다 (기동 자동 이동 금지)")
 
     sp = load_servo_protocol()
     cycle = sp.get_cycle(args.cycle)
@@ -85,8 +92,10 @@ def main():
         raise TimeoutError(f"{pose_name} feedback timeout; last={last}")
 
     try:
+        initial = driver.read_positions()
+        print(f"startup positions (no motion sent): {initial}")
         measured = wait_and_measure(sp.HOME_POSE, sp.HOMING_DURATION_MS, {sp.HOME_POSE: sp.HOME})
-        print(f"home measured: {measured}")
+        print(f"stow controller response matched: {measured}; physical_stow_verified=false")
         for index, (pose_name, duration_ms, send) in enumerate(cycle, start=1):
             if send:
                 measured = wait_and_measure(pose_name, duration_ms, poses)
@@ -96,7 +105,7 @@ def main():
                 if not sp.positions_reached(measured, poses[pose_name], args.tolerance_pwm):
                     raise TimeoutError(f"hold feedback mismatch: {measured}")
             print(f"step {index}/{len(cycle)} measured: {pose_name} {measured}")
-        print("COMPLETED: 모든 단계와 최종 home을 위치 피드백으로 확인함")
+        print("COMPLETED: controller position responses matched; physical result remains unverified")
     except KeyboardInterrupt:
         stop_unverified(driver)
         raise SystemExit(130)

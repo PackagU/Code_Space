@@ -60,7 +60,7 @@ def main():
     )
     assert (
         sp.pose_command("home", 3000)
-        == "{#000P1500T3000!#001P1200T3000!#002P2000T3000!#003P1500T3000!}"
+        == "{#000P1500T3000!#001P1100T3000!#002P2400T3000!#003P1500T3000!}"
     )
     assert sp.stop_command("002") == "#002PDPT!"
     assert sp.read_position_command("001") == "#001PRAD!"
@@ -68,11 +68,12 @@ def main():
     assert sp.HOME_POSE in sp.POSES and sp.PRESS_CYCLE[-1][0] == sp.HOME_POSE, "대기 자세 = 사이클 종료 자세"
     assert sp.POSES[sp.HOME_POSE] is sp.HOME
     # 2b) 사이클별 포즈 표: 선택 가능, home 은 전부 공용 HOME, 표를 바꾸면 명령 문자열이 그 표 값으로 나온다
-    assert sp.POSES is sp.POSES_1 and sp.get_poses(1) is sp.POSES_1 and sorted(sp.POSE_TABLES) == [1, 2, 3]
-    expect_raise(sp.get_poses, 4)
+    assert sp.POSES is sp.POSES_1 and sp.get_poses(1) is sp.POSES_1 and sorted(sp.POSE_TABLES) == [1, 2]
+    expect_raise(sp.get_poses, 3)
     for cid, table in sp.POSE_TABLES.items():
         assert table[sp.HOME_POSE] is sp.HOME, f"POSES_{cid}: home 은 공용 HOME 이어야 함"
-        assert set(table) >= {"home", "press_ready", "pre_press", "press", "retreat"}, f"POSES_{cid} 키 누락"
+    assert set(sp.POSES_1) == {"home", "press_ready", "pre_press", "press", "retreat"}
+    assert set(sp.POSES_2) == {"home", "press_ready", "pre_press2", "press2", "retreat2"}
     tuned = {"press": {"000": 1500, "001": 2100, "002": 1800, "003": 1200}}
     assert sp.pose_command("press", 1000, tuned) == "{#000P1500T1000!#001P2100T1000!#002P1800T1000!#003P1200T1000!}"
     # 2·3번 표는 독립 튜닝 대상 — 값 자체는 고정하지 않고, 각 표의 모든 PWM 이 안전 범위인지만 본다
@@ -81,13 +82,15 @@ def main():
             for servo_id, pwm in pose.items():
                 sp.check_pwm(servo_id, pwm)
     assert sp.homing_command() == sp.pose_command("home", sp.HOMING_DURATION_MS)
-    assert sp.homing_command(3000) == "{#000P1500T3000!#001P1200T3000!#002P2000T3000!#003P1500T3000!}"
+    assert sp.homing_command(3000) == "{#000P1500T3000!#001P1100T3000!#002P2400T3000!#003P1500T3000!}"
+    assert sp.STOW is sp.HOME and sp.STOW_USER_CONFIRMED and not sp.STOW_PHYSICALLY_VERIFIED
+    assert sp.CYCLE_LABELS == {1: "elevator_door_open_close", 2: "robot_left_button"}
 
     # 3) 안전 가드: 잘못된 포즈/시간/PWM/ID 는 ValueError
     expect_raise(sp.pose_command, "no_such_pose", 1000)
     expect_raise(sp.pose_command, "home", 10000)
-    expect_raise(sp.check_pwm, "000", 900)
-    expect_raise(sp.check_pwm, "000", 2600)
+    expect_raise(sp.check_pwm, "000", 899)
+    expect_raise(sp.check_pwm, "000", 2601)
     expect_raise(sp.check_pwm, "999", 1500)
 
     # 4) 위치 응답 파싱
@@ -110,14 +113,18 @@ def main():
         ("press_ready", True),
         ("home", True),
     ]
-    # 5b) 사이클 3종: 선택 가능 + 각 스텝 포즈/시간 유효 + 마지막 스텝 home(대기 자세). 2·3번은 현재 1번 복제본
-    assert sorted(sp.PRESS_CYCLES) == [1, 2, 3]
-    expect_raise(sp.get_cycle, 4)
+    # 5b) 사용자 메뉴 6/7의 두 사이클만 유지하고 둘 다 home/stow로 끝난다.
+    assert sorted(sp.PRESS_CYCLES) == [1, 2]
+    expect_raise(sp.get_cycle, 3)
     expect_raise(sp.get_cycle, "x")
     for cid, cycle in sp.PRESS_CYCLES.items():
         assert cycle[-1][0] == sp.HOME_POSE, f"cycle {cid}: 마지막 스텝이 home 이 아님"
         for pose, dur, send in cycle:
             sp.pose_command(pose, dur, sp.get_poses(cid))  # 그 사이클 표에 포즈 존재 + PWM 범위 + 0~9999ms
+    assert [step[0] for step in sp.PRESS_CYCLE_2] == [
+        "press_ready", "pre_press2", "press2", "press2",
+        "retreat2", "press_ready", "home",
+    ]
 
     # 6) PWM 보간(사이클별): home 에서 시작해 home 으로 복귀, 50Hz 틱 간 점프가 완만
     tick_ms = 20.0
@@ -135,7 +142,8 @@ def main():
             for servo_id in sp.SERVO_IDS:
                 sp.check_pwm(servo_id, cur[servo_id])  # 보간 전 구간이 안전 범위 안
             prev = cur
-        assert max_step < 10.0, f"cycle {cid}: 틱당 PWM 점프 {max_step:.2f} — 사이클이 불연속"
+        # 최신 사용자 stow의 002=2400 복귀는 1500 ms에 900 PWM이므로 50 Hz 근사 12/tick.
+        assert max_step <= 12.1, f"cycle {cid}: 틱당 PWM 변화 {max_step:.2f}"
 
     print(f"PASS arm trigger + servo protocol ({len(sp.PRESS_CYCLES)} cycles, {ticks} ticks, max_step {max_step:.2f} PWM/tick)")
 
