@@ -3,6 +3,7 @@
 
 import importlib.util
 import json
+import subprocess
 import tempfile
 from argparse import Namespace
 from pathlib import Path
@@ -21,6 +22,16 @@ def load_module():
 
 def main():
     mod = load_module()
+    fieldctl = ROOT / "scripts/fieldctl"
+    syntax = subprocess.run(["bash", "-n", str(fieldctl)], capture_output=True)
+    assert syntax.returncode == 0, "fieldctl shell syntax failed"
+    shell = fieldctl.read_text(encoding="utf-8")
+    assert "pkill" not in shell, "fieldctl must not use broad pkill"
+    assert shell.index("runtime_cli stop-state assert") < shell.index("runtime_cli cancel || true")
+    assert "start/status/map 명령은 software stop을 해제하거나 goal을 보내지 않는다" in shell
+    source = MODULE.read_text(encoding="utf-8")
+    assert "/nav_safety/stopped" in source
+    assert "saved active goal id is absent; refusing broad cancel" in source
     assert mod.quaternion_from_yaw(0.0) == (0.0, 1.0)
     try:
         mod.reject_unverified_origin(0.0, 0.0, 0.0, False)

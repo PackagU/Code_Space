@@ -14,6 +14,9 @@ cd "${ROOT_DIR}"
 HAVE_ROS=0
 python3 -c "import rclpy" 2>/dev/null && HAVE_ROS=1
 echo "ROS python available: ${HAVE_ROS}"
+HAVE_GIT_TREE=0
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 && HAVE_GIT_TREE=1
+echo "Git worktree available: ${HAVE_GIT_TREE}"
 
 ROS_MODULE_PATTERN='ModuleNotFoundError.*(rclpy|launch|launch_ros|ament_index_python|geometry_msgs|std_msgs|std_srvs|nav_msgs|nav2_msgs|sensor_msgs|gazebo_msgs|py_trees_ros|tf2)'
 
@@ -33,6 +36,7 @@ PY_TESTS=(
   scripts/test_integration_safety_contract.py
   scripts/test_field_mapping_launch.py
   scripts/test_field_scripts_contract.py
+  scripts/test_field_nav_cli.py
   scripts/test_udev_contract.py
   scripts/test_jetson_deployment_contract.py
   scripts/test_jetson_safe_profiles.py
@@ -65,6 +69,15 @@ skip=0
 failed_tests=()
 
 for test in "${PY_TESTS[@]}"; do
+  case "${test}" in
+    scripts/test_jetson_deployment_contract.py|scripts/test_jetson_safe_profiles.py|scripts/check_portability.py)
+      if [[ ${HAVE_GIT_TREE} -eq 0 ]]; then
+        echo "SKIP ${test} (Git worktree 없음; host에서 실행)"
+        skip=$((skip + 1))
+        continue
+      fi
+      ;;
+  esac
   output="$(python3 "${test}" 2>&1)"
   rc=$?
   if [[ ${rc} -eq 0 ]]; then
