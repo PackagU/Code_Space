@@ -194,7 +194,7 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.28
+      footprint: "[[0.033, 0.219], [0.033, -0.219], [-0.327, -0.219], [-0.327, 0.219]]"  # r1 v2 섀시(x -0.327~0.033)+바퀴 외측 0.2186. 외접 약 0.39m
       plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -237,7 +237,7 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: True
-      robot_radius: 0.28
+      footprint: "[[0.033, 0.219], [0.033, -0.219], [-0.327, -0.219], [-0.327, 0.219]]"  # r1 v2 섀시(x -0.327~0.033)+바퀴 외측 0.2186. 외접 약 0.39m
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]

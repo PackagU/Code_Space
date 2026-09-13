@@ -12,17 +12,17 @@
    2. LiDAR 링크/조인트 이름 laser_link -> laser
       (SLAM/Nav2 가 /scan frame_id 를 "laser" 로 기대하므로 정렬)
    3. 바퀴/캐스터 마찰(mu/kp/kd) gazebo 블록
-   4. diff_drive 플러그인 (wheel_separation=0.51324, wheel_diameter=0.066)
+   4. diff_drive 플러그인 (wheel_separation=0.4194, wheel_diameter=0.066)
    5. joint_state_publisher 플러그인 (좌우 바퀴 + lift_joint)
    6. LiDAR ray 센서 플러그인 (360도, 8m, frame_name=laser)
   실측 확정 시 ★ 표시 값은 원본과 함께 갱신할 것.
 -->
 <robot name="delivery_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- 현장 장착값 오버라이드. 기본값은 2026-09-10 모델이며 실측 전 ⚠️미확인. -->
-  <xacro:arg name="laser_x" default="-0.1015"/>
+  <!-- 현장 장착값 오버라이드. 기본값은 HW팀 r1.urdf v2(2026-09-13) 기준. -->
+  <xacro:arg name="laser_x" default="-0.117"/>
   <xacro:arg name="laser_y" default="0.0"/>
-  <xacro:arg name="laser_z" default="0.750"/>
+  <xacro:arg name="laser_z" default="0.667"/>
   <xacro:arg name="laser_roll" default="0.0"/>
   <xacro:arg name="laser_pitch" default="0.0"/>
   <xacro:arg name="laser_yaw" default="0.0"/>
@@ -44,7 +44,7 @@
     <!-- ★SIM 접지 클리어런스 0.02m. 원본은 z=0 이라 섀시/마스트 바닥이
          바퀴 접지면과 같은 평면 -> 섀시가 바닥에 깔려 바퀴 헛돎.
          본체를 0.02 들어올리고 아래에서 바퀴/캐스터를 같은 양 내려 접지 유지. -->
-    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>  <!-- r1 v2: 섀시 바닥 z=0.053 이라 들어올림 보정 불필요 -->
   </joint>
 
   <!-- ============================================================
@@ -52,35 +52,35 @@
        ============================================================ -->
   <link name="base_link">
     <visual>
-      <origin xyz="-0.025 0 0.125" rpy="0 0 0"/>
-      <geometry><box size="0.300 0.400 0.250"/></geometry>
+      <origin xyz="-0.147 0 0.178" rpy="0 0 0"/>
+      <geometry><box size="0.360 0.400 0.250"/></geometry>
       <material name="grey"/>
     </visual>
     <collision>
-      <origin xyz="-0.025 0 0.125" rpy="0 0 0"/>
-      <geometry><box size="0.300 0.400 0.250"/></geometry>
+      <origin xyz="-0.147 0 0.178" rpy="0 0 0"/>
+      <geometry><box size="0.360 0.400 0.250"/></geometry>
     </collision>
     <inertial>
-      <origin xyz="-0.025 0 0.125" rpy="0 0 0"/>
+      <origin xyz="-0.147 0 0.178" rpy="0 0 0"/>
       <mass value="8.0"/>
       <inertia ixx="0.1483" ixy="0" ixz="0"
-                            iyy="0.1017" iyz="0"
-                                         izz="0.1667"/>
+                            iyy="0.1281" iyz="0"
+                                         izz="0.1931"/>
     </inertial>
   </link>
 
   <!-- ============================================================
-       구동 바퀴 (지름 66 -> 반지름 0.033), 트랙폭 0.51324
+       구동 바퀴 (지름 66 -> 반지름 0.033), 트랙폭 0.4194 (r1 v2)
        ============================================================ -->
   <link name="left_wheel">
     <visual>
       <origin xyz="0 0 0" rpy="1.5708 0 0"/>
-      <geometry><cylinder radius="0.033" length="0.025"/></geometry>
+      <geometry><cylinder radius="0.033" length="0.0178"/></geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="1.5708 0 0"/>
-      <geometry><cylinder radius="0.033" length="0.025"/></geometry>
+      <geometry><cylinder radius="0.033" length="0.0178"/></geometry>
     </collision>
     <inertial>
       <mass value="0.3"/>
@@ -92,7 +92,7 @@
   <joint name="left_wheel_joint" type="continuous">
     <parent link="base_link"/>
     <child  link="left_wheel"/>
-    <origin xyz="0 0.25662 0.013" rpy="0 0 0"/>  <!-- ★SIM z 0.033->0.013 (base 0.02 보정) -->
+    <origin xyz="0 0.2097 0.033" rpy="0 0 0"/>  <!-- r1 v2 -->
     <axis xyz="0 1 0"/>
     <dynamics damping="0.05" friction="0.3"/>  <!-- ★SIM 무명령 활주 제동 (§1.22) — max_wheel_torque 40 대비 미미 -->
   </joint>
@@ -100,12 +100,12 @@
   <link name="right_wheel">
     <visual>
       <origin xyz="0 0 0" rpy="1.5708 0 0"/>
-      <geometry><cylinder radius="0.033" length="0.025"/></geometry>
+      <geometry><cylinder radius="0.033" length="0.0178"/></geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="1.5708 0 0"/>
-      <geometry><cylinder radius="0.033" length="0.025"/></geometry>
+      <geometry><cylinder radius="0.033" length="0.0178"/></geometry>
     </collision>
     <inertial>
       <mass value="0.3"/>
@@ -117,7 +117,7 @@
   <joint name="right_wheel_joint" type="continuous">
     <parent link="base_link"/>
     <child  link="right_wheel"/>
-    <origin xyz="0 -0.25662 0.013" rpy="0 0 0"/>  <!-- ★SIM z 0.033->0.013 (base 0.02 보정) -->
+    <origin xyz="0 -0.2097 0.033" rpy="0 0 0"/>  <!-- r1 v2 -->
     <axis xyz="0 1 0"/>
     <dynamics damping="0.05" friction="0.3"/>  <!-- ★SIM 무명령 활주 제동 (§1.22) -->
   </joint>
@@ -128,12 +128,12 @@
   <link name="caster_wheel">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry><sphere radius="0.015"/></geometry>
+      <geometry><sphere radius="0.033"/></geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry><sphere radius="0.015"/></geometry>
+      <geometry><sphere radius="0.033"/></geometry>
     </collision>
     <inertial>
       <mass value="0.1"/>
@@ -143,7 +143,7 @@
   <joint name="caster_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="caster_wheel"/>
-    <origin xyz="-0.1285 0 -0.005" rpy="0 0 0"/>  <!-- ★SIM z 0.015->-0.005 (base 0.02 보정) -->
+    <origin xyz="-0.2575 0 0.033" rpy="0 0 0"/>  <!-- r1 v2 -->
   </joint>
 
   <!-- ★SIM 전방 캐스터 추가. 원본은 후방 캐스터 1개뿐이고 마스트가 앞에 있어
@@ -167,7 +167,7 @@
   <joint name="caster_front_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="caster_wheel_front"/>
-    <origin xyz="0.1285 0 -0.005" rpy="0 0 0"/>
+    <origin xyz="0.1285 0 0.015" rpy="0 0 0"/>  <!-- ★SIM base z=0 에 맞춰 접지 유지 -->
   </joint>
 
   <!-- ============================================================
@@ -323,7 +323,7 @@
       <update_rate>30</update_rate>
       <left_joint>left_wheel_joint</left_joint>
       <right_joint>right_wheel_joint</right_joint>
-      <wheel_separation>0.51324</wheel_separation>
+      <wheel_separation>0.4194</wheel_separation>
       <wheel_diameter>0.066</wheel_diameter>
       <max_wheel_torque>40.0</max_wheel_torque>          <!-- ★SIM 0.5m/s 가속 여유 -->
       <max_wheel_acceleration>8.0</max_wheel_acceleration>
