@@ -278,12 +278,38 @@ def cmd_pose(args):
         msg.pose.covariance[0] = 0.25
         msg.pose.covariance[7] = 0.25
         msg.pose.covariance[35] = math.radians(15.0) ** 2
-        for _ in range(5):
+        # 2026-09-13: AMCL /initialpose 구독은 BEST_EFFORT다. 부하(load 6.6) 중 5회 발행이 전부 유실돼
+        # AMCL이 이전 위치를 유지한 채 goal이 '도착'으로 끝난 사례가 있어, /amcl_pose 반영을 확인한다.
+        latest = []
+        node.create_subscription(
+            ros["PoseWithCovarianceStamped"], "/amcl_pose", lambda m: latest.append(m), transient_qos(ros)
+        )
+
+        def accepted():
+            for m in reversed(latest):
+                p = m.pose.pose
+                got_yaw = 2.0 * math.atan2(p.orientation.z, p.orientation.w)
+                d_yaw = abs(math.atan2(math.sin(got_yaw - yaw), math.cos(got_yaw - yaw)))
+                if math.hypot(p.position.x - x, p.position.y - y) <= 0.30 and d_yaw <= 0.35:
+                    return p, got_yaw
+            return None
+
+        deadline = time.monotonic() + 8.0
+        result = None
+        while time.monotonic() < deadline and result is None:
+            latest.clear()
             msg.header.stamp = node.get_clock().now().to_msg()
             publisher.publish(msg)
-            ros["rclpy"].spin_once(node, timeout_sec=0.1)
+            until = time.monotonic() + 0.5
+            while time.monotonic() < until and result is None:
+                ros["rclpy"].spin_once(node, timeout_sec=0.05)
+                result = accepted()
+        if result is None:
+            raise RuntimeError("AMCL did not reflect /initialpose within 8 s; do not send a goal")
+        p, got_yaw = result
         print(f"initialpose published: frame=map x={x:.6f} y={y:.6f} yaw={yaw:.6f}")
-        print("AMCL 수렴과 실제 위치 일치는 별도로 확인해야 합니다.")
+        print(f"AMCL accepted: x={p.position.x:.3f} y={p.position.y:.3f} yaw={got_yaw:.3f}")
+        print("실제 위치 일치는 현장에서 확인해야 합니다.")
         return 0
     finally:
         shutdown(ros, node)
