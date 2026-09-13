@@ -142,8 +142,8 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.08
+      xy_goal_tolerance: 0.20  # 2026-09-13 도착 부근 회전 반복 완화
+      yaw_goal_tolerance: 0.15
     # Option B: Regulated Pure Pursuit (RPP) 컨트롤러.
     # DWB(제자리 회전 위주 -> 직각 느낌) 대신 경로를 부드럽게 추종한다.
     # 전역 planner 는 NavFn 유지(거친 grid 경로). RPP 의 lookahead 가 추종을 매끈하게,
@@ -151,7 +151,7 @@ controller_server:
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       # 30rpm wheel limit에서 곡선 주행 여유를 남긴 현장 저속 [제안값].
-      desired_linear_vel: 0.05
+      desired_linear_vel: 0.10  # 2026-09-13 48 rpm 상한: v0.10+w0.25 → 약 44 rpm
       # lookahead: 속도에 비례한 가변 전방주시(코너에선 짧게->정확, 직선에선 길게->부드럽게)
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.5
@@ -177,7 +177,7 @@ controller_server:
       # 차동 구동: 경로 시작/목표에서 헤딩 정렬을 위해 제자리 회전 사용(좁은 alcove 180° 대응)
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      rotate_to_heading_angular_vel: 0.20
+      rotate_to_heading_angular_vel: 0.25
       max_angular_accel: 0.6
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
@@ -367,8 +367,8 @@ velocity_smoother:
     scale_velocities: False
     feedback: "OPEN_LOOP"
     # 0.05m/s + 0.20rad/s 동시 명령도 30rpm 아래(약 29.4rpm)다.
-    max_velocity: [0.05, 0.0, 0.20]
-    min_velocity: [-0.05, 0.0, -0.20]
+    max_velocity: [0.10, 0.0, 0.25]
+    min_velocity: [-0.10, 0.0, -0.25]
     max_accel: [0.3, 0.0, 0.6]
     max_decel: [-0.5, 0.0, -0.8]
     odom_topic: "odom"
