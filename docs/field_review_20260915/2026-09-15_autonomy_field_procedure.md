@@ -16,6 +16,8 @@
 | bag 계측 | `fieldctl record start`가 존재하는 Nav2 진단 토픽을 추가 기록, 없는 토픽은 `absent_nav_topics.txt`. cache 256 KiB. `fieldctl record check` 신규 | 오프라인 검증 (실제 토픽 이름은 현장 확인) |
 | bag 분석 | `scripts/analyze_nav_bag.py`: collision-ahead 등 로그 시점의 map pose, goal 상태, 종료 후 비영 명령, 명령/피드백 역산 RPM, 정지거리 | 오프라인 검증 (합성 bag) |
 | pose 재등록 | `fieldctl pose capture NAME F1 [--save]`: 구독 전용 10초, 안정도·AMCL/TF 일치·costmap footprint lethal 검사, PASS일 때만 새 이름 저장 | 오프라인 검증 (순수 함수만) |
+| F1 v3 지도(기본 아님) | `f1/f1_manual_clean_v3.pgm`(`d525759b…`)·`.yaml`(`d701d2b6…`) 추가. v2 외곽선을 raw SLAM 지도의 주 벽 방향 21.75°에 맞춰 직각화했고, 엘리베이터는 네모로 바꿨다(문 폭 약 1.0 m는 v2 유지). idle 옆 벽은 v2 위치를 유지한다. 값은 map_saver 방식 254/0/205, `free_thresh 0.19`. `map validate` VALID. pointer·`map_pins.json`은 v2 그대로라 **지금 v3로 nav start하면 guard가 거부한다** | 오프라인 검증 |
+| 경로 벽 여유 후보 | `nav2_params_wall_push_v1.yaml`(5.1절) | 오프라인 검증(근사) |
 | gate 상한 override | `start_field_base.sh`·`field_base.launch.py`에 `GATE_MAX_LINEAR_SPEED`(비움·0.12·0.13만 허용) 추가. 비우면 `nav_safety.yaml` 0.12 그대로. launch를 실행하지 않고 setup 함수만 호출해 0.13 override 추가·0.20 거부를 확인 | 오프라인 검증 |
 | 증속 후보 | `nav2_params_speed_v011.yaml`(0.11 m/s·0.22 rad/s), `nav2_params_speed_v012.yaml`(0.12·0.20). `NAV2_PARAMS_FILE`로 명시할 때만 사용. 기본 `nav2_params.yaml` 해시 `e8cf213b…` 불변 | 코드 존재 |
 
@@ -109,17 +111,34 @@ docker exec -w /ros2_ws ros2_humble bash -lc "source /opt/ros/humble/setup.bash 
 
 기존 `f2_elevator_entry`는 그대로 두고 `f2_elevator_staging_v1`까지만 자율주행한다. 오프라인 계산 `[측정값]`(지도 사본 기준): staging 중심–비이동 영역 0.886 m, footprint 가장자리–벽 0.729 m, footprint 안 occupied/unknown 0셀, 목적지에서 circumscribed 0.394 m 여유로 연결. 기존 entry는 각각 0.461 m, 0.240 m다. 근사 경로(비용 가중 Dijkstra, Nav2 재현 아님)의 staging 마지막 3 m 최소 중심 여유는 0.552 m다. 그림: `artifacts/autonomy_improvement_20260915/f2_staging_overlay.png`(빨강 entry, 초록 staging, 파랑 근사 경로).
 
-벽에 붙어 멈춘 곳(2026-09-15 사용자 확인): 마지막 문틀이 아니라 **엘리베이터를 바라볼 때 오른쪽, 벽 안으로 움푹 들어간 곳**이다. 지도에서는 `(-11.05, -1.85)` 부근의 들어간 벽 모양으로 추정한다(그림 `artifacts/autonomy_improvement_20260915/f2_recess_candidates.png`의 A). 지도 계산으로 기존 entry 중심은 A에서 0.749 m, staging_v1은 1.231 m이며, 목적지→staging 근사 경로는 A 쪽으로 가지 않는다. 현장에서는 A 앞을 지날 때의 실제 측면 여유를 따로 적는다.
+벽에 붙어 멈춘 곳(2026-09-15 사용자가 그림에서 직접 지정): 복도에서 로비로 꺾기 직전, **복도 왼쪽 벽의 움푹 들어간 곳**(지도 `(-12.95, -5.25)` 부근, 점이 흩어진 V자 홈)이다. 처음 추정한 엘리베이터 문 오른쪽 `(-11.05, -1.85)`는 틀렸다. 이 지점은 staging 앞 경로에 있으므로 staging만으로는 해결되지 않는다. 기본 설정 근사 경로는 이 코너 안쪽을 inflation 경계(중심 여유 0.552 m)에 붙어 돌고, `wall_push_v1`에서는 0.886 m로 떨어진다(5.1). 그림: `artifacts/autonomy_improvement_20260915/wall_push_paths_F2.png`(주황 원이 지정 지점, 빨강 기본, 파랑 후보).
 
 절차: `goal f2_delivery_destination F2` 후 D `stop` → 하차 → D `resume` → C `./scripts/fieldctl goal f2_elevator_staging_v1 F2` → 도착 즉시 D `./scripts/fieldctl stop` → D `./scripts/fieldctl nav stop` → 문 열림 확인 후 D `resume` → C `teleop`으로 수동 진입.
 
-| 회차 | 목적지→staging action | 완전 정지 | 움푹 들어간 곳(A) 앞 실제 측면 여유 최소(m) | 벽 접촉 | 강제 정지 | collision_ahead 수·최초 map pose | bag |
+| 회차 | 목적지→staging action | 완전 정지 | 복도 코너 움푹 들어간 곳 앞 실제 측면 여유 최소(m) | 벽 접촉 | 강제 정지 | collision_ahead 수·최초 map pose | bag |
 |---|---|---|---|---|---|---|---|
 | 1 | | | | | | | |
 | 2 | | | | | | | |
 | 3 | | | | | | | |
 
 `[제안 기준]` 합격: 3회 모두 staging 완전 정지, 측면 여유 0.20 m 이상, 벽 접촉·강제 정지 0회, 지속 collision-ahead 없음. 3회 중 벽을 타면 bag의 `/plan`·costmap에서 벽 쪽 경로가 처음 생긴 위치를 찾아 복도 중심 경유점 또는 작은 keepout을 검토한다. F2 전체 inflation은 먼저 바꾸지 않는다.
+
+### 5.1 벽에서 더 떼는 경로 후보 `wall_push_v1` (사용자 승인, 기본값 아님)
+
+원인: footprint 원점이 차체 앞 끝 근처라 Nav2 inscribed가 0.033 m이고, Humble SmacPlanner2D는 중심 셀 cost ≥ INSCRIBED만 막는다(소스 확인). 그래서 경로를 벽에서 떼는 힘은 inflation 비용뿐이다.
+
+`/ros2_ws/src/slam_pkg/config/nav2_params_wall_push_v1.yaml`(`527f4c58…`)은 기본 파일에서 세 값만 바꿨다. global costmap `inflation_radius 0.55→1.0`, `cost_scaling_factor 3.0→2.0`, planner `cost_travel_multiplier 2.0→3.0`. local costmap과 RPP 값은 그대로라 감속·충돌 판정은 기존과 같다.
+
+오프라인 근사(`evaluate_wall_push.py`, Smac2D 비용식과 같은 8방향 최적 경로, 장애물층·smoother·AMCL 오차 없음) `[측정값]`:
+
+| 경로 | 기본 최소 중심 여유 | wall_push_v1 | 길이 변화 |
+|---|---:|---:|---:|
+| F2 목적지→staging (지정 코너 3 m 이내) | 0.552 m | 0.886 m | 42.45→43.50 m |
+| F1 v3 idle 시드→locker | 0.552 m | 0.618 m(유리문 열린 절반이 병목) | 11.59→11.67 m |
+| F1 v3 locker→엘리베이터 앞 | 0.552 m | 0.618 m | 11.50→11.97 m |
+| F1 v3 엘리베이터 앞→idle 시드 | 0.566 m | 0.738 m | 5.17→5.68 m |
+
+inflation을 더 세게 한 `push_B`(1.0 m·1.5·4.0)는 F2 코너에서 추가 이득이 없어 채택하지 않았다. 사용법: `NAV2_PARAMS_FILE=/ros2_ws/src/slam_pkg/config/nav2_params_wall_push_v1.yaml ./scripts/fieldctl nav start F2`. 첫 사용 때 controller·planner CPU(`fieldctl diagnose`)와 global costmap 갱신 지연을 기록한다. 증속 후보 파일에는 이 변경이 들어 있지 않다.
 
 ## 6. 보조 바퀴 H0와 문턱 시험
 

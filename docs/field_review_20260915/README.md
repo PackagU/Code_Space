@@ -33,10 +33,23 @@ PGM은 저장소 `.gitignore`(`*.pgm`) 대상이라 이 브랜치에만 강제�
 |---|---|---|
 | F1 기본(pointer) | `f1/f1_manual_clean_v2.yaml` / `.pgm` | yaml `5ed28bf0…`, pgm `3f9a40c4…` |
 | F1 이전 | `f1/f1_manual_clean_v1.yaml` / `.pgm` | pgm `364fe2ad…` |
+| F1 후보(기본 아님) | `f1/f1_manual_clean_v3.yaml` / `.pgm` — v2 직각화(21.75°)·엘리베이터 네모·254/0/205·free_thresh 0.19 | yaml `d701d2b6…`, pgm `d525759b…` |
 | F2 기본 | `f2/f2_nav_unknown_v1.yaml` + `f2/f2_raw_20260914.pgm` | yaml `b670cd2b…`, pgm `f89bfeb9…` |
 | F3 기본 | `f3/f3_c192.yaml` / `.pgm` | yaml `2221c27f…`, pgm `ace8779d…` |
 
 `waypoints.json`(`ebcfb132…`), `map_pins.json`(`0aeeb3e9…`), 층별 `latest_map.txt`는 미러 커밋에 이미 들어 있다. v1과 v2의 차이는 유리 고정문 occupied 선분 51셀이다.
+
+젯슨 기본 포인터와 `map_pins.json`은 F1 v2다. v3로 guard를 통과시키려면 pointer와 핀을 함께 바꿔야 한다(현장 결정 전).
+
+## 20:3x KST 추가분
+
+- F2에서 벽에 붙은 지점 정정: 복도→로비 코너 직전 왼쪽 벽의 움푹 들어간 곳 `(-12.95, -5.25)`. 세션 문서 앞부분의 `(-11.05, -1.85)` 추정은 틀렸다.
+- `src/slam_pkg/config/nav2_params_wall_push_v1.yaml`: global inflation 1.0 m·cost_scaling 2.0, planner cost_travel_multiplier 3.0(local·RPP 불변). 근거 `autonomy_improvement_20260915/evaluate_wall_push.py`·`wall_push_evaluation.json`. 시뮬 S4의 후보 중 하나로 쓸 수 있다.
+- `f1_manual_clean_20260915_v3/`: v3 생성 스크립트와 v2 대비 그림.
+
+| 문서 속 경로 (PC) | 이 브랜치 |
+|---|---|
+| `artifacts/f1_manual_clean_20260915_v3/` | `docs/field_review_20260915/f1_manual_clean_20260915_v3/` |
 
 ## 올리지 않은 것
 

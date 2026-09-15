@@ -26,9 +26,32 @@
 ## 사용자 답변 반영 (같은 날 20:00 KST 기록)
 
 - F1 idle 시드는 로봇 오른쪽 0.8 m가 적당하다는 답을 받았다. 절차 문서에 반영했고 저장 좌표는 현장 capture 값으로 한다.
-- F2에서 벽에 붙은 곳은 엘리베이터를 바라볼 때 오른쪽의 움푹 들어간 벽이다. 지도 추정 위치 `(-11.05, -1.85)`, entry까지 0.749 m, staging_v1까지 1.231 m다. 그림은 `artifacts/autonomy_improvement_20260915/f2_recess_candidates.png`.
+- ~~F2에서 벽에 붙은 곳은 엘리베이터 문 오른쪽 `(-11.05, -1.85)`~~ → **정정**: 사용자가 그림에서 직접 지정한 곳은 복도→로비 코너 직전 왼쪽 벽의 움푹 들어간 곳 `(-12.95, -5.25)`다(아래 절).
 - v012 단계 gate 0.13 승인: `start_field_base.sh`(`fa21474c…` → `27ccef20…`), `field_base.launch.py`(`c7d3d844…` → `f55a19d1…`)에 `GATE_MAX_LINEAR_SPEED` 명시 override를 추가했다. 변경 전 파일은 `before/scripts`, `before/launch`에 있다. setup 함수만 호출한 결과: 비움이면 YAML만, 0.13이면 YAML 뒤에 `max_linear_speed: 0.13` 추가, 0.20은 RuntimeError. 셸 스크립트는 `GATE_MAX_LINEAR_SPEED=0.2`를 exit 2로 거부했다. 호스트 시험은 PASS 37/SKIP 7/FAIL 4로 기존과 같고, 컨테이너 `field_scripts_contract`·`field_mapping_launch`·`opencr_imu_profile`은 PASS다.
 - Humble SmacPlanner2D 소스를 GitHub humble 브랜치에서 대조했다. footprint를 반지름으로 설정하고(`setFootprint(..., true, 0.0)`), 중심 셀 cost가 `INSCRIBED` 이상일 때만 충돌로 본다.
+
+## F1 v3 지도·벽 여유 후보 (같은 날 20:2x~20:5x KST)
+
+- F2 벽 근접 지점 정정: `(-12.95, -5.25)`. 기본 설정 근사 경로의 코너 중심 여유는 0.552 m(= inflation 반경 경계)였다.
+- `nav2_params_wall_push_v1.yaml`(`527f4c58…`)을 기본 파일에서 3줄만 바꿔 추가했다(global inflation 0.55→1.0, cost_scaling 3.0→2.0, planner cost_travel_multiplier 2.0→3.0, local 불변). Humble `node_2d.cpp`의 비용식과 같은 오프라인 최적 경로에서 F2 코너 여유 0.552→0.886 m. 근거: `artifacts/autonomy_improvement_20260915/evaluate_wall_push.py`, `wall_push_evaluation.json`, `wall_push_paths_F2.png`·`_F1_v3.png`. 기본값은 바꾸지 않았다.
+- `f1_manual_clean_v3`(pgm `d525759b…`, yaml `d701d2b6…`): raw SLAM 지도의 점유 셀 방향 히스토그램 최고점 21.75°(홀 영역 21.5~22.0°)에 v2 외곽선을 직각화했다. 엘리베이터는 네모(1.85×2.0 m, 문 약 1.0 m)로 바꿨다. idle 옆 벽과 코너는 v2 위치를 유지했고, 인공 스캔 노이즈는 넣지 않았다. 값은 254/0/205, `free_thresh 0.19`. 생성: `artifacts/f1_manual_clean_20260915_v3/build_v3.py`. 젯슨 `fieldctl map validate` VALID. 웨이포인트 여유(v2→v3): idle 시드 footprint 0.362→0.453 m, locker 0.921→0.959 m, 엘리베이터 앞 0.933→0.912 m, 캐빈 안 0.423→0.332 m. **pointer와 map_pins는 v2 그대로다.**
+- 젯슨 `after/SHA256SUMS`를 22줄로 갱신했다(v3 지도 2개, wall_push params 추가).
+
+## GitHub 업로드 (같은 날 20:16~20:40 KST, 사용자 승인)
+
+저장소 `PackagU/Code_Space`(PRIVATE). force push 없음, PR 없음.
+
+| 브랜치 | 커밋 | 내용 |
+|---|---|---|
+| `lee/jetson-live` (미러) | `4bf35636466e073a6321de8ff098b4b09816d516` (부모 `9638ddd`) | 젯슨 HEAD `c83d092cc` + 미커밋 작업 트리 347파일. 직전 미러 대비 추가 21·수정 9·삭제 0. 모든 blob이 젯슨 `git hash-object`(.gitattributes 적용) 결과와 일치 |
+| `lee/sim-real-maps` (작업) | `4049111414657b627d4e93b3509b642093dc2951` (부모 미러 `4bf3563`) | 강제 추가 PGM 4개(F1 v1/v2, F2 raw, F3), `docs/field_review_20260915/` 34파일. 38파일 추가 |
+
+- 수집: 젯슨에서 `ls-files`·`hash-object`·`tar -c`만 사용(읽기 전용), 시작 전 `fieldctl status` 전부 stopped.
+- 미러 제외(기존 규칙): `.gitignore` 대상(`docker/compose/.env` 포함), `*.bak*`·`*.orig`·`*.rej`·`*.before-*`, `*.posegraph`·`*.data`.
+- 작업 브랜치 제외: 수집 로그 tar·ROS 로그, 12 MB급 현장 사진 원본과 보조 바퀴 사진, hwp.
+- 커밋 전 검사: 변경·추가 텍스트 파일 CR 0, 100 MB 초과 없음(최대 F2 PGM 1.45 MB), 비밀 패턴 강한 일치 3건은 `.env.example` 소문자 placeholder와 코드 식별자(`secrets.token_…`, `document.…`)로 값 노출 없이 확인.
+- 젯슨 파일 8개(Dockerfile.jetson, CMakeLists·package.xml 등)는 작업 트리에 CRLF로 저장돼 있지만, 젯슨 git이 LF로 정규화해 저장하는 내용(직전 미러와 동일)으로 올렸다.
+- push 후: 원격 브랜치 해시 확인, 작업 브랜치의 파일 19개 SHA256이 `after/SHA256SUMS`와 전부 일치, F1 v2·F2 PGM·F2 YAML 해시 일치.
 
 ## 추가 확인한 사실
 
