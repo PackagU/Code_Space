@@ -1,0 +1,270 @@
+SOURCE bt_navigator_1779_1789493860741.log
+SOURCE_SHA256 7ed4bf51119308cb7dc58e9816753eb6390732e3c282d61a662f3fd2f79ec864
+[INFO] [1789494038.740160861] [bt_navigator]: Begin navigating from current location (-4.56, 2.16) to (-5.12, -8.62)
+[WARN] [1789494119.554881356] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789494120.041520794] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789494135.490624374] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[WARN] [1789494135.570546205] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789494135.668197413] [bt_navigator]: [navigate_to_pose] [ActionServer] Aborting handle.
+[ERROR] [1789494135.681755478] [bt_navigator]: Goal failed
+
+SOURCE bt_navigator_4219_1789496205641.log
+SOURCE_SHA256 650a23d3fd8b71aaf9218bab50ca64b29ffe76d90c2a03529d50c2576410b048
+[WARN] [1789497133.746611643] [bt_navigator.rclcpp_action]: Failed to send goal response d98f7403661405b9960b8bf6f1e619 (timeout): client will not receive response, at ./src/rmw_response.cpp:154, at ./src/rcl/service.c:314
+[INFO] [1789497327.984485093] [bt_navigator]: Begin navigating from current location (-11.32, -2.55) to (-24.73, -17.98)
+[WARN] [1789497387.197511466] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789497387.230271586] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[WARN] [1789497387.277676580] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[WARN] [1789497454.214409913] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789497454.286621913] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to cancel action server for follow_path
+[ERROR] [1789497454.317069319] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1789497572.072168387] [bt_navigator]: Goal succeeded
+
+SOURCE bt_navigator_6056_1789497771818.log
+SOURCE_SHA256 0e0d687d2cf3f4d306232332a5db71694b44a328c2b5b17061fa44c79f61f61c
+[INFO] [1789498086.327465299] [bt_navigator]: Begin navigating from current location (-24.74, -17.94) to (-11.18, -3.08)
+[WARN] [1789498099.712456811] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789498099.738307891] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to cancel action server for follow_path
+[WARN] [1789498099.800046776] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498135.575249948] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498135.686816633] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[WARN] [1789498135.720815649] [bt_navigator]: [navigate_to_pose] [ActionServer] Aborting handle.
+[ERROR] [1789498135.768594403] [bt_navigator]: Goal failed
+
+SOURCE bt_navigator_7283_1789498632180.log
+SOURCE_SHA256 480a7b41b99adc64eecfc035289dbca290c54b98f0b3cfc45f68dddb5b2c99c6
+[INFO] [1789498782.861819289] [bt_navigator]: Begin navigating from current location (-24.70, -18.00) to (-11.18, -3.08)
+[WARN] [1789498796.061010739] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789498796.105833353] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[WARN] [1789498818.848671893] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498864.217986455] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789498864.247768964] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[WARN] [1789498886.138507472] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498886.164185040] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498908.547195484] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498908.573369388] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[WARN] [1789498931.104917473] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789498931.126265620] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to cancel action server for follow_path
+[ERROR] [1789498931.146964537] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[WARN] [1789498931.201746838] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[WARN] [1789498954.012446388] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789498954.020280149] [bt_navigator]: [navigate_to_pose] [ActionServer] Aborting handle.
+[ERROR] [1789498954.020789120] [bt_navigator]: Goal failed
+
+SOURCE bt_navigator_8871_1789500415473.log
+SOURCE_SHA256 a860f72db3e3a3945aea5e4478d7ff62e8312f566add80b739e798627af0f0e2
+[INFO] [1789500532.267128945] [bt_navigator]: Begin navigating from current location (-8.77, -0.25) to (-4.52, 2.18)
+[WARN] [1789500543.935027196] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789500543.960456119] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to cancel action server for follow_path
+[WARN] [1789500544.129986585] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789500612.188704653] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to local_costmap/clear_entirely_local_costmap.
+[WARN] [1789500635.285114186] [bt_navigator_navigate_to_pose_rclcpp_node]: Node timed out while executing service call to global_costmap/clear_entirely_global_costmap.
+[ERROR] [1789500635.314682850] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to cancel action server for follow_path
+[ERROR] [1789500635.337440688] [bt_navigator_navigate_to_pose_rclcpp_node]: Failed to get result for follow_path in node halt!
+[INFO] [1789500651.493362777] [bt_navigator]: Goal succeeded
+
+SOURCE controller_server_1771_1789493860557.log
+SOURCE_SHA256 dbd5643799fd4a0408111e6a75393adf45136745b438e9c211494371d6f3f5bd
+[INFO] [1789494038.905903844] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1789494140.834309368] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+
+SOURCE controller_server_4205_1789496204883.log
+SOURCE_SHA256 f9e9485a536f5c76eddad4a3030f28a038ff275ce9b1e7f668da4e857cfd6508
+[INFO] [1789497328.160904376] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789497397.176678365] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789497459.479382556] [controller_server]: Received a goal, begin computing control effort.
+
+SOURCE controller_server_6048_1789497771823.log
+SOURCE_SHA256 fc923a978e1cb85d83f91927220846dd3329caffb325315ac54cfb3265b2568a
+[INFO] [1789498086.456804159] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1789498088.861137543] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498088.911579284] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498088.961051719] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.011065641] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.061228239] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.123003157] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.162881568] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.222415560] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498089.278064326] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498091.311297430] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498091.361006800] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498091.411028338] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498091.460977778] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498091.511978863] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498092.160818178] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498092.210842212] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498092.261108909] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789498092.310840871] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[INFO] [1789498108.765482903] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1789498154.122599275] [controller_server]: [follow_path] [ActionServer] Aborting handle.
+
+SOURCE controller_server_7271_1789498631153.log
+SOURCE_SHA256 f80d2293d0623a1fcfafa82da0073b3f6df7f3bc0fb3f41f898cf2bee791a91a
+[INFO] [1789498783.011358080] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789498797.015711955] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789498873.143066626] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789498946.320065595] [controller_server]: Received a goal, begin computing control effort.
+
+SOURCE controller_server_8863_1789500415366.log
+SOURCE_SHA256 df83160fd8d320b3392fcc77ab2ec1bb8046d5d686ae0ead23cbeef7ecd4a45a
+[INFO] [1789500532.333841001] [controller_server]: Received a goal, begin computing control effort.
+[WARN] [1789500538.238835426] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.290277074] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.337164914] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.387069692] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.437031847] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.487335347] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.539489669] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.587192072] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.637393076] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.687483455] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.737796107] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.787512021] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.837245631] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.887546379] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.939975070] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500538.987189951] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.037175403] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.087076567] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.141399475] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.187185809] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.238545474] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.287050441] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.337780568] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.387675524] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.436993710] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.491738667] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.537057768] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.587068340] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.637148609] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.688471090] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.737930972] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.787063142] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.837322067] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.887300384] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.937008907] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500539.987014488] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.037514215] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.087057363] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.140738062] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.187605905] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.237221470] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.287215148] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.339435970] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.386966471] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.437563159] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.487208324] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.538070101] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.589891562] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.637003886] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.687095164] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.736962634] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.787295993] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.837166790] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.887599670] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.936981026] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500540.987144816] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.037130015] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.087105615] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.137081983] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.187145230] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.237101502] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.287905392] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.337538655] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.387309229] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.437001788] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.486896683] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.537655166] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.587080971] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.637019131] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.687239307] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.737009146] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.786985961] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.836955289] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.887404618] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.937270393] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500541.989380144] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.037057113] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.087103370] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.137127035] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.186954508] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.237004285] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.287385296] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.337075712] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.387206258] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.438279495] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.487203956] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.537026501] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.586938613] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.636985959] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.686979224] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.737021193] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.787047387] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.838359344] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.889445061] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.937152943] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500542.987101536] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.037218834] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.087011332] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.138436508] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.186953450] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.237174237] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.287130800] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.336944482] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.387431766] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.437159272] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.493267377] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.537050573] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.587516866] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.637590133] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.701241656] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.742393003] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.885053161] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[WARN] [1789500543.930891053] [controller_server]: RegulatedPurePursuitController detected collision ahead!
+[INFO] [1789500549.274537781] [controller_server]: Received a goal, begin computing control effort.
+[INFO] [1789500644.155226511] [controller_server]: Received a goal, begin computing control effort.
+
+SOURCE map_server_1765_1789493860943.log
+SOURCE_SHA256 9c0758d7e8c411716dc994b7125678da9c31b49273e109b55e09687bd5530dd3
+[INFO] [1789493862.899048219] [map_io]: Loading yaml file: /ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml
+[INFO] [1789493863.045469802] [map_io]: Loading image_file: /ros2_ws/maps/field/f1/f1_manual_clean_v3.pgm
+[INFO] [1789493863.193430079] [map_io]: Read map /ros2_ws/maps/field/f1/f1_manual_clean_v3.pgm: 512 X 423 map @ 0.05 m/cell
+
+SOURCE map_server_4199_1789496205225.log
+SOURCE_SHA256 5e942313b897947d5c0e25eb79ccbc690dfd265c452b5fb39b784b7f97f11e23
+[INFO] [1789496208.153823223] [map_io]: Loading yaml file: /ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml
+[INFO] [1789496208.161378972] [map_io]: Loading image_file: /ros2_ws/maps/field/f2/f2_raw_20260914.pgm
+[INFO] [1789496209.933058056] [map_io]: Read map /ros2_ws/maps/field/f2/f2_raw_20260914.pgm: 884 X 1643 map @ 0.05 m/cell
+
+SOURCE map_server_6042_1789497771774.log
+SOURCE_SHA256 6a8cb48445649256a5833fe6348b84ff843506b937e059d4a6bb7fbfe3854da4
+[INFO] [1789497774.085439573] [map_io]: Loading yaml file: /ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml
+[INFO] [1789497774.088438473] [map_io]: Loading image_file: /ros2_ws/maps/field/f2/f2_raw_20260914.pgm
+[INFO] [1789497774.686850389] [map_io]: Read map /ros2_ws/maps/field/f2/f2_raw_20260914.pgm: 884 X 1643 map @ 0.05 m/cell
+
+SOURCE map_server_7265_1789498631105.log
+SOURCE_SHA256 2f3d0478825ff312d13b7848627a0f4431e109ef1cd670719b28e5e064f34b7c
+[INFO] [1789498634.556332886] [map_io]: Loading yaml file: /ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml
+[INFO] [1789498634.560075733] [map_io]: Loading image_file: /ros2_ws/maps/field/f2/f2_raw_20260914.pgm
+[INFO] [1789498636.482268650] [map_io]: Read map /ros2_ws/maps/field/f2/f2_raw_20260914.pgm: 884 X 1643 map @ 0.05 m/cell
+
+SOURCE map_server_8857_1789500415081.log
+SOURCE_SHA256 cecfc7ec88474ddd1e54d66bc49a1250268ebe70f7537e9f99f35f7497a61e55
+[INFO] [1789500417.852260966] [map_io]: Loading yaml file: /ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml
+[INFO] [1789500417.854803332] [map_io]: Loading image_file: /ros2_ws/maps/field/f1/f1_manual_clean_v3.pgm
+[INFO] [1789500418.137299242] [map_io]: Read map /ros2_ws/maps/field/f1/f1_manual_clean_v3.pgm: 512 X 423 map @ 0.05 m/cell
+
+SOURCE planner_server_1775_1789493860511.log
+SOURCE_SHA256 9874df77d35e33727c088c7e5a584ad0b5c86e19f9532ec054bf8e07f2f9a993
+
+SOURCE planner_server_4209_1789496205211.log
+SOURCE_SHA256 b8f1e7420bfd5c2e257c6da14f720c7893e7e614ba9cebfc3e02ccda7d29eb18
+
+SOURCE planner_server_6052_1789497772185.log
+SOURCE_SHA256 4a401e74da8c1111f073398a1cd9230b4af78a1ad9da11a4e6db5a8cebaac06e
+
+SOURCE planner_server_7275_1789498631170.log
+SOURCE_SHA256 efaf4278febee1d0fc1c6ebd82bd72262ec92e8feb8d1876586f9e77f02a4755
+
+SOURCE planner_server_8867_1789500415402.log
+SOURCE_SHA256 05b1ba523f10f0ab35587ec727b353e525dce6f49022270b897b9f7a4baa2c40

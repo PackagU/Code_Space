@@ -1,3 +1,5 @@
+> 2026-09-16 발표 자료: `codex/presentation-20260916`에 최신 Jetson 코드·지도·주행 결과 정리. 수동 조작은 엘리베이터 탑승·하차 시에만 사용. 자료: `docs/presentation_20260916/README.md`.
+
 # TODO — 종설_6조
 
 > Claude Code와 Codex CLI가 공유하는 **세션 단위 휘발성 메모/lock 보드**.

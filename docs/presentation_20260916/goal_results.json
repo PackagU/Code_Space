@@ -1,0 +1,120 @@
+{
+  "test_date": "2026-09-16",
+  "timezone": "Asia/Seoul",
+  "environment": "Jetson / ROS 2 Humble Docker / physical field test",
+  "completion": {
+    "status": "실물 검증(사용자 현장 보고)",
+    "statement": "완주 성공"
+  },
+  "manual_control": {
+    "source": "2026-09-16 사용자 명시",
+    "used_only_for": [
+      "엘리베이터 탑승",
+      "엘리베이터 하차"
+    ],
+    "statement": "수동 조작은 엘리베이터 탑승·하차 시에만 사용했다."
+  },
+  "measurements_basis": "Nav2 log timestamps and map coordinates; durations are per goal, not total mission time",
+  "goals": [
+    {
+      "floor": "F1",
+      "map": "f1_manual_clean_v3.yaml",
+      "start_kst": "2026-09-16T02:40:38.740+09:00",
+      "end_kst": "2026-09-16T02:42:15.681+09:00",
+      "duration_sec": 96.941594617,
+      "start_xy": [
+        -4.56,
+        2.16
+      ],
+      "goal_xy": [
+        -5.12,
+        -8.62
+      ],
+      "result": "FAILED",
+      "collision_ahead_count": 0,
+      "navigator_log": "bt_navigator_1779_1789493860741.log",
+      "navigator_source_sha256": "7ed4bf51119308cb7dc58e9816753eb6390732e3c282d61a662f3fd2f79ec864",
+      "segment": "F1 시작 지점 → 택배함 목표"
+    },
+    {
+      "floor": "F2",
+      "map": "f2_nav_unknown_v1.yaml",
+      "start_kst": "2026-09-16T03:35:27.984+09:00",
+      "end_kst": "2026-09-16T03:39:32.072+09:00",
+      "duration_sec": 244.087683294,
+      "start_xy": [
+        -11.32,
+        -2.55
+      ],
+      "goal_xy": [
+        -24.73,
+        -17.98
+      ],
+      "result": "SUCCEEDED",
+      "collision_ahead_count": 0,
+      "navigator_log": "bt_navigator_4219_1789496205641.log",
+      "navigator_source_sha256": "650a23d3fd8b71aaf9218bab50ca64b29ffe76d90c2a03529d50c2576410b048",
+      "segment": "F2 엘리베이터 앞 → 왼쪽 4번 방 목적지"
+    },
+    {
+      "floor": "F2",
+      "map": "f2_nav_unknown_v1.yaml",
+      "start_kst": "2026-09-16T03:48:06.327+09:00",
+      "end_kst": "2026-09-16T03:48:55.768+09:00",
+      "duration_sec": 49.441129104,
+      "start_xy": [
+        -24.74,
+        -17.94
+      ],
+      "goal_xy": [
+        -11.18,
+        -3.08
+      ],
+      "result": "FAILED",
+      "collision_ahead_count": 18,
+      "navigator_log": "bt_navigator_6056_1789497771818.log",
+      "navigator_source_sha256": "0e0d687d2cf3f4d306232332a5db71694b44a328c2b5b17061fa44c79f61f61c",
+      "segment": "F2 목적지 → 엘리베이터 앞 staging 시도"
+    },
+    {
+      "floor": "F2",
+      "map": "f2_nav_unknown_v1.yaml",
+      "start_kst": "2026-09-16T03:59:42.861+09:00",
+      "end_kst": "2026-09-16T04:02:34.020+09:00",
+      "duration_sec": 171.158969831,
+      "start_xy": [
+        -24.7,
+        -18.0
+      ],
+      "goal_xy": [
+        -11.18,
+        -3.08
+      ],
+      "result": "FAILED",
+      "collision_ahead_count": 0,
+      "navigator_log": "bt_navigator_7283_1789498632180.log",
+      "navigator_source_sha256": "480a7b41b99adc64eecfc035289dbca290c54b98f0b3cfc45f68dddb5b2c99c6",
+      "segment": "F2 목적지 → staging 재시도"
+    },
+    {
+      "floor": "F1",
+      "map": "f1_manual_clean_v3.yaml",
+      "start_kst": "2026-09-16T04:28:52.267+09:00",
+      "end_kst": "2026-09-16T04:30:51.493+09:00",
+      "duration_sec": 119.226233832,
+      "start_xy": [
+        -8.77,
+        -0.25
+      ],
+      "goal_xy": [
+        -4.52,
+        2.18
+      ],
+      "result": "SUCCEEDED",
+      "collision_ahead_count": 113,
+      "navigator_log": "bt_navigator_8871_1789500415473.log",
+      "navigator_source_sha256": "a860f72db3e3a3945aea5e4478d7ff62e8312f566add80b739e798627af0f0e2",
+      "segment": "F1 엘리베이터 앞 → 시작 지점 복귀"
+    }
+  ]
+}

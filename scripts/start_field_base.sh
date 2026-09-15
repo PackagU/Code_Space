@@ -90,4 +90,7 @@ echo "[field-base] laser xyz=${LASER_X},${LASER_Y},${LASER_Z} rpy=${LASER_ROLL},
 echo "[field-base] gate max_linear_speed=${GATE_MAX_LINEAR_SPEED:-nav_safety.yaml default}"
 enable_drive_arg=false
 [[ "${ENABLE_DRIVE}" == "1" ]] && enable_drive_arg=true
-in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} odometry_profile:='${ODOMETRY_PROFILE}' imu_mount_verified:='$([[ "${IMU_MOUNT_VERIFIED}" == "1" ]] && echo true || echo false)' imu_x:='${IMU_X}' imu_y:='${IMU_Y}' imu_z:='${IMU_Z}' imu_roll:='${IMU_ROLL}' imu_pitch:='${IMU_PITCH}' imu_yaw:='${IMU_YAW}' lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}' gate_max_linear_speed:='${GATE_MAX_LINEAR_SPEED}'"
+# ros2 launch rejects an empty "name:=" argument; pass the override only when set.
+gate_speed_arg=""
+[[ -n "${GATE_MAX_LINEAR_SPEED}" ]] && gate_speed_arg=" gate_max_linear_speed:='${GATE_MAX_LINEAR_SPEED}'"
+in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} odometry_profile:='${ODOMETRY_PROFILE}' imu_mount_verified:='$([[ "${IMU_MOUNT_VERIFIED}" == "1" ]] && echo true || echo false)' imu_x:='${IMU_X}' imu_y:='${IMU_Y}' imu_z:='${IMU_Z}' imu_roll:='${IMU_ROLL}' imu_pitch:='${IMU_PITCH}' imu_yaw:='${IMU_YAW}' lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}'${gate_speed_arg}"

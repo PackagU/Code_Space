@@ -1,0 +1,96 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>버튼 인식 · 로봇팔 시험</title>
+<style>
+body{font:15px system-ui,sans-serif;margin:0;padding:12px 16px;background:#111a22;color:#eef2f5}
+h1{font-size:20px;margin:4px 0 2px}#mode{margin:0 0 10px;color:#9fb3c4}#mode.exec{color:#ff8a65;font-weight:700}
+.wrap{display:grid;grid-template-columns:minmax(0,640px) minmax(280px,1fr);gap:14px;max-width:1120px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+canvas{width:100%;aspect-ratio:4/3;background:#000;border-radius:6px;display:block;cursor:pointer}
+section{background:#1d2b37;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+h2{font-size:14px;margin:0 0 6px;color:#9fb3c4;font-weight:600}
+button,input{font:inherit;padding:6px 9px;margin:2px;border-radius:6px;border:1px solid #3c5163;background:#2a3d4d;color:#eef2f5}
+button:disabled{opacity:.4}button.on{background:#1f8a4c;border-color:#2fbf6a}
+.targets{display:grid;grid-template-columns:1fr 1fr;gap:4px}.targets button{font-size:15px;padding:8px}.targets b{font-size:20px}
+#status{font-size:21px;font-weight:600;margin:4px 0}#status.ok{color:#48e08a}#status.warn{color:#ffc857}
+.stop{background:#c33;border-color:#e55}#press{background:#1d6fb8;border-color:#3a92dd}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:3px 4px;text-align:left;border-bottom:1px solid #2c3e4d}
+small,#metrics{color:#8aa0b2}pre{white-space:pre-wrap;font-size:12px;max-height:160px;overflow:auto}
+.jog td:first-child{width:3.5em}.jog button{padding:4px 7px;min-width:3em}
+</style>
+<h1>엘리베이터 버튼 인식 · 누르기 시험</h1><p id="mode">연결 중</p>
+<div class="wrap">
+<div><canvas id="view" width="640" height="480"></canvas>
+<p id="message"></p><p id="metrics"></p>
+<section><h2>인식 결과</h2><table><thead><tr><th>#</th><th>인식</th><th>거리</th><th>비율</th><th>누름 PWM (000/001/002/003)</th></tr></thead><tbody id="rows"></tbody></table></section>
+</div>
+<div>
+<section><h2>① 임무 (목표 버튼 자동 결정)</h2><div class="targets" id="targets"></div>
+<p id="status">연결 중</p><p id="detail"></p>
+<button id="press" disabled onclick="press()">목표 버튼 누르기 1회</button>
+<button class="stop" onclick="api('/api/stop',{})">중지</button>
+<pre id="result"></pre></section>
+<section><h2>② 좌표 보정 (화면 픽셀 → 누름 자세)</h2>
+<p><b>고정: 버튼 1 → 메뉴 6 press, 버튼 4 → 메뉴 7 press2</b> <small>(화면 위치와 무관, 보정점 불필요)</small><br><span id="arrows"></span></p>
+<small>고정 자세가 없는 버튼만 아래 보정점을 쓴다. 영상에서 버튼을 클릭해 선택 → 누르는 자세 지정. 3점 이상이면 판 전체로 보간.</small>
+<p id="sel">선택 없음</p>
+<button id="p6" onclick="point('6')">= 메뉴 6 press 자세</button>
+<button id="p7" onclick="point('7')">= 메뉴 7 press2 자세</button>
+<button id="pc" onclick="point('current')">= 현재 조그 자세</button>
+<table><tbody id="points"></tbody></table><p id="model"></p></section>
+<section><h2>③ 조그 (누름 자세 찾기)</h2>
+<table class="jog"><tbody id="jog"></tbody></table>
+<button onclick="api('/api/goto',{pose:'home'}).catch(err)">home</button>
+<button onclick="api('/api/goto',{pose:'press_ready'}).catch(err)">press_ready</button>
+<button id="read" onclick="api('/api/read',{}).catch(err)">위치 읽기</button>
+<br><button class="save" onclick="saveMenu('6')">현재 자세 → 메뉴 6 press 저장</button>
+<button class="save" onclick="saveMenu('7')">현재 자세 → 메뉴 7 press2 저장</button>
+<br><button class="save" onclick="saveArrow('UP')">현재 자세 → ▲ 저장</button>
+<button class="save" onclick="saveArrow('DOWN')">현재 자세 → ▼ 저장</button>
+<br><small>버튼에 살짝 닿는 자세까지 10/50씩 이동 후 저장. servo_test.py의 press(와 pre_press/retreat)를 고쳐 쓰고 백업을 남긴다. 그 메뉴로 만든 보정점도 새 값으로 바뀐다. 누르기 전 home으로.</small></section>
+<section><h2>④ 숫자 등록 (화살표는 등록 불필요)</h2>
+보이는 숫자를 왼쪽 위→오른쪽 아래 순서로<br>
+<input id="labels" value="1234" size="5" maxlength="4"><button onclick="enroll()">등록</button><button onclick="clearT()">등록 초기화</button>
+<p id="samples"></p><small>숫자당 3번 등록 권장 (위치·조명 조금씩 바꿔서).</small></section>
+</div></div>
+<script>
+const $=s=>document.querySelector(s),canvas=$('#view'),ctx=canvas.getContext('2d');
+const NAMES={'1':'1','2':'2','3':'3','4':'4',UP:'▲',DOWN:'▼'},IDS=['000','001','002','003'];let state={},polling=false,sending=false,errorUntil=0;
+const pwm=p=>p?IDS.map(i=>p[i]).join(' / '):'-';
+const MISSIONS=[['hall','up','탑승 전 · 올라감','▲'],['hall','down','탑승 전 · 내려감','▼'],['car','up','내부 · 올라감','4'],['car','down','내부 · 내려감','1']];
+for(const [stage,direction,text,sym] of MISSIONS){const b=document.createElement('button');b.innerHTML=text+' → <b>'+sym+'</b>';b.dataset.k=stage+'-'+direction;b.onclick=()=>api('/api/mission',{stage,direction}).then(()=>$('#result').textContent='').catch(err);$('#targets').append(b)}
+async function api(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const body=await r.json();if(!r.ok)throw Error(body.error);return body}
+function err(e){$('#message').textContent='⚠ '+e.message;errorUntil=Date.now()+6000}
+canvas.onclick=e=>{const r=canvas.getBoundingClientRect();api('/api/select',{point:[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]}).catch(err)};
+const point=p=>api('/api/point',{pose:p}).catch(err);
+const delPoint=i=>{if(confirm('보정점 P'+(i+1)+' 삭제?'))api('/api/point/delete',{index:i}).catch(err)};
+const saveMenu=m=>{const c=state.commanded;if(c&&confirm('servo_test.py 메뉴 '+m+' 누름 자세를 '+pwm(c)+'(으)로 저장할까요?'))api('/api/save_menu',{menu:m}).catch(err)};
+const saveArrow=l=>{const c=state.commanded;if(c&&confirm(NAMES[l]+' 누름 자세를 '+pwm(c)+'(으)로 저장할까요?'))api('/api/save_arrow',{label:l}).catch(err)};
+const jog=(j,d)=>api('/api/jog',{joint:j,delta:d}).catch(err);
+async function enroll(){try{await api('/api/enroll',{labels:$('#labels').value.trim()});$('#message').textContent='등록 완료'}catch(e){err(e)}}
+async function clearT(){if(confirm('등록한 숫자 샘플을 모두 지울까요?'))try{await api('/api/clear',{})}catch(e){err(e)}}
+async function press(){if(sending)return;if(state.execute&&!confirm('실제 팔이 움직입니다. 주변을 확인했습니까?'))return;sending=true;$('#press').disabled=true;try{const r=await api('/api/press',{token:state.token});$('#result').textContent=JSON.stringify(r,null,1)}catch(e){err(e)}finally{sending=false}}
+$('#jog').innerHTML=IDS.map(i=>`<tr><td>${i}</td><td id="c${i}">-</td><td>${[-50,-10,10,50].map(d=>`<button onclick="jog('${i}',${d})">${d>0?'+':''}${d}</button>`).join('')}</td></tr>`).join('');
+async function tick(){if(polling)return;polling=true;try{
+ state=await(await fetch('/api/state')).json();const m=$('#mode');m.textContent=state.mode+(state.busy?' · 동작 중':'');m.className=state.execute?'exec':'';
+ for(const b of document.querySelectorAll('#targets button'))b.classList.toggle('on',b.dataset.k===state.mission);
+ const t=NAMES[state.target],st=$('#status'),rd=state.ready;
+ if(state.error){st.textContent=state.error;st.className='warn'}
+ else if(rd&&state.token){st.textContent=t+' 찾음 → 누르기 준비됨';st.className='ok'}
+ else if(rd){st.textContent=t+' 찾음 · '+rd.reason;st.className='warn'}
+ else{const n=state.observations.filter(o=>o.label===state.target).length;st.textContent=n>1?t+' '+n+'개 보임 (중복)':t+' 찾는 중';st.className=''}
+ $('#detail').textContent=rd&&rd.press?'누름 PWM '+pwm(rd.press):'';
+ $('#press').disabled=sending||!state.token||state.busy;
+ $('#rows').innerHTML=state.observations.map((o,i)=>`<tr><td>${i+1}</td><td>${o.label==='UNKNOWN'?'?':NAMES[o.label]}</td><td>${o.distance}</td><td>${o.ratio}</td><td>${o.press?pwm(o.press):'<small>'+o.reason+'</small>'}</td></tr>`).join('');
+ const s=state.selected;$('#sel').textContent=s?'선택: 버튼 '+(NAMES[s.label]||'?')+' @ ('+s.px.join(', ')+')':'선택 없음 — 영상에서 버튼 클릭';
+ for(const id of ['p6','p7','pc'])$('#'+id).disabled=!s||state.busy;$('#pc').disabled=!s||!state.commanded||state.busy;
+ $('#points').innerHTML=state.points.map((p,i)=>`<tr><td>P${i+1}</td><td>(${p.px.join(', ')})</td><td>${pwm(p.press)}</td><td><small>${p.from==='current'?'조그':'메뉴 '+p.from}</small></td><td><button onclick="delPoint(${i})">삭제</button></td></tr>`).join('');
+ $('#arrows').textContent=['UP','DOWN'].map(l=>NAMES[l]+' → '+(state.arrow_poses&&state.arrow_poses[l]?pwm(state.arrow_poses[l]):'미저장')).join('   ');
+ $('#model').textContent='보정 모델: '+({single:'1점 (그 버튼만)',line:'2점 직선 보간',affine:'평면 보간'}[state.model]||'없음');
+ for(const i of IDS)$('#c'+i).textContent=state.commanded?state.commanded[i]:'?';
+ for(const b of document.querySelectorAll('.jog button,button.save'))b.disabled=!state.commanded||state.busy;$('#read').disabled=!state.execute||state.busy;
+ if(Date.now()>errorUntil)$('#message').textContent=state.message;
+ $('#samples').textContent='등록 샘플: '+Object.entries(state.samples).map(([k,v])=>k+'='+v).join('  ');
+ $('#metrics').textContent='프레임 '+state.frames+' · 처리 '+state.processing_ms+' ms · 값 출처 '+state.source.split('/').pop();
+ if(!state.error){const im=new Image();im.src='/frame.jpg?t='+Date.now();await im.decode();ctx.drawImage(im,0,0,640,480)}
+}catch(e){$('#press').disabled=true;$('#status').textContent='서버 연결 대기'}finally{polling=false}}
+setInterval(tick,300);tick();
+</script></html>
