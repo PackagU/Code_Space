@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "updated_kst": "2026-09-15",
+  "updated_kst": "2026-09-15 v3",
   "policy": "nav start and every goal require latest_map.txt, YAML/PGM SHA256 and the running map_server load path to equal this pin",
   "floors": {
     "F1": {
-      "yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v2.yaml",
-      "yaml_sha256": "5ed28bf0cf438e0e2c085ace005039b71dc7f4474d87ea56e42824baac95b796",
-      "image": "/ros2_ws/maps/field/f1/f1_manual_clean_v2.pgm",
-      "image_sha256": "3f9a40c42bbdb73933eac76cd187853b8502d2587e398b24b7537e4b8e3ab9d1",
-      "basis": "2026-09-15 field review: v2 glass-door map, hashes equal local artifact"
+      "yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml",
+      "yaml_sha256": "d701d2b6df578c23093abf41cb40afd5069193df6125713b39093f41bb68ddaa",
+      "image": "/ros2_ws/maps/field/f1/f1_manual_clean_v3.pgm",
+      "image_sha256": "d525759b07a8093180aefb42985e061884d014712ecd12c1a9e39c396a2558d5",
+      "basis": "2026-09-15 user decision: v3 right-angle outline, square elevator, 254/0/205 + free_thresh 0.19; previous pin v2 (pgm 3f9a40c4)"
     },
     "F2": {
       "yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
