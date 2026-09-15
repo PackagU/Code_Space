@@ -16,8 +16,8 @@
 | bag 계측 | `fieldctl record start`가 존재하는 Nav2 진단 토픽을 추가 기록, 없는 토픽은 `absent_nav_topics.txt`. cache 256 KiB. `fieldctl record check` 신규 | 오프라인 검증 (실제 토픽 이름은 현장 확인) |
 | bag 분석 | `scripts/analyze_nav_bag.py`: collision-ahead 등 로그 시점의 map pose, goal 상태, 종료 후 비영 명령, 명령/피드백 역산 RPM, 정지거리 | 오프라인 검증 (합성 bag) |
 | pose 재등록 | `fieldctl pose capture NAME F1 [--save]`: 구독 전용 10초, 안정도·AMCL/TF 일치·costmap footprint lethal 검사, PASS일 때만 새 이름 저장 | 오프라인 검증 (순수 함수만) |
-| F1 v3 지도(기본 아님) | `f1/f1_manual_clean_v3.pgm`(`d525759b…`)·`.yaml`(`d701d2b6…`) 추가. v2 외곽선을 raw SLAM 지도의 주 벽 방향 21.75°에 맞춰 직각화했고, 엘리베이터는 네모로 바꿨다(문 폭 약 1.0 m는 v2 유지). idle 옆 벽은 v2 위치를 유지한다. 값은 map_saver 방식 254/0/205, `free_thresh 0.19`. `map validate` VALID. pointer·`map_pins.json`은 v2 그대로라 **지금 v3로 nav start하면 guard가 거부한다** | 오프라인 검증 |
-| 경로 벽 여유 후보 | `nav2_params_wall_push_v1.yaml`(5.1절) | 오프라인 검증(근사) |
+| **F1 기본 지도 v3** (20:39 KST 사용자 결정) | `f1/f1_manual_clean_v3.pgm`(`d525759b…`)·`.yaml`(`d701d2b6…`). v2 외곽선을 raw SLAM 지도의 주 벽 방향 21.75°에 맞춰 직각화, 엘리베이터 네모(문 폭 약 1.0 m 유지), idle 옆 벽은 v2 위치 유지, 값 254/0/205·`free_thresh 0.19`. `latest_map.txt`(`4c9e6638…`)와 `map_pins.json`(`eb5aaa29…`) F1 항목을 v3로 교체. `map validate` VALID, guard F1·F2 pre-nav PASS, v2 명시 지도는 FAIL. 이전 pointer·핀은 세션 `before_v3_wallpush_203914/`에 있다 | 오프라인 검증 |
+| **Nav2 기본값에 wall_push_v1 적용** (20:40 KST 사용자 결정) | 기본 `nav2_params.yaml`(`80787840…`): global inflation 1.0 m·cost_scaling 2.0, planner cost_travel_multiplier 3.0(local·RPP 불변). 증속 후보 두 파일도 이 기본값 위에서 다시 만들었다(v011 `1815932d…`, v012 `7fb6b40c…`). 이전 기본값은 `nav2_params_pre_wallpush_20260915.yaml`(`e8cf213b…`)로 보존. 오프라인 시험은 PASS 37/SKIP 7/FAIL 4로 기존과 같다 | 오프라인 검증(근사) |
 | gate 상한 override | `start_field_base.sh`·`field_base.launch.py`에 `GATE_MAX_LINEAR_SPEED`(비움·0.12·0.13만 허용) 추가. 비우면 `nav_safety.yaml` 0.12 그대로. launch를 실행하지 않고 setup 함수만 호출해 0.13 override 추가·0.20 거부를 확인 | 오프라인 검증 |
 | 증속 후보 | `nav2_params_speed_v011.yaml`(0.11 m/s·0.22 rad/s), `nav2_params_speed_v012.yaml`(0.12·0.20). `NAV2_PARAMS_FILE`로 명시할 때만 사용. 기본 `nav2_params.yaml` 해시 `e8cf213b…` 불변 | 코드 존재 |
 
@@ -44,7 +44,7 @@ docker exec ros2_humble bash -lc "source /opt/ros/humble/setup.bash && source /r
 docker exec ros2_humble bash -lc 'grep -ah "HELLO opencr" /root/.ros/log/python3_*.log | tail -3'
 ```
 
-6. B: `./scripts/fieldctl nav start F1` (지도 인자 생략 → pointer v2 사용. 증속 시험만 `NAV2_PARAMS_FILE=... ./scripts/fieldctl nav start F1`)
+6. B: `./scripts/fieldctl nav start F1` (지도 인자 생략 → pointer v3 사용, Nav2는 wall_push 적용 기본값. 증속 시험만 `NAV2_PARAMS_FILE=... ./scripts/fieldctl nav start F1`). 벽 여유 설정 때문에 문제가 보이면 `NAV2_PARAMS_FILE=/ros2_ws/src/slam_pkg/config/nav2_params_pre_wallpush_20260915.yaml`로 이전 기본값으로 바로 되돌린다.
 7. C: `./scripts/fieldctl record start <세션명>` → `./scripts/fieldctl record check`가 `RECORD_CHECK=PASS`여야 그 주행을 진단 합격 판정에 넣는다.
 8. D: 첫 goal 직전에 bag 토픽 이름을 확인한다. `absent_nav_topics.txt`는 record 종료 뒤 생성된다.
 
@@ -76,7 +76,7 @@ docker exec -w /ros2_ws ros2_humble bash -lc "source /opt/ros/humble/setup.bash 
 
 1. 바닥 테이프로 idle 중심점(로봇 `base_footprint` 원점 = 차체 앞쪽 끝에서 약 0.033 m 뒤)과 정면 방향 화살표를 표시한다. 사용자 보고대로 기존 위치보다 로봇 기준 **오른쪽 벽 쪽**에 둔다.
 2. 줄자로 로봇 측면과 오른쪽 벽의 최소 거리를 mm로 잰다. `[제안 기준]` 0.30 m 이상.
-3. 참고 시드(지도 계산값, 실제 좌표 아님): 기존 `f1_idle`에서 로봇 오른쪽으로 0.8 m 옮긴 `(-4.518, 2.179, -1.701)`은 v2 지도상 footprint–벽 여유 0.362 m, 1.0 m 옮긴 `(-4.717, 2.205, -1.701)`은 0.178 m다. 0.8 m 쪽을 시드로 쓴다(2026-09-15 사용자 확인: "0.8 m 정도가 적당"). 저장 좌표는 이 시드가 아니라 6단계 capture 값이다. 근거: `artifacts/autonomy_improvement_20260915/waypoint_offline_check.json`.
+3. 참고 시드(지도 계산값, 실제 좌표 아님): 기존 `f1_idle`에서 로봇 오른쪽으로 0.8 m 옮긴 `(-4.518, 2.179, -1.701)`은 v2 지도상 footprint–벽 여유 0.362 m, 1.0 m 옮긴 `(-4.717, 2.205, -1.701)`은 0.178 m다. 0.8 m 쪽을 시드로 쓴다(2026-09-15 사용자 확인: "0.8 m 정도가 적당"). 기본 지도가 v3로 바뀐 뒤에도 같은 시드의 v3 footprint–벽 여유는 0.453 m다. 저장 좌표는 이 시드가 아니라 6단계 capture 값이다. 근거: `artifacts/autonomy_improvement_20260915/waypoint_offline_check.json`.
 4. D: `./scripts/fieldctl stop`으로 software stop을 건 상태에서 C: `./scripts/fieldctl pose set -4.518 2.179 -1.701`
 5. scan이 벽과 맞는지 눈으로 확인한다. 맞지 않으면 원격 RViz 또는 현장 웹 UI의 `2D Pose Estimate`로 다시 맞춘다. 웹 UI는 `/cmd_vel`을 발행하므로 software stop 유지 중에만 쓰고, 끝나면 종료한 뒤 D `./scripts/fieldctl diagnose`의 `/cmd_vel` publisher 목록에 웹 UI가 없는지 확인한다. 웹 UI만 재시작하면 gate ready가 false로 남을 수 있으니 `fieldctl status`로 확인한다.
 6. C: `./scripts/fieldctl pose capture f1_idle_v2 F1 --duration 10 --floor-mark IDLE-A` → 모든 항목 PASS면 같은 명령에 `--save`를 붙여 저장한다. FAIL이 하나라도 있으면 저장하지 않고 goal도 보내지 않는다. 특히 `global_costmap_footprint_non_lethal` FAIL은 9/14 v2 `Starting point in lethal space`와 같은 상태다.
@@ -123,7 +123,9 @@ docker exec -w /ros2_ws ros2_humble bash -lc "source /opt/ros/humble/setup.bash 
 
 `[제안 기준]` 합격: 3회 모두 staging 완전 정지, 측면 여유 0.20 m 이상, 벽 접촉·강제 정지 0회, 지속 collision-ahead 없음. 3회 중 벽을 타면 bag의 `/plan`·costmap에서 벽 쪽 경로가 처음 생긴 위치를 찾아 복도 중심 경유점 또는 작은 keepout을 검토한다. F2 전체 inflation은 먼저 바꾸지 않는다.
 
-### 5.1 벽에서 더 떼는 경로 후보 `wall_push_v1` (사용자 승인, 기본값 아님)
+### 5.1 벽에서 더 떼는 경로 설정 `wall_push_v1` (2026-09-15 20:40 KST 기본값으로 적용)
+
+아래 표는 적용 전 후보 평가다. 지금은 기본 `nav2_params.yaml`이 같은 값을 쓰므로 `NAV2_PARAMS_FILE` 없이 적용된다. F1 경로 수치는 v3 지도 기준이다.
 
 원인: footprint 원점이 차체 앞 끝 근처라 Nav2 inscribed가 0.033 m이고, Humble SmacPlanner2D는 중심 셀 cost ≥ INSCRIBED만 막는다(소스 확인). 그래서 경로를 벽에서 떼는 힘은 inflation 비용뿐이다.
 
@@ -138,7 +140,7 @@ docker exec -w /ros2_ws ros2_humble bash -lc "source /opt/ros/humble/setup.bash 
 | F1 v3 locker→엘리베이터 앞 | 0.552 m | 0.618 m | 11.50→11.97 m |
 | F1 v3 엘리베이터 앞→idle 시드 | 0.566 m | 0.738 m | 5.17→5.68 m |
 
-inflation을 더 세게 한 `push_B`(1.0 m·1.5·4.0)는 F2 코너에서 추가 이득이 없어 채택하지 않았다. 사용법: `NAV2_PARAMS_FILE=/ros2_ws/src/slam_pkg/config/nav2_params_wall_push_v1.yaml ./scripts/fieldctl nav start F2`. 첫 사용 때 controller·planner CPU(`fieldctl diagnose`)와 global costmap 갱신 지연을 기록한다. 증속 후보 파일에는 이 변경이 들어 있지 않다.
+inflation을 더 세게 한 `push_B`(1.0 m·1.5·4.0)는 F2 코너에서 추가 이득이 없어 채택하지 않았다. 첫 사용 때 controller·planner CPU(`fieldctl diagnose`)와 global costmap 갱신 지연을 기록한다(inflation 반경이 커져 계산량이 늘어난다). 증속 후보 파일도 이 값을 포함한다. 되돌리기: `NAV2_PARAMS_FILE=/ros2_ws/src/slam_pkg/config/nav2_params_pre_wallpush_20260915.yaml`.
 
 ## 6. 보조 바퀴 H0와 문턱 시험
 

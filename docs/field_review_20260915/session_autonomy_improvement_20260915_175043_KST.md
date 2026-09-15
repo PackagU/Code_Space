@@ -34,8 +34,16 @@
 
 - F2 벽 근접 지점 정정: `(-12.95, -5.25)`. 기본 설정 근사 경로의 코너 중심 여유는 0.552 m(= inflation 반경 경계)였다.
 - `nav2_params_wall_push_v1.yaml`(`527f4c58…`)을 기본 파일에서 3줄만 바꿔 추가했다(global inflation 0.55→1.0, cost_scaling 3.0→2.0, planner cost_travel_multiplier 2.0→3.0, local 불변). Humble `node_2d.cpp`의 비용식과 같은 오프라인 최적 경로에서 F2 코너 여유 0.552→0.886 m. 근거: `artifacts/autonomy_improvement_20260915/evaluate_wall_push.py`, `wall_push_evaluation.json`, `wall_push_paths_F2.png`·`_F1_v3.png`. 기본값은 바꾸지 않았다.
-- `f1_manual_clean_v3`(pgm `d525759b…`, yaml `d701d2b6…`): raw SLAM 지도의 점유 셀 방향 히스토그램 최고점 21.75°(홀 영역 21.5~22.0°)에 v2 외곽선을 직각화했다. 엘리베이터는 네모(1.85×2.0 m, 문 약 1.0 m)로 바꿨다. idle 옆 벽과 코너는 v2 위치를 유지했고, 인공 스캔 노이즈는 넣지 않았다. 값은 254/0/205, `free_thresh 0.19`. 생성: `artifacts/f1_manual_clean_20260915_v3/build_v3.py`. 젯슨 `fieldctl map validate` VALID. 웨이포인트 여유(v2→v3): idle 시드 footprint 0.362→0.453 m, locker 0.921→0.959 m, 엘리베이터 앞 0.933→0.912 m, 캐빈 안 0.423→0.332 m. **pointer와 map_pins는 v2 그대로다.**
+- `f1_manual_clean_v3`(pgm `d525759b…`, yaml `d701d2b6…`): raw SLAM 지도의 점유 셀 방향 히스토그램 최고점 21.75°(홀 영역 21.5~22.0°)에 v2 외곽선을 직각화했다. 엘리베이터는 네모(1.85×2.0 m, 문 약 1.0 m)로 바꿨다. idle 옆 벽과 코너는 v2 위치를 유지했고, 인공 스캔 노이즈는 넣지 않았다. 값은 254/0/205, `free_thresh 0.19`. 생성: `artifacts/f1_manual_clean_20260915_v3/build_v3.py`. 젯슨 `fieldctl map validate` VALID. 웨이포인트 여유(v2→v3): idle 시드 footprint 0.362→0.453 m, locker 0.921→0.959 m, 엘리베이터 앞 0.933→0.912 m, 캐빈 안 0.423→0.332 m. (이 시점에는 pointer와 핀이 v2였고, 20:39에 v3로 바꿨다. 아래 절 참고)
 - 젯슨 `after/SHA256SUMS`를 22줄로 갱신했다(v3 지도 2개, wall_push params 추가).
+
+## F1 기본 v3 전환·wall_push 기본 적용 (같은 날 20:39~20:45 KST, 사용자 결정)
+
+- 백업: `before_v3_wallpush_203914/`(pointer v2 `8736d5ba…`, 핀 `0aeeb3e9…`, 이전 params 4개). 그 폴더의 `SHA256SUMS`에는 빈 파일 자신의 해시(`e3b0c442…`) 한 줄이 섞여 있다. 무해하다.
+- F1: v3 해시 assert 후 `latest_map.txt` → `f1_manual_clean_v3.yaml`(`4c9e6638…`), `map_pins.json` F1 → v3(`eb5aaa29…`)로 원자적으로 교체했다. `map validate` VALID, guard F1·F2 pre-nav PASS, v2 명시 FAIL.
+- Nav2: 기본 `nav2_params.yaml` `e8cf213b…` → `80787840…`(global inflation 1.0·scaling 2.0, cost_travel_multiplier 3.0, 주석). 증속 후보는 새 기본값에서 다시 만들었다(v011 `871494ba…`→`1815932d…`, v012 `c9f3319e…`→`7fb6b40c…`). 되돌리기용 `nav2_params_pre_wallpush_20260915.yaml` = 이전 기본값 `e8cf213b…`. 5개 파일을 컨테이너에서 파싱해 값을 확인했다.
+- 새 후보 파일은 install share에 symlink가 없다(빌드 당시 파일만 링크). `NAV2_PARAMS_FILE`은 `/ros2_ws/src/...` 경로를 쓰므로 영향이 없고, 기본 파일은 share → src symlink라 바로 적용된다.
+- 호스트 오프라인 시험 PASS 37/SKIP 7/FAIL 4(기존 실패 4건, 메시지 동일). `after/SHA256SUMS` 23줄.
 
 ## GitHub 업로드 (같은 날 20:16~20:40 KST, 사용자 승인)
 
@@ -52,6 +60,7 @@
 - 커밋 전 검사: 변경·추가 텍스트 파일 CR 0, 100 MB 초과 없음(최대 F2 PGM 1.45 MB), 비밀 패턴 강한 일치 3건은 `.env.example` 소문자 placeholder와 코드 식별자(`secrets.token_…`, `document.…`)로 값 노출 없이 확인.
 - 젯슨 파일 8개(Dockerfile.jetson, CMakeLists·package.xml 등)는 작업 트리에 CRLF로 저장돼 있지만, 젯슨 git이 LF로 정규화해 저장하는 내용(직전 미러와 동일)으로 올렸다.
 - push 후: 원격 브랜치 해시 확인, 작업 브랜치의 파일 19개 SHA256이 `after/SHA256SUMS`와 전부 일치, F1 v2·F2 PGM·F2 YAML 해시 일치.
+- 20:34 KST 후속(F1 v3·wall_push_v1): 미러 `lee/jetson-live` = `cab911b8cc8526cffa85b160d62977b78adeaae9`(추가 2: `nav2_params_wall_push_v1.yaml`, `f1_manual_clean_v3.yaml`, blob 불일치 0). 작업 브랜치 `lee/sim-real-maps` = `3377834728bbc51f37414303e5c0a5c3219ee30b`(미러 merge `1117d78` + v3 PGM·평가 자료·문서 갱신 18파일). 두 push 모두 fast-forward. 원격 작업 브랜치의 파일 22개 SHA256이 갱신된 `after/SHA256SUMS`와 전부 일치.
 
 ## 추가 확인한 사실
 
