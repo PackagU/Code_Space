@@ -151,7 +151,7 @@ controller_server:
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       # 30rpm wheel limit에서 곡선 주행 여유를 남긴 현장 저속 [제안값].
-      desired_linear_vel: 0.12  # 2026-09-15 [제안값] 증속 후보 v012: v0.12+w0.20 → 바깥 바퀴 47.2 rpm (48 rpm 상한). wall_push_v1 기본값 포함. 현장 승인 전 기본값 아님
+      desired_linear_vel: 0.10  # 2026-09-13 48 rpm 상한: v0.10+w0.25 → 약 44 rpm
       # lookahead: 속도에 비례한 가변 전방주시(코너에선 짧게->정확, 직선에선 길게->부드럽게)
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 1.5
@@ -177,7 +177,7 @@ controller_server:
       # 차동 구동: 경로 시작/목표에서 헤딩 정렬을 위해 제자리 회전 사용(좁은 alcove 180° 대응)
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      rotate_to_heading_angular_vel: 0.20
+      rotate_to_heading_angular_vel: 0.25
       max_angular_accel: 0.6
       allow_reversing: false
       max_robot_pose_search_dist: 10.0
@@ -230,8 +230,6 @@ local_costmap:
       always_send_full_costmap: False
 
 global_costmap:
-  # 2026-09-15 사용자 결정: wall_push_v1을 기본값으로 적용. footprint 원점이 차체 앞이라 inscribed 0.033 m이고
-  # Humble SmacPlanner2D는 중심 셀만 막으므로 전역 경로를 inflation 비용으로 벽에서 뗀다. local costmap·RPP는 불변.
   global_costmap:
     ros__parameters:
       update_frequency: 1.0
@@ -267,8 +265,8 @@ global_costmap:
         # 0.52m)까지 붙어 경로를 내고 RPP 가 코너를 깎다 충돌(G004 run3: 정적 장애물 (3.3,0) 옆
         # y=0.48 에서 collision ahead 3회). 밴드를 0.28m 로 넓혀 경로가 장애물에서 떨어지게 한다.
         # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
-        cost_scaling_factor: 2.0  # 2026-09-15 wall_push_v1 기본 적용 (이전 3.0)
-        inflation_radius: 1.0  # 2026-09-15 wall_push_v1 기본 적용 (이전 0.55)
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
       # 2026-09-12: True -> False. 매 주기 전체 코스트맵 재전송 대신 변경분만 보낸다.
       always_send_full_costmap: False
 
@@ -304,7 +302,7 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 2.0          # 계획 시간 상한(초)
-      cost_travel_multiplier: 3.0     # 2026-09-15 wall_push_v1 기본 적용 (이전 2.0) 벽에서 떨어진 중앙 경로를 더 강하게 선호
+      cost_travel_multiplier: 2.0     # 벽에서 떨어진 중앙 경로 선호 -> 벽 충돌 완화
       use_final_approach_orientation: false
       smoother:
         max_iterations: 1000
@@ -369,8 +367,8 @@ velocity_smoother:
     scale_velocities: False
     feedback: "OPEN_LOOP"
     # 0.05m/s + 0.20rad/s 동시 명령도 30rpm 아래(약 29.4rpm)다.
-    max_velocity: [0.12, 0.0, 0.20]
-    min_velocity: [-0.12, 0.0, -0.20]
+    max_velocity: [0.10, 0.0, 0.25]
+    min_velocity: [-0.10, 0.0, -0.25]
     max_accel: [0.3, 0.0, 0.6]
     max_decel: [-0.5, 0.0, -0.8]
     odom_topic: "odom"

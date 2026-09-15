@@ -1,1 +1,1 @@
-/ros2_ws/maps/field/f1/f1_manual_clean_v2.yaml
+/ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml

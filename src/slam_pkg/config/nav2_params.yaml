@@ -230,6 +230,8 @@ local_costmap:
       always_send_full_costmap: False
 
 global_costmap:
+  # 2026-09-15 사용자 결정: wall_push_v1을 기본값으로 적용. footprint 원점이 차체 앞이라 inscribed 0.033 m이고
+  # Humble SmacPlanner2D는 중심 셀만 막으므로 전역 경로를 inflation 비용으로 벽에서 뗀다. local costmap·RPP는 불변.
   global_costmap:
     ros__parameters:
       update_frequency: 1.0
@@ -265,8 +267,8 @@ global_costmap:
         # 0.52m)까지 붙어 경로를 내고 RPP 가 코너를 깎다 충돌(G004 run3: 정적 장애물 (3.3,0) 옆
         # y=0.48 에서 collision ahead 3회). 밴드를 0.28m 로 넓혀 경로가 장애물에서 떨어지게 한다.
         # 문 1.0m 중앙 비용 ≈127(<253) 로 통과 가능, 뒤 복도(3m)+중앙 정적 장애물도 중심 자유폭 0.74m.
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 2.0  # 2026-09-15 wall_push_v1 기본 적용 (이전 3.0)
+        inflation_radius: 1.0  # 2026-09-15 wall_push_v1 기본 적용 (이전 0.55)
       # 2026-09-12: True -> False. 매 주기 전체 코스트맵 재전송 대신 변경분만 보낸다.
       always_send_full_costmap: False
 
@@ -302,7 +304,7 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 2.0          # 계획 시간 상한(초)
-      cost_travel_multiplier: 2.0     # 벽에서 떨어진 중앙 경로 선호 -> 벽 충돌 완화
+      cost_travel_multiplier: 3.0     # 2026-09-15 wall_push_v1 기본 적용 (이전 2.0) 벽에서 떨어진 중앙 경로를 더 강하게 선호
       use_final_approach_orientation: false
       smoother:
         max_iterations: 1000
