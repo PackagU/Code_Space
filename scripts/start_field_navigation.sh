@@ -37,6 +37,23 @@ fi
   exit 2
 }
 in_container "python3 -m slam_pkg.map_contract '${MAP_YAML}'"
+# 2026-09-15: 지도 버전 fail-closed. 9/15 00:09 F1 복귀가 v2 기대와 달리 v1을 로드했다.
+# latest_map.txt·명시 지도·YAML/PGM SHA256이 map_pins.json과 모두 같아야 Nav2를 시작한다.
+in_container "python3 scripts/field_map_guard.py check --floor '${FLOOR}' --stage pre-nav --map-yaml '${MAP_YAML}'" || {
+  echo "error: ${FLOOR} map is not the pinned version; Nav2 was not started" >&2
+  exit 1
+}
+# 2026-09-15: 증속 후보 등 대체 params는 명시할 때만 쓴다. 기본은 slam_pkg/config/nav2_params.yaml.
+NAV2_PARAMS_FILE="${NAV2_PARAMS_FILE:-}"
+params_arg=""
+if [[ -n "${NAV2_PARAMS_FILE}" ]]; then
+  [[ "${NAV2_PARAMS_FILE}" =~ ^/ros2_ws/src/slam_pkg/config/nav2_params[A-Za-z0-9_]*\.yaml$ ]] || {
+    echo "error: NAV2_PARAMS_FILE must be /ros2_ws/src/slam_pkg/config/nav2_params*.yaml" >&2
+    exit 2
+  }
+  in_container "test -f '${NAV2_PARAMS_FILE}'" || { echo "error: ${NAV2_PARAMS_FILE} not found" >&2; exit 2; }
+  params_arg="params_file:='${NAV2_PARAMS_FILE}'"
+fi
 
 nodes="$(in_container 'ros2 node list')"
 grep -Fxq /slam_toolbox <<<"${nodes}" && {
@@ -80,5 +97,6 @@ done
 }
 
 echo "[field-nav] map=${MAP_YAML}"
+echo "[field-nav] params=${NAV2_PARAMS_FILE:-default slam_pkg/config/nav2_params.yaml}"
 echo "[field-nav] starting saved-map AMCL/Nav2 only; no goal is sent; arm/lift excluded"
-in_container "ros2 launch slam_pkg kku_navigation.launch.py map:='${MAP_YAML}' use_sim_time:=false rviz:=false"
+in_container "ros2 launch slam_pkg kku_navigation.launch.py map:='${MAP_YAML}' use_sim_time:=false rviz:=false ${params_arg}"

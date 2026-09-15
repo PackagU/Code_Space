@@ -8,6 +8,166 @@
       "y": -0.48,
       "yaw_rad": -0.41,
       "source": "user-supplied field coordinate"
+    },
+    "f2_elevator_entry": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -11.375,
+      "y": -2.525,
+      "yaw_rad": 2.312744,
+      "source": "elevator location confirmed on-site by the user; metric pose derived from the marked map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "map_yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
+      "map_image_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+      "reference_pixel": [
+        670,
+        955
+      ],
+      "role": "approach outside door",
+      "white_pixel_clearance_m_image_estimate": 0.461,
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured"
+    },
+    "f2_elevator_inside": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -12.475,
+      "y": -1.325,
+      "yaw_rad": -0.828849,
+      "source": "elevator location confirmed on-site by the user; metric pose derived from the marked map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "map_yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
+      "map_image_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+      "reference_pixel": [
+        648,
+        931
+      ],
+      "role": "cabin reference / proposed arrival localization seed, not a verified entry goal",
+      "white_pixel_clearance_m_image_estimate": 0.224,
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured"
+    },
+    "f2_elevator_exit": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -11.375,
+      "y": -2.525,
+      "yaw_rad": -0.828849,
+      "source": "elevator location confirmed on-site by the user; metric pose derived from the marked map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "map_yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
+      "map_image_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+      "reference_pixel": [
+        670,
+        955
+      ],
+      "role": "same outside location, facing away from cabin",
+      "white_pixel_clearance_m_image_estimate": 0.461,
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured"
+    },
+    "f1_elevator_entry": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -8.725,
+      "y": -0.175,
+      "yaw_rad": -2.222665,
+      "source": "elevator location and wall outline confirmed by user; metric pose derived from the corrected map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured",
+      "map_yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v1.yaml",
+      "map_image_sha256": "364fe2ad5ac544f7bf45419cdbfd384e1a1b0ab42d1c3feab20eab9c98f8d5d0",
+      "reference_pixel": [
+        195,
+        194
+      ],
+      "role": "approach outside door, facing cabin",
+      "white_pixel_clearance_m_image_estimate": 1.031
+    },
+    "f1_elevator_inside": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -10.175,
+      "y": -2.075,
+      "yaw_rad": 0.918927,
+      "source": "elevator location and wall outline confirmed by user; metric pose derived from the corrected map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured",
+      "map_yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v1.yaml",
+      "map_image_sha256": "364fe2ad5ac544f7bf45419cdbfd384e1a1b0ab42d1c3feab20eab9c98f8d5d0",
+      "reference_pixel": [
+        166,
+        232
+      ],
+      "role": "cabin reference / proposed arrival localization seed, facing corridor",
+      "white_pixel_clearance_m_image_estimate": 0.75
+    },
+    "f1_elevator_exit": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -8.725,
+      "y": -0.175,
+      "yaw_rad": 0.918927,
+      "source": "elevator location and wall outline confirmed by user; metric pose derived from the corrected map",
+      "validation_status": "location_user_confirmed_pose_image_derived",
+      "location_identity_status": "user_confirmed_on_site",
+      "pose_validation_status": "position_calculated_from_map_heading_proposed_not_robot_measured",
+      "map_yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v1.yaml",
+      "map_image_sha256": "364fe2ad5ac544f7bf45419cdbfd384e1a1b0ab42d1c3feab20eab9c98f8d5d0",
+      "reference_pixel": [
+        195,
+        194
+      ],
+      "role": "same outside position, facing away from cabin",
+      "white_pixel_clearance_m_image_estimate": 1.031
+    },
+    "f1_idle": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -3.725,
+      "y": 2.075,
+      "yaw_rad": -1.701,
+      "source": "user-supplied field coordinate"
+    },
+    "f1_locker": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -5.125,
+      "y": -8.625,
+      "yaw_rad": -1.69,
+      "source": "user-supplied field coordinate"
+    },
+    "f2_delivery_destination": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -39.925,
+      "y": -32.625,
+      "yaw_rad": -2.33,
+      "source": "user-supplied field coordinate"
+    },
+    "f2_elevator_staging_v1": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -11.175,
+      "y": -3.075,
+      "yaw_rad": 2.312744,
+      "source": "[제안값] 2026-09-15 offline corridor-centre candidate behind f2_elevator_entry; not robot measured",
+      "validation_status": "offline_map_check_pass_not_field_verified",
+      "map_yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
+      "map_image_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+      "role": "autonomous stop point before the last door; Nav2 stop then manual elevator entry",
+      "offline_check": {
+        "center_to_nonfree_m": 0.886,
+        "footprint_edge_to_occupied_m": 0.729,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0,
+        "static_inflation_cost_center": 0,
+        "connected_from_f2_delivery_destination_at_clearance_m": 0.394,
+        "report": "artifacts/autonomy_improvement_20260915/waypoint_offline_check.json (local PC)"
+      },
+      "pose_validation_status": "position_proposed_heading_copied_from_f2_elevator_entry"
     }
   }
 }

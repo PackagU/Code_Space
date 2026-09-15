@@ -168,3 +168,5 @@ PR 마다 자동으로 코드 리뷰 코멘트를 다는 도구가 있음. 도�
 - `/scan`, `/odom`, `/tf` 확인 결과를 다음 실험 로그에 남김.
 - SLAM Toolbox 파라미터 비교 실험 시작.
 - `resolution`, `max_laser_range`, `loop_search_maximum_distance`별 map 품질 비교.
+
+- 2026-09-14 Codex: F1/F2 approved map defaults applied. Native map loader and readback SHA PASS; no motion. See docs/handover/2026-09-14_navigation_defaults.md

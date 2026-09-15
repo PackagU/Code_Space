@@ -19,6 +19,13 @@ LASER_Z="${LASER_Z:-0.667}"
 LASER_ROLL="${LASER_ROLL:-0.0}"
 LASER_PITCH="${LASER_PITCH:-0.0}"
 LASER_YAW="${LASER_YAW:-0.0}"
+# 2026-09-15: 증속 v012(0.12 m/s) 시험 때만 gate 선속도 상한을 명시적으로 0.13으로 올린다(사용자 승인).
+# 비우면 nav_safety.yaml 값(0.12)을 그대로 쓴다. 허용값 외에는 시작을 거부한다.
+GATE_MAX_LINEAR_SPEED="${GATE_MAX_LINEAR_SPEED:-}"
+[[ -z "${GATE_MAX_LINEAR_SPEED}" || "${GATE_MAX_LINEAR_SPEED}" == "0.12" || "${GATE_MAX_LINEAR_SPEED}" == "0.13" ]] || {
+  echo "error: GATE_MAX_LINEAR_SPEED must be empty, 0.12, or 0.13" >&2
+  exit 2
+}
 
 [[ "${ENABLE_DRIVE}" == "0" || "${ENABLE_DRIVE}" == "1" ]] || {
   echo "error: ENABLE_DRIVE must be 0 or 1" >&2
@@ -80,6 +87,7 @@ fi
 
 echo "[field-base] LiDAR=${LIDAR_PORT}; drive=${ENABLE_DRIVE}; odometry=${ODOMETRY_PROFILE}; arm/lift excluded"
 echo "[field-base] laser xyz=${LASER_X},${LASER_Y},${LASER_Z} rpy=${LASER_ROLL},${LASER_PITCH},${LASER_YAW}"
+echo "[field-base] gate max_linear_speed=${GATE_MAX_LINEAR_SPEED:-nav_safety.yaml default}"
 enable_drive_arg=false
 [[ "${ENABLE_DRIVE}" == "1" ]] && enable_drive_arg=true
-in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} odometry_profile:='${ODOMETRY_PROFILE}' imu_mount_verified:='$([[ "${IMU_MOUNT_VERIFIED}" == "1" ]] && echo true || echo false)' imu_x:='${IMU_X}' imu_y:='${IMU_Y}' imu_z:='${IMU_Z}' imu_roll:='${IMU_ROLL}' imu_pitch:='${IMU_PITCH}' imu_yaw:='${IMU_YAW}' lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}'"
+in_container "ros2 launch slam_pkg field_base.launch.py use_sim_time:=false enable_lidar:=true enable_drive:=${enable_drive_arg} odometry_profile:='${ODOMETRY_PROFILE}' imu_mount_verified:='$([[ "${IMU_MOUNT_VERIFIED}" == "1" ]] && echo true || echo false)' imu_x:='${IMU_X}' imu_y:='${IMU_Y}' imu_z:='${IMU_Z}' imu_roll:='${IMU_ROLL}' imu_pitch:='${IMU_PITCH}' imu_yaw:='${IMU_YAW}' lidar_port:='${LIDAR_PORT}' opencr_port:='${OPENCR_PORT}' laser_x:='${LASER_X}' laser_y:='${LASER_Y}' laser_z:='${LASER_Z}' laser_roll:='${LASER_ROLL}' laser_pitch:='${LASER_PITCH}' laser_yaw:='${LASER_YAW}' gate_max_linear_speed:='${GATE_MAX_LINEAR_SPEED}'"

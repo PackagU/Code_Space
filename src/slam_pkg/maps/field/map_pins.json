@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "updated_kst": "2026-09-15",
+  "policy": "nav start and every goal require latest_map.txt, YAML/PGM SHA256 and the running map_server load path to equal this pin",
+  "floors": {
+    "F1": {
+      "yaml": "/ros2_ws/maps/field/f1/f1_manual_clean_v2.yaml",
+      "yaml_sha256": "5ed28bf0cf438e0e2c085ace005039b71dc7f4474d87ea56e42824baac95b796",
+      "image": "/ros2_ws/maps/field/f1/f1_manual_clean_v2.pgm",
+      "image_sha256": "3f9a40c42bbdb73933eac76cd187853b8502d2587e398b24b7537e4b8e3ab9d1",
+      "basis": "2026-09-15 field review: v2 glass-door map, hashes equal local artifact"
+    },
+    "F2": {
+      "yaml": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml",
+      "yaml_sha256": "b670cd2b8790340e703b747c2b82c2c1540a826a06cba49899527a41eeddc45f",
+      "image": "/ros2_ws/maps/field/f2/f2_raw_20260914.pgm",
+      "image_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+      "basis": "2026-09-14 approved unknown-handling YAML, hashes equal local collection"
+    },
+    "F3": {
+      "yaml": "/ros2_ws/maps/field/f3/f3_c192.yaml",
+      "yaml_sha256": "2221c27fd900528f6ba1ddbc085b8c3ce33da395bed0537d6c7f616cd913c7b9",
+      "image": "/ros2_ws/maps/field/f3/f3_c192.pgm",
+      "image_sha256": "ace8779d1ff73dc66bdb80787e1c3bcf93a589f1fc35bddc893b2e631c75493c",
+      "basis": "current default pointer pinned as-is 2026-09-15; not re-verified in this task"
+    }
+  }
+}

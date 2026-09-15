@@ -14,11 +14,15 @@ Packagu 현장 터미널 CLI (웹 UI 불필요)
   fieldctl mapping start F1|F2 | mapping save F1|F2 [name] | mapping stop
   fieldctl teleop
   fieldctl map snapshot | map list | map validate /ros2_ws/maps/...yaml
+  fieldctl map guard F1|F2|F3            (pointer·SHA256·실행 중 map_server 로드 경로 = map_pins.json)
   fieldctl nav start F1|F2|F3 [/ros2_ws/maps/...yaml] | nav stop
+           (증속 후보: NAV2_PARAMS_FILE=/ros2_ws/src/slam_pkg/config/nav2_params_speed_v012.yaml)
   fieldctl pose set X Y YAW [--allow-origin]
+  fieldctl pose capture NAME F1|F2 [--duration 10] [--floor-mark ID] [--save]
+           (구독 전용: AMCL·TF 안정도·costmap footprint lethal 검사, PASS일 때만 새 waypoint 저장)
   fieldctl waypoint save NAME F1|F2 X Y YAW [--replace] | waypoint list
   fieldctl goal NAME [F1|F2] | cancel [--all] | stop | resume
-  fieldctl record start [name] [duration_sec] | record stop
+  fieldctl record start [name] [duration_sec] | record check | record stop
   fieldctl probe [name] [duration_sec] | probe analyze /ros2_ws/logs/.../probes/NAME
 
 안전 계약:
@@ -27,6 +31,8 @@ Packagu 현장 터미널 CLI (웹 UI 불필요)
   - stop은 gate 정지를 먼저 확인한 뒤 저장된 goal ID만 취소한다.
   - resume은 gate만 해제하며 이전 goal을 되살리지 않는다.
   - 실측하지 않은 전체 0 pose/waypoint는 기본 거부한다.
+  - nav start와 goal은 map guard가 PASS일 때만 진행한다(지도 버전 fail-closed).
+  - goal 전 record check가 PASS가 아니면 그 주행은 진단용 합격 판정에서 제외한다.
 EOF
 }
 
@@ -157,7 +163,7 @@ record_start() {
     fi
     rm -f -- "${pidfile}"
   fi
-  INCLUDE_CONTROL_DIAGNOSTICS=1 DURATION_SEC="${duration}" setsid nohup \
+  INCLUDE_CONTROL_DIAGNOSTICS=1 INCLUDE_NAV_DIAGNOSTICS=1 DURATION_SEC="${duration}" setsid nohup \
     "${ROOT_DIR}/scripts/record_field_bag.sh" "${name}" >"${logfile}" 2>&1 &
   local pid=$!
   printf '%s\n' "${pid}" > "${pidfile}"
@@ -166,6 +172,39 @@ record_start() {
   kill -0 "${pid}" 2>/dev/null || { echo "error: recorder failed; inspect ${logfile}" >&2; return 1; }
   echo "recorder PID=${pid} log=${logfile} bag=/ros2_ws/logs/field_bags/${name}"
   [[ "${duration}" == 0 ]] && echo "종료: fieldctl record stop"
+}
+
+owned_recorder() {
+  # stdout: "PID NAME" only when the saved PID still runs record_field_bag.sh for that name.
+  local pidfile="${STATE_DIR}/recorder.pid"
+  [[ -s "${pidfile}" && -s "${STATE_DIR}/recorder.name" ]] || return 1
+  local pid name
+  pid="$(<"${pidfile}")"
+  name="$(<"${STATE_DIR}/recorder.name")"
+  [[ "${pid}" =~ ^[0-9]+$ && "${name}" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  [[ -r "/proc/${pid}/cmdline" ]] && tr '\0' ' ' < "/proc/${pid}/cmdline" | grep -Fq "scripts/record_field_bag.sh ${name}" || return 1
+  printf '%s %s\n' "${pid}" "${name}"
+}
+
+record_check() {
+  # 2026-09-15: goal 전에 recorder 생존과 bag 용량 증가를 확인한다(9/14 시험은 bag이 없어 재생 불가).
+  local owned pid name bag first size
+  owned="$(owned_recorder)" || { echo "RECORD_CHECK=FAIL: owned recorder is not running (fieldctl record start)" >&2; return 1; }
+  read -r pid name <<<"${owned}"
+  bag="/ros2_ws/logs/field_bags/${name}"
+  first="$(docker exec "${CONTAINER_NAME}" sh -c "du -sb '${bag}' 2>/dev/null | cut -f1")"
+  first="${first:-0}"
+  for _ in $(seq 1 12); do
+    sleep 1
+    kill -0 "${pid}" 2>/dev/null || { echo "RECORD_CHECK=FAIL: recorder PID ${pid} exited" >&2; return 1; }
+    size="$(docker exec "${CONTAINER_NAME}" sh -c "du -sb '${bag}' 2>/dev/null | cut -f1")"
+    if [[ "${size:-0}" =~ ^[0-9]+$ ]] && (( ${size:-0} > first )); then
+      echo "RECORD_CHECK=PASS pid=${pid} bag=${bag} bytes ${first} -> ${size}"
+      return 0
+    fi
+  done
+  echo "RECORD_CHECK=FAIL: ${bag} did not grow within 12 s (bytes=${first})" >&2
+  return 1
 }
 
 record_stop() {
@@ -231,6 +270,11 @@ case "${cmd}" in
       snapshot) map_snapshot ;;
       list) in_container "find /ros2_ws/maps/field -mindepth 2 -maxdepth 2 -type f -name '*.yaml' -print | sort" ;;
       validate) [[ "${1:-}" =~ ^/ros2_ws/maps/[A-Za-z0-9_./-]+\.yaml$ ]] || { echo "error: absolute map YAML path required" >&2; exit 2; }; in_container "python3 -m slam_pkg.map_contract '$1'" ;;
+      guard)
+        [[ "${1:-}" =~ ^F[123]$ ]] || { echo "error: floor must be F1, F2, or F3" >&2; exit 2; }
+        stage=pre-nav
+        has_process '[/]opt/ros/humble/bin/ros2 launch slam_pkg kku_navigation\.launch\.py' && stage=goal
+        in_container "python3 scripts/field_map_guard.py check --floor '$1' --stage ${stage}" ;;
       *) usage; exit 2 ;;
     esac ;;
   nav)
@@ -244,13 +288,38 @@ case "${cmd}" in
       *) usage; exit 2 ;;
     esac ;;
   pose)
-    [[ "${1:-}" == set ]] || { usage; exit 2; }; shift
-    runtime_cli pose "$@" ;;
+    case "${1:-}" in
+      set) shift; runtime_cli pose "$@" ;;
+      capture)
+        # 2026-09-15: 구독 전용 10초 안정 pose 캡처. 지도 guard PASS 뒤에만 실행하고 새 이름으로만 저장한다.
+        shift
+        cap_name="${1:-}"; cap_floor="${2:-}"
+        [[ "${cap_name}" =~ ^[A-Za-z0-9_.-]+$ && "${cap_floor}" =~ ^F[123]$ ]] || { usage; exit 2; }
+        shift 2
+        guard_out="$(in_container "python3 scripts/field_map_guard.py check --floor '${cap_floor}' --stage goal")" || {
+          printf '%s\n' "${guard_out}"
+          echo "error: map guard failed; pose was not captured" >&2
+          exit 1
+        }
+        printf '%s\n' "${guard_out}"
+        guard_record="$(sed -n 's/^MAP_GUARD=PASS record=//p' <<<"${guard_out}")"
+        docker exec -i -w /ros2_ws "${CONTAINER_NAME}" bash -lc \
+          'source /opt/ros/humble/setup.bash && source install/setup.bash && exec python3 /ros2_ws/scripts/field_pose_capture.py "$@"' \
+          field_pose_capture "${cap_name}" "${cap_floor}" --map-guard-record "${guard_record}" "$@" ;;
+      *) usage; exit 2 ;;
+    esac ;;
   waypoint)
     action="${1:-}"; shift || true
     case "${action}" in save) runtime_cli waypoint-save "$@" ;; list) runtime_cli waypoint-list ;; *) usage; exit 2 ;; esac ;;
   goal)
     name="${1:-}"; floor="${2:-}"; [[ -n "${name}" ]] || { usage; exit 2; }
+    [[ "${name}" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "error: invalid waypoint name" >&2; exit 2; }
+    # 2026-09-15: 실행 중 map_server가 고정 지도를 로드했는지 확인하지 못하면 goal을 보내지 않는다.
+    in_container "python3 scripts/field_map_guard.py check --waypoint '${name}' --stage goal" || {
+      echo "error: map guard failed; goal was NOT sent" >&2
+      exit 1
+    }
+    owned_recorder >/dev/null || echo "warning: no owned rosbag recorder; this run is excluded from diagnostic pass/fail" >&2
     echo "[approval boundary] NavigateToPose can move the robot"
     if [[ -n "${floor}" ]]; then runtime_cli goal "${name}" --floor "${floor}"; else runtime_cli goal "${name}"; fi ;;
   cancel) runtime_cli cancel "$@" ;;
@@ -261,7 +330,7 @@ case "${cmd}" in
   resume) runtime_cli stop-state release ;;
   record)
     action="${1:-}"; shift || true
-    case "${action}" in start) record_start "$@" ;; stop) record_stop ;; *) usage; exit 2 ;; esac ;;
+    case "${action}" in start) record_start "$@" ;; check) record_check ;; stop) record_stop ;; *) usage; exit 2 ;; esac ;;
   probe)
     if [[ "${1:-}" == analyze ]]; then
       [[ "${2:-}" =~ ^/ros2_ws/logs/[A-Za-z0-9_./-]+$ ]] || { echo "error: probe directory below /ros2_ws/logs required" >&2; exit 2; }

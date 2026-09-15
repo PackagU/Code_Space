@@ -40,6 +40,9 @@ PY_TESTS=(
   scripts/test_field_mapping_launch.py
   scripts/test_field_scripts_contract.py
   scripts/test_field_nav_cli.py
+  scripts/test_field_map_guard.py
+  scripts/test_analyze_nav_bag.py
+  scripts/test_field_pose_capture.py
   scripts/test_udev_contract.py
   scripts/test_jetson_deployment_contract.py
   scripts/test_jetson_safe_profiles.py

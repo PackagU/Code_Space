@@ -1,0 +1,19 @@
+{
+  "timestamp_jetson": "20260914-111752",
+  "backup": "/ros2_ws/logs/field_execution/navigation_defaults_20260914-111752",
+  "status": "native loader offline PASS; no ROS node, publisher or motion",
+  "loader_output": "COUNTS 146780 67110 2686\nCOUNTS 1312411 123548 16453\n",
+  "defaults": {
+    "f1": "/ros2_ws/maps/field/f1/f1_manual_clean_v1.yaml",
+    "f2": "/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml"
+  },
+  "files": {
+    "f1/latest_map.txt": "7904b96ceee078ea1c309ec7ec924ac5c7c0bd96050d676ce21e9609194f5d2b",
+    "f2/latest_map.txt": "ecd9754248c49f95cc468057e0a7786762ad9f2a4dafc3e637b549b0d2cb31bf",
+    "f1/f1_manual_clean_v1.pgm": "364fe2ad5ac544f7bf45419cdbfd384e1a1b0ab42d1c3feab20eab9c98f8d5d0",
+    "f1/f1_manual_clean_v1.yaml": "8e4d7ff0c8bc1a8e4ab14c1f8a9c19525979df39055202d16d645df5f6544862",
+    "f2/f2_raw_20260914.pgm": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+    "f2/f2_nav_unknown_v1.yaml": "b670cd2b8790340e703b747c2b82c2c1540a826a06cba49899527a41eeddc45f",
+    "waypoints.json": "15bc37e702b4692cc16ae38c95f766255ee03aa0436459e700678ba8ab5effa2"
+  }
+}

@@ -18,3 +18,25 @@
   durability: transient_local
   history: keep_last
   depth: 1
+# 2026-09-15: goal 전에 이미 발행된 latched 상태를 늦게 시작한 recorder도 받게 한다.
+# 발행자 QoS가 transient_local인 토픽만 둔다. 현장에서 `ros2 topic info -v`로 재확인한다.
+/map:
+  reliability: reliable
+  durability: transient_local
+  history: keep_last
+  depth: 1
+/global_costmap/costmap:
+  reliability: reliable
+  durability: transient_local
+  history: keep_last
+  depth: 1
+/local_costmap/costmap:
+  reliability: reliable
+  durability: transient_local
+  history: keep_last
+  depth: 1
+/amcl_pose:
+  reliability: reliable
+  durability: transient_local
+  history: keep_last
+  depth: 10

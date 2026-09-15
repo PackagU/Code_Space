@@ -83,6 +83,16 @@ def _launch_setup(context, *args, **kwargs):
                     raise RuntimeError(f"{key} must be a measured decimal value") from exc
             drive_launch = "drive_imu_bringup.launch.py"
             drive_arguments.update({key: LaunchConfiguration(key) for key in mount})
+        gate_parameters = [
+            os.path.join(pkg_drive, "config", "nav_safety.yaml"),
+            {"input_cmd_topic": LaunchConfiguration("cmd_vel_input_topic")},
+        ]
+        # 2026-09-15: 증속 v012 시험 전용 명시 override. 빈 값이면 YAML 상한을 그대로 쓴다.
+        gate_speed = LaunchConfiguration("gate_max_linear_speed").perform(context).strip()
+        if gate_speed:
+            if gate_speed not in ("0.12", "0.13"):
+                raise RuntimeError("gate_max_linear_speed must be empty, 0.12, or 0.13")
+            gate_parameters.append({"max_linear_speed": float(gate_speed)})
         actions.extend([
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -95,10 +105,7 @@ def _launch_setup(context, *args, **kwargs):
                 executable="nav_safety_gate",
                 name="nav_safety_gate",
                 output="screen",
-                parameters=[
-                    os.path.join(pkg_drive, "config", "nav_safety.yaml"),
-                    {"input_cmd_topic": LaunchConfiguration("cmd_vel_input_topic")},
-                ],
+                parameters=gate_parameters,
             ),
         ])
     return actions
@@ -130,5 +137,6 @@ def generate_launch_description():
         DeclareLaunchArgument("laser_roll", default_value="0.0"),
         DeclareLaunchArgument("laser_pitch", default_value="0.0"),
         DeclareLaunchArgument("laser_yaw", default_value="0.0"),
+        DeclareLaunchArgument("gate_max_linear_speed", default_value=""),
         OpaqueFunction(function=_launch_setup),
     ])
