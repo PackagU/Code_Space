@@ -36,7 +36,7 @@ ros2 launch drive_pkg drive_bringup.launch.py
 | udev | CH340 `1a86:7523` — Nano 클론과 겹치면 rules 파일의 KERNELS 분리 주석 참조 |
 | compose | `.env` 에 `ARM_SERVO_DEVICE=/dev/arm_servo` + recreate |
 | smoke | `WITH_ARM=1 ARM_SERIAL_PORT=/dev/arm_servo` — 미지정 시 topic 전용 mock |
-| 벤치 확인 | `ros2 run robot_arm_pkg arm_sequence` self_test (9초 사이클 구동 확인) |
+| 벤치 확인 | 먼저 `python3 scripts/run_arm_press.py 1 --dry-run`, 주변 공간 확보 후 `python3 scripts/run_arm_press.py 1` (1~3번 사이클). ROS 연동은 `ros2 launch robot_arm_pkg arm_sequence.launch.py self_test:=true press_cycle:=1 serial_port:=/dev/arm_servo` |
 
 ## 4. Depth 카메라 확정 시
 
