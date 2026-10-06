@@ -9,6 +9,8 @@ instead of one diagonal start-to-finish goal.
 from __future__ import annotations
 
 import sys
+import json
+import time
 from pathlib import Path
 
 import rclpy
@@ -34,12 +36,20 @@ except ImportError:  # pragma: no cover - fallback for unbuilt source tree
     from elevator_mission_pkg.mission_model import load_mission
 
 
+def _helper_script(name):
+    source_path = Path(__file__).resolve().parents[3] / "scripts" / name
+    if source_path.exists():
+        return source_path
+    from ament_index_python.packages import get_package_share_directory
+    return Path(get_package_share_directory("elevator_mission_pkg")) / "scripts" / name
+
+
 def _load_point_registry(path):
     # Import lazily so the registry script's path-insert trick is unnecessary
     # when ``point_registry`` is installed alongside ``elevator_mission_pkg``.
     import importlib.util
 
-    registry_path = Path(__file__).resolve().parents[3] / "scripts" / "point_registry.py"
+    registry_path = _helper_script("point_registry.py")
     if not registry_path.exists():
         raise FileNotFoundError(
             f"point_registry.py not found at {registry_path}. "
@@ -52,7 +62,7 @@ def _load_point_registry(path):
 
 
 def _load_orthogonal_router(registry):
-    registry_path = Path(__file__).resolve().parents[3] / "scripts" / "orthogonal_router.py"
+    registry_path = _helper_script("orthogonal_router.py")
     if not registry_path.exists():
         raise FileNotFoundError(
             f"orthogonal_router.py not found at {registry_path}. "
@@ -76,10 +86,19 @@ class DeliveryMissionNode(Node):
         self.declare_parameter("points_yaml", "")
         self.declare_parameter("missions_yaml", "")
         self.declare_parameter("tick_period_sec", 0.5)
+        self.declare_parameter("camera_elevator_mode", False)
+        self.declare_parameter("require_door_confirmation", False)
+        self.declare_parameter("floor_observation_topic", "/elevator/vision_floor")
+        self.declare_parameter("door_state_topic", "/elevator/door_state")
+        self.declare_parameter("call_press_cycle", 1)
+        self.declare_parameter("destination_press_cycle", 2)
 
         mission_id = self.get_parameter("mission_id").value
         dry_run = bool(self.get_parameter("dry_run_nav2").value)
-        root = Path(self.get_parameter("workspace_root").value)
+        root = Path(self.get_parameter("workspace_root").value or default_root)
+        if not (root / "config").is_dir():
+            from ament_index_python.packages import get_package_share_directory
+            root = Path(get_package_share_directory("elevator_mission_pkg"))
         points_yaml = self.get_parameter("points_yaml").value or str(root / "config" / "kku_nav_points.yaml")
         missions_yaml = self.get_parameter("missions_yaml").value or str(root / "config" / "delivery_missions.yaml")
 
@@ -92,6 +111,28 @@ class DeliveryMissionNode(Node):
         self.registry = _load_point_registry(points_yaml)
         self.router = _load_orthogonal_router(self.registry)
         self.dry_run = dry_run
+        self.camera_mode = bool(self.get_parameter("camera_elevator_mode").value)
+        if self.camera_mode:
+            from elevator_mission_pkg.behaviors import NAV2_AVAILABLE
+            if not NAV2_AVAILABLE:
+                raise RuntimeError("camera mission requires nav2_msgs and rclpy.action")
+            if dry_run:
+                raise ValueError("camera_elevator_mode requires real Nav2 action results")
+            from elevator_mission_pkg.elevator_camera import ElevatorArrivalGate
+            from std_msgs.msg import String
+            from rclpy.qos import QoSProfile, DurabilityPolicy
+            self.arrival_gate = ElevatorArrivalGate(
+                self.mission.target_floor,
+                require_door_confirmation=bool(self.get_parameter("require_door_confirmation").value))
+            qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            self._inhibit_pub = self.create_publisher(String, "/mission/drive_inhibit", qos)
+            self._camera_state_pub = self.create_publisher(String, "/elevator/camera_state", 10)
+            self.create_subscription(String, self.get_parameter("floor_observation_topic").value,
+                                     self._on_floor_observation, 10)
+            if self.arrival_gate.require_door_confirmation:
+                self.create_subscription(String, self.get_parameter("door_state_topic").value,
+                                         self._on_door_state, 10)
+            self.set_drive_inhibit("camera_mission_startup")
 
         self.sequence = self._build_sequence()
         self.index = 0
@@ -106,6 +147,32 @@ class DeliveryMissionNode(Node):
     def _build_sequence(self):
         m = self.mission
         start_pose_id = self.registry.initial_pose_id(m.start_floor)
+        if self.camera_mode:
+            from elevator_mission_pkg.camera_behaviors import (
+                ArmCommand, WaitDoorOpen, GuardedNavigate, PrepareCameraExit,
+            )
+            direction = "UP" if int(m.target_floor.lstrip("F")) > int(m.start_floor.lstrip("F")) else "DOWN"
+            boarding = self._navigate_route(
+                m.start_floor, m.elevator_entry_point, m.elevator_inside_point)
+            boarding_steps = ([WaitDoorOpen(self), GuardedNavigate(self, boarding)]
+                              if self.arrival_gate.require_door_confirmation else [boarding])
+            return [
+                ArmCommand(self, "home"),
+                ArmCommand(self, "view", view="front_view"),
+                self._navigate_route(m.start_floor, start_pose_id, m.pickup_point),
+                WaitForAck(self, m.mock_load_event),
+                self._navigate_route(m.start_floor, m.pickup_point, m.elevator_entry_point),
+                ArmCommand(self, "press", target="call", button=direction,
+                           press_cycle=int(self.get_parameter("call_press_cycle").value)),
+                ArmCommand(self, "view", view="front_view"),
+                *boarding_steps,
+                ArmCommand(self, "press", target="destination", button=m.target_floor,
+                           press_cycle=int(self.get_parameter("destination_press_cycle").value)),
+                PrepareCameraExit(self, m.target_floor, m.elevator_inside_point,
+                                  self._navigate_single_goal(m.target_floor, m.elevator_exit_point)),
+                self._navigate_route(m.target_floor, m.elevator_exit_point, m.destination_point),
+                WaitForAck(self, m.mock_delivery_event),
+            ]
         return [
             self._navigate_route(m.start_floor, start_pose_id, m.pickup_point),
             WaitForAck(self, m.mock_load_event),
@@ -141,13 +208,23 @@ class DeliveryMissionNode(Node):
         )
 
     def _tick(self):
+        if self.camera_mode:
+            self._publish_camera_state()
         if self._done:
             return
         if self.index >= len(self.sequence):
             self.get_logger().info("MISSION COMPLETE")
             self._done = True
+            if self.camera_mode:
+                self.set_drive_inhibit("mission_complete")
             return
         behavior = self.sequence[self.index]
+        if self.camera_mode:
+            from elevator_mission_pkg.camera_behaviors import GuardedNavigate, PrepareCameraExit
+            if isinstance(behavior, NavigateRoute):
+                self.set_drive_inhibit("")
+            elif not isinstance(behavior, (GuardedNavigate, PrepareCameraExit)):
+                self.set_drive_inhibit("mission_stationary_step")
         status = behavior.tick()
         if status == SUCCESS:
             self.get_logger().info(f"[{self.index + 1}/{len(self.sequence)}] {behavior.name} SUCCESS")
@@ -155,6 +232,45 @@ class DeliveryMissionNode(Node):
         elif status == FAILURE:
             self.get_logger().error(f"[{self.index + 1}/{len(self.sequence)}] {behavior.name} FAILURE — aborting mission")
             self._done = True
+            if self.camera_mode:
+                self.set_drive_inhibit("mission_failed")
+
+    def set_drive_inhibit(self, reason):
+        from std_msgs.msg import String
+        msg = String()
+        msg.data = reason
+        self._inhibit_pub.publish(msg)
+
+    def _on_floor_observation(self, msg):
+        try:
+            state = json.loads(msg.data)
+        except (ValueError, TypeError):
+            state = {}
+        self.arrival_gate.observe_floor(state, time.monotonic(), time.time())
+
+    def _on_door_state(self, msg):
+        try:
+            state = json.loads(msg.data)
+        except (ValueError, TypeError):
+            state = {}
+        self.arrival_gate.observe_door(state, time.monotonic(), time.time())
+
+    def _publish_camera_state(self):
+        from std_msgs.msg import String
+        gate = self.arrival_gate
+        now, wall = time.monotonic(), time.time()
+        ready = gate.confirmed(now, wall) if gate.looking else gate.can_exit(now, wall)
+        msg = String()
+        msg.data = json.dumps({"current_floor": gate.target if ready else "UNKNOWN",
+                               "door_state": "camera_confirmed" if ready else "unknown",
+                               "source": "camera_verified", "stamp": wall})
+        self._camera_state_pub.publish(msg)
+
+    def shutdown(self):
+        if self.camera_mode:
+            self.set_drive_inhibit("mission_stopped")
+            if self.index < len(self.sequence) and hasattr(self.sequence[self.index], "cancel"):
+                self.sequence[self.index].cancel()
 
 
 def main():
@@ -163,5 +279,6 @@ def main():
     try:
         rclpy.spin(node)
     finally:
+        node.shutdown()
         node.destroy_node()
         rclpy.shutdown()

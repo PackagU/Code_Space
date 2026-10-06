@@ -6,6 +6,7 @@ find_package(ament_cmake_python REQUIRED)
 find_package(rclpy REQUIRED)
 
 ament_python_install_package(${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME}/)
 
 install(PROGRAMS
   robot_arm_pkg/arm_sequence_node.py

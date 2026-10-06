@@ -64,8 +64,12 @@ services:
       - PACKAGU_REQUIRED_READABLE_MOUNTS=/opt/floor_reader
       - PACKAGU_REQUIRED_WRITABLE_MOUNTS=/opt/floor_reader/data
     volumes:
-      - ${PACKAGU_FLOOR_READER:-../../../floor_reader}:/opt/floor_reader:ro
-      - ${PACKAGU_FLOOR_DATA:-../../../floor_reader/data}:/opt/floor_reader/data:rw
+      - ${PACKAGU_FLOOR_READER:-../../tools/floor_reader}:/opt/floor_reader:ro
+      - ${PACKAGU_FLOOR_DATA:-../../tools/floor_reader/data}:/opt/floor_reader/data:rw
+    devices:
+      - ${FLOOR_CAMERA_DEVICE:-/dev/null}:/dev/floor_camera
+    group_add:
+      - "${FLOOR_CAMERA_GID:-44}"
     network_mode: host
     ipc: private
     read_only: true

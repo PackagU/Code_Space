@@ -42,6 +42,7 @@ class ArmSequenceNode(Node):
         self.declare_parameter("stow_verified", False)
         self.declare_parameter("press_cycle", 1)
         self.declare_parameter("self_test", False)
+        self.declare_parameter("camera_pose_config", "")
 
         status_qos = QoSProfile(depth=1)
         status_qos.reliability = ReliabilityPolicy.RELIABLE
@@ -73,6 +74,11 @@ class ArmSequenceNode(Node):
                 serial_error = f"serial_open_failed:{type(exc).__name__}"
                 self.get_logger().error(f"arm serial open failed: {exc}")
 
+        camera_views, view_duration = {}, 2000
+        camera_config = str(self.get_parameter("camera_pose_config").value)
+        if camera_config:
+            from robot_arm_pkg.camera_views import load_views
+            camera_views, view_duration = load_views(camera_config)
         self._contract = ArmExecutionContract(
             driver,
             simulation_mode=simulation_mode,
@@ -81,6 +87,8 @@ class ArmSequenceNode(Node):
             * float(self.get_parameter("feedback_timeout_sec").value),
             position_tolerance_pwm=int(self.get_parameter("position_tolerance_pwm").value),
             stow_verified=bool(self.get_parameter("stow_verified").value),
+            camera_views=camera_views,
+            view_duration_ms=view_duration,
         )
         self._driver = driver
         self._default_cycle = int(self.get_parameter("press_cycle").value)

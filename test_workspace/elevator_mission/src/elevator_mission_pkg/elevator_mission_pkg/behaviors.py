@@ -107,7 +107,7 @@ class NavigateToPoint(Behavior):
             return RUNNING
 
         if self._result_future is not None and self._result_future.done():
-            return SUCCESS
+            return SUCCESS if self._result_future.result().status == 4 else FAILURE
 
         return RUNNING
 
@@ -125,6 +125,7 @@ class NavigateRoute(Behavior):
         self._sent = False
         self._index = 0
         self._dry_start = None
+        self._goal_handle = None
 
     def initialise(self):
         super().initialise()
@@ -133,6 +134,7 @@ class NavigateRoute(Behavior):
         self._sent = False
         self._index = 0
         self._dry_start = time.monotonic()
+        self._goal_handle = None
         route_ids = " -> ".join(point.point_id for point in self.route) or "(already there)"
         if self.dry_run:
             self.node.get_logger().info(f"[dry-run] {self.name}: {route_ids}")
@@ -163,6 +165,7 @@ class NavigateRoute(Behavior):
 
         if self._goal_future is not None and self._goal_future.done():
             handle = self._goal_future.result()
+            self._goal_handle = handle
             if not handle.accepted:
                 self.node.get_logger().error(f"{self.name} waypoint rejected")
                 return FAILURE
@@ -171,12 +174,25 @@ class NavigateRoute(Behavior):
             return RUNNING
 
         if self._result_future is not None and self._result_future.done():
+            if self._result_future.result().status != 4:
+                return FAILURE
             self._index += 1
             self._result_future = None
+            self._goal_handle = None
             self._sent = False
             return SUCCESS if self._index >= len(self.route) else RUNNING
 
         return RUNNING
+
+    def cancel(self):
+        if self._goal_handle is not None:
+            self._goal_handle.cancel_goal_async()
+        elif self._goal_future is not None:
+            def cancel_pending(future):
+                handle = future.result()
+                if handle is not None and handle.accepted:
+                    handle.cancel_goal_async()
+            self._goal_future.add_done_callback(cancel_pending)
 
     def _make_goal(self, point):
         goal = NavigateToPose.Goal()

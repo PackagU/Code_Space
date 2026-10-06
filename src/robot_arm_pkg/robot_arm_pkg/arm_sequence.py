@@ -42,8 +42,13 @@ def parse_arm_command(command_json):
     if not REQUEST_ID_PATTERN.fullmatch(request_id):
         raise ValueError("request_id must be 1-64 safe characters")
     action = str(command.get("action", "")).strip().lower()
-    if action not in ("press", "home", "stow", "cancel"):
-        raise ValueError("action must be press, home, stow, or cancel")
+    if action not in ("press", "home", "stow", "cancel", "view"):
+        raise ValueError("action must be press, home, stow, cancel, or view")
+    if action == "view":
+        view = command.get("view")
+        if view not in ("front_view", "floor_view"):
+            raise ValueError("view must be front_view or floor_view")
+        return {"request_id": request_id, "action": action, "view": view}
     if action in ("home", "stow"):
         return {"request_id": request_id, "action": action}
     if action == "cancel":

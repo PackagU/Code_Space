@@ -12,6 +12,7 @@ setup(
         (f"share/{package_name}", ["package.xml"]),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
         (f"share/{package_name}/config", glob("../../config/*.yaml")),
+        (f"share/{package_name}/scripts", ["../../scripts/point_registry.py", "../../scripts/orthogonal_router.py"]),
     ],
     install_requires=["setuptools", "PyYAML"],
     zip_safe=True,
@@ -22,6 +23,7 @@ setup(
     entry_points={
         "console_scripts": [
             "delivery_mission_node = elevator_mission_pkg.delivery_mission_node:main",
+            "floor_reader_bridge = elevator_mission_pkg.floor_reader_bridge:main",
         ],
     },
 )

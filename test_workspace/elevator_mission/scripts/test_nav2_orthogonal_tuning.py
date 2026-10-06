@@ -18,8 +18,16 @@ def main():
     goal_checker = controller["general_goal_checker"]
     follow_path = controller["FollowPath"]
 
-    require(goal_checker["xy_goal_tolerance"] <= 0.12, "xy goal tolerance is too loose for corner waypoints")
-    require(goal_checker["yaw_goal_tolerance"] <= 0.10, "yaw goal tolerance is too loose for 90-degree turns")
+    # The field profile uses 20 cm / 0.15 rad to reduce repeated turns near goals.
+    # Keep fixed caps so future, looser settings still fail this regression check.
+    require(
+        0 < goal_checker["xy_goal_tolerance"] <= 0.20,
+        "xy goal tolerance must be positive and at most 0.20 m for the field profile",
+    )
+    require(
+        0 < goal_checker["yaw_goal_tolerance"] <= 0.15,
+        "yaw goal tolerance must be positive and at most 0.15 rad for the field profile",
+    )
     # DWB -> Regulated Pure Pursuit 교체(ad96746) 이후의 코너 충실도 계약:
     require(
         "RegulatedPurePursuitController" in follow_path["plugin"],

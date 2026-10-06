@@ -4,11 +4,16 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import PathJoinSubstitution
 
 
 def generate_launch_description():
     return LaunchDescription(
         [
+            DeclareLaunchArgument("camera_pose_config", default_value=PathJoinSubstitution([
+                FindPackageShare("robot_arm_pkg"), "config", "camera_views.json"
+            ])),
             DeclareLaunchArgument("serial_port", default_value="", description="예: /dev/arm_servo (빈 값=물리 명령 비활성)"),
             DeclareLaunchArgument("serial_baud", default_value="115200"),
             DeclareLaunchArgument("rate_hz", default_value="20.0"),
@@ -29,6 +34,7 @@ def generate_launch_description():
                 parameters=[
                     {
                         "serial_port": LaunchConfiguration("serial_port"),
+                        "camera_pose_config": LaunchConfiguration("camera_pose_config"),
                         "serial_baud": LaunchConfiguration("serial_baud"),
                         "rate_hz": LaunchConfiguration("rate_hz"),
                         "self_test": LaunchConfiguration("self_test"),

@@ -10,6 +10,8 @@
   <depend>std_srvs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav2_msgs</depend>
+  <exec_depend>robot_arm_pkg</exec_depend>
+  <exec_depend>auto_floor_orchestrator_pkg</exec_depend>
   <exec_depend>py_trees</exec_depend>
   <exec_depend>py_trees_ros</exec_depend>
   <buildtool_depend>ament_python</buildtool_depend>

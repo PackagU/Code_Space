@@ -5,6 +5,7 @@ import collections
 import json
 import threading
 import time
+import uuid
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -97,6 +98,8 @@ class Reader:
         self.gate = Gate()
         self.last_event = None
         self.seq = 0
+        self.frame_seq = 0
+        self.stream_id = uuid.uuid4().hex
         self.status = {'floor':'UNKNOWN', 'error':'카메라 연결 중', 'score':0}
         self.templates = {s:[normalize(pattern(s))] for s in ['B1','B2']+[str(i) for i in range(1,21)]}
         for p in DATA.glob('template_*.png'):
@@ -138,6 +141,7 @@ class Reader:
             last = now
             with self.lock:
                 self.frame = frame
+                self.frame_seq += 1
                 try:
                     crop = self.crop(frame)
                     self.mask = normalize(crop) if crop is not None else None
@@ -150,7 +154,8 @@ class Reader:
                     print('Frame processing error: '+str(exc), flush=True)
                     continue
                 self.status = {'floor':label, 'score':round(score,3), 'margin':round(margin,3),
-                               'error':None, 'updated':time.time()}
+                               'error':None, 'updated':time.time(),
+                               'frame_seq':self.frame_seq, 'stream_id':self.stream_id}
                 if self.gate.update(label, self.target, now):
                     self.seq += 1
                     event = {'event':'TARGET_FLOOR_DETECTED', 'floor':label, 'seq':self.seq,

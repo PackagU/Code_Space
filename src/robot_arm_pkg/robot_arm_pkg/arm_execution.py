@@ -25,6 +25,8 @@ class ArmExecutionContract:
         feedback_timeout_ms=1000,
         position_tolerance_pwm=30,
         stow_verified=False,
+        camera_views=None,
+        view_duration_ms=2000,
     ):
         if driver is not None and simulation_mode:
             raise ValueError("simulation_mode cannot use a physical serial driver")
@@ -38,6 +40,14 @@ class ArmExecutionContract:
         self.feedback_timeout_ms = float(feedback_timeout_ms)
         self.position_tolerance_pwm = int(position_tolerance_pwm)
         self.stow_verified = bool(stow_verified)
+        self.camera_views = camera_views or {}
+        self.view_duration_ms = view_duration_ms
+        self.current_view = ""
+        if self.camera_views:
+            from robot_arm_pkg.camera_views import validate_views
+            self.camera_views, self.view_duration_ms = validate_views(
+                dict(self.camera_views, duration_ms=view_duration_ms)
+            )
         self.state = "idle"
         self.phase = "unhomed"
         self.homed = False
@@ -68,13 +78,14 @@ class ArmExecutionContract:
             "homed": self.homed,
             "homing_basis": self.homing_basis,
             "stow_verified": self.stow_verified,
+            "current_view": self.current_view,
             "feedback_semantics": "controller_position_response; encoder_vs_echo_unverified",
             "completion_basis": completion_basis,
             "physical_stop_verified": False,
             "error": error,
         }
         if command:
-            for key in ("target", "button", "press_cycle", "target_request_id"):
+            for key in ("target", "button", "press_cycle", "target_request_id", "view"):
                 if key in command:
                     result[key] = command[key]
         if self.last_positions is not None:
@@ -104,12 +115,19 @@ class ArmExecutionContract:
             return self.snapshot("rejected", error="busy", request=command)
 
         self.active = command
-        if command["action"] == "press" and self.require_homed and not self.homed:
+        if command["action"] in ("press", "view") and self.require_homed and not self.homed:
             return self._fail("home_not_measured")
         if not self.hardware_connected and not self.simulation_mode:
             return self._fail("hardware_unavailable")
 
-        if command["action"] in ("home", "stow"):
+        if command["action"] == "view":
+            name = command["view"]
+            if name not in self.camera_views:
+                return self._fail("camera_view_not_configured")
+            self._cycle = ((name, self.view_duration_ms, True),)
+            self._poses = self.camera_views
+            self.phase = "camera_moving"
+        elif command["action"] in ("home", "stow"):
             self._cycle = ((sp.HOME_POSE, sp.HOMING_DURATION_MS, True),)
             self._poses = {sp.HOME_POSE: sp.HOME}
             self.phase = "stowing"
@@ -119,6 +137,7 @@ class ArmExecutionContract:
             self._poses = sp.get_poses(cycle_id)
             self.phase = "pressing"
         self.state = "busy"
+        self.current_view = ""
         self._step_index = 0
         return self._start_current_step(float(now_ms), "started")
 
@@ -137,6 +156,7 @@ class ArmExecutionContract:
         self.state = "cancelled"
         self.phase = "stopped_unverified"
         self.homed = False
+        self.current_view = ""
         self.homing_basis = "none"
         self.active = None
         return self.snapshot(
@@ -156,6 +176,7 @@ class ArmExecutionContract:
         self.state = "failed"
         self.phase = "stopped_unverified"
         self.homed = False
+        self.current_view = ""
         self.homing_basis = "none"
         self.active = None
         return self.snapshot("failed", error=error + stop_error, request=failed_request)
@@ -200,13 +221,14 @@ class ArmExecutionContract:
             return self._start_current_step(now_ms)
         completed_request = self.active
         final_pose = self._cycle[-1][0]
+        self.current_view = completed_request.get("view", "")
         if final_pose == sp.HOME_POSE:
             self.homed = True
             self.homing_basis = (
                 "simulation_timing" if self.simulation_mode else "controller_position_response"
             )
         self.state = "simulated_complete" if self.simulation_mode else "completed"
-        self.phase = "stow" if self.homed else "complete"
+        self.phase = self.current_view or ("stow" if final_pose == sp.HOME_POSE else "complete")
         self.active = None
         basis = "simulation_timing" if self.simulation_mode else "controller_position_response"
         return self.snapshot("completed", request=completed_request, completion_basis=basis)
