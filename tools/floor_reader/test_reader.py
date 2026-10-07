@@ -1,5 +1,7 @@
 import unittest
 import tempfile
+import io
+import socket
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
@@ -7,6 +9,37 @@ import app
 from app import Gate, Reader, pattern, normalize, classify
 
 class Tests(unittest.TestCase):
+    def test_occupied_port_does_not_start_camera(self):
+        with socket.socket() as occupied:
+            if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                occupied.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            occupied.bind(('127.0.0.1', 0))
+            occupied.listen()
+            port = occupied.getsockname()[1]
+            with tempfile.TemporaryDirectory() as folder, \
+                    patch.object(app, 'DATA', Path(folder)), \
+                    patch.object(app.threading, 'Thread') as thread, \
+                    patch.object(app.cv2, 'VideoCapture') as capture, \
+                    patch.object(app.sys, 'stderr', new_callable=io.StringIO) as stderr, \
+                    patch.object(app.sys, 'stdout', new_callable=io.StringIO) as stdout:
+                result = app.main(['--source', '/dev/video0', '--port', str(port)])
+            self.assertEqual(result, 1)
+            thread.assert_not_called()
+            capture.assert_not_called()
+            self.assertIn(str(port), stderr.getvalue())
+            self.assertNotIn('Floor reader:', stdout.getvalue())
+
+    def test_usb_camera_avoids_gstreamer_auto_detection(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(app, 'DATA', Path(folder)):
+            reader = Reader('/dev/video0')
+            with patch.object(app.cv2, 'VideoCapture') as capture:
+                capture.return_value.isOpened.return_value = False
+                reader.run()
+            capture.assert_called_once_with('/dev/video0', app.cv2.CAP_V4L2)
+            capture.return_value.release.assert_called_once()
+            self.assertEqual(reader.status['floor'], 'UNKNOWN')
+            self.assertTrue(reader.status['error'])
+
     def test_live_frame_identity_and_camera_loss(self):
         with tempfile.TemporaryDirectory() as folder, patch.object(app, 'DATA', Path(folder)):
             reader, restarted = Reader(0), Reader(0)

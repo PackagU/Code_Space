@@ -17,6 +17,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-10-07 (Codex 인식기 시작 오류): HTTP 포트를 먼저 확보한 뒤 카메라를 열도록 수정하여 중복 실행의 카메라 접근·잘못된 시작 안내를 방지. USB 장치 경로는 V4L2로 지정. 실제 점유 포트에서 카메라 미시작·USB backend 검증 포함 인식기 6개, 판정 probe 12개·미션 13개 및 이식성 검사 PASS. Jetson 8765 점유 프로세스·영상 상태 확인 대기.
 - 2026-10-07 (Codex 4층 판정 시험): `floor_arrival_probe.py --target 4` 추가. 실제 미션의 새 프레임 5개 연속 조건을 HTTP 영상 상태로 검사하며 주행·팔 명령은 발행하지 않는다. 다른 층·UNKNOWN·중복/오래된 프레임·연결 실패를 검증. probe 12개·미션 13개·인식기 4개, 이식성·셸 문법 검사 PASS. Jetson 웹캠 실물 판정 결과 확인 대기.
 - 2026-10-07 (Codex 층수 자세 재보정): 사용자 요청으로 `floor_view`의 PWM을 `001=1480`, `002=1670`으로 재조정. 배포 문서·기존 검증 기대값 갱신. `test_elevator_camera.py` 13/13, 이식성 검사 PASS. Jetson 실물 적용·시선 확인 대기.
 - 2026-10-07 (Codex 팔 자세 보정): 사용자 요청으로 `floor_view`의 PWM을 `001=1400`, `002=1750`으로 변경. 배포 문서·기존 검증 기대값을 함께 갱신. `test_elevator_camera.py` 13/13, 이식성 검사 PASS. Jetson 실물 적용·시선 확인 대기.

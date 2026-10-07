@@ -3,6 +3,7 @@
 import argparse
 import collections
 import json
+import sys
 import threading
 import time
 import uuid
@@ -129,7 +130,12 @@ class Reader:
     def run(self):
         pipeline = ('nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1 ! '
                     'nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink drop=true max-buffers=1 sync=false')
-        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER) if self.source == 'jetson' else cv2.VideoCapture(self.source)
+        if self.source == 'jetson':
+            cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        elif isinstance(self.source, str) and self.source.startswith('/dev/'):
+            cap = cv2.VideoCapture(self.source, cv2.CAP_V4L2)
+        else:
+            cap = cv2.VideoCapture(self.source)
         last = 0
         while cap.isOpened():
             ok, frame = cap.read()
@@ -280,13 +286,30 @@ def handler(reader):
                 self.send({'error':str(e)},code=400)
     return Handler
 
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--source',default='jetson')
     parser.add_argument('--host',default='127.0.0.1')
     parser.add_argument('--port',type=int,default=8765)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     reader = Reader(args.source)
-    threading.Thread(target=reader.run,daemon=True).start()
-    print('Floor reader: http://%s:%s' % (args.host,args.port),flush=True)
-    ThreadingHTTPServer((args.host,args.port),handler(reader)).serve_forever()
+    # Reserve the HTTP endpoint before opening the shared webcam.
+    try:
+        server = ThreadingHTTPServer((args.host,args.port),handler(reader))
+    except OSError as exc:
+        print('층수 인식 서버 시작 실패 (%s:%s): %s\n'
+              '포트를 사용하는 기존 프로그램을 확인하세요. 카메라는 열지 않았습니다.'
+              % (args.host,args.port,exc), file=sys.stderr, flush=True)
+        return 1
+    with server:
+        threading.Thread(target=reader.run,daemon=True).start()
+        print('Floor reader: http://%s:%s' % server.server_address,flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
