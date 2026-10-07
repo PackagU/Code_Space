@@ -215,7 +215,7 @@ class Tests(unittest.TestCase):
     def test_user_camera_poses_require_feedback(self):
         views, duration = load_views(ROOT / "src/robot_arm_pkg/config/camera_views.json")
         self.assertEqual(views["front_view"], {"000":1500,"001":1500,"002":2000,"003":1500})
-        self.assertEqual(views["floor_view"], {"000":1500,"001":1100,"002":1700,"003":1500})
+        self.assertEqual(views["floor_view"], {"000":1500,"001":1400,"002":1750,"003":1500})
         arm = FakeArm()
         contract = ArmExecutionContract(arm, camera_views=views, view_duration_ms=duration)
         contract.submit({"request_id":"home", "action":"home"}, 0)
