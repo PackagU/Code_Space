@@ -77,7 +77,50 @@ ros2 launch elevator_mission_pkg elevator_camera_mission.launch.py serial_port:=
 
 새 launch는 `dry_run_map_load=false`로 실제 map_server 응답을 기다린다. 기존 주행 launch에서 팔 노드나 floor orchestrator를 함께 실행 중이라면 중복 실행을 제거한다. 이 두 노드는 새 미션 launch가 실행한다.
 
+## 4층 주행 없는 판정 시험
+
+팔의 층수 보기 자세를 확인한 뒤 카메라 앱을 `floor_reader`로 전환한다.
+같은 웹캠을 사용하는 `button_arm_test/app.py`는 Ctrl+C로 종료한다.
+팔 노드는 그대로 유지하며, 이 시험은 팔·Nav2·맵 전환 명령을 발행하지 않는다.
+
+```bash
+python3 tools/floor_reader/app.py --source /dev/video0 --host 127.0.0.1 --port 8765
+```
+
+SSH로 8765 포트를 전달해 층수 화면을 연다. 층수 글자 영역을
+좌상 → 우상 → 우하 → 좌하 순서로 지정하고, 목표 층에 `4`를 입력해 적용한다.
+실제 표시창의 4층과 비교할 다른 층 숫자를 해당 이름으로 등록한다.
+표시창이 없다면 `/test` 페이지의 숫자를 모니터에 띄워 웹캠에 보여줄 수 있다.
+ROI와 등록에는 실제 영상 확인이 필요하므로 서버 기동·등록은 수동으로 수행한다.
+
+별도 터미널에서 프로젝트 루트를 기준으로 아래 한 줄을 실행한다.
+ROS 설치나 colcon 빌드 없이 미션의 `reader_observation`과 `ElevatorArrivalGate`를 사용한다.
+
+```bash
+python3 scripts/floor_arrival_probe.py --target 4
+```
+
+`exit_condition_met`는 현재 목표층 확인 조건이며 실제 하차 주행 허가는 아니다.
+`motion_authorized`는 항상 false다. 이 시험에서는 정면 복귀를 위한 확인 결과 고정을
+수행하지 않으므로, 다른 층·인식 불가·영상 끊김에는 조건을 즉시 해제한다.
+
+| 카메라에 보여줄 값 | 기대 결과 |
+|---|---|
+| 1·2·3·5층 | `exit_condition_met=false` |
+| 4층의 새 영상 1~4개 | `exit_condition_met=false` |
+| 4층의 새 영상 5개 연속 | `exit_condition_met=true` |
+| 4층 확인 후 다른 층·글자 가림·서버 종료 | `exit_condition_met=false` |
+
+웹 화면의 목표층 감지 기록은 과거 기록일 수 있다. 현재 조건은 probe 출력으로 확인한다.
+기본 기준은 자세 안정 대기 0.5초, 영상 최대 나이 0.8초, 일치 점수 0.70 이상,
+차순위와의 점수 차이 0.08 이상이다. HTTP 연결·JSON 오류도 조건을 해제한다.
+이 시험은 실제 문 열림·엘리베이터 정지·맵 전환·물리 하차를 검증하지 않는다.
+
 ## 오프라인 검증
+
+2026-10-07 Windows 검증: 4층 판정 probe 12개·기존 미션 13개·층 인식기 4개,
+이식성 검사와 오프라인 러너 셸 문법 검사 통과. 실제 HTTP 응답으로 4층 확인 후
+3층으로 바뀌면 조건이 해제되는 것도 검사했다. Jetson 실물 웹캠 결과는 아직 확인 전이다.
 
 ```bash
 python3 scripts/test_elevator_camera.py

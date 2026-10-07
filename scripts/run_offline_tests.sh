@@ -50,6 +50,7 @@ PY_TESTS=(
   scripts/test_arm_sequence.py
   scripts/test_arm_execution_contract.py
   scripts/test_elevator_camera.py
+  scripts/test_floor_arrival_probe.py
   scripts/test_lift_uno_contract.py
   scripts/check_portability.py
   test_workspace/elevator_mission/scripts/test_behaviors_dryrun.py
