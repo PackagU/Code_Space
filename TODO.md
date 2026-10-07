@@ -17,6 +17,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-10-07 (Codex 층수 자세 재보정): 사용자 요청으로 `floor_view`의 PWM을 `001=1480`, `002=1670`으로 재조정. 배포 문서·기존 검증 기대값 갱신. `test_elevator_camera.py` 13/13, 이식성 검사 PASS. Jetson 실물 적용·시선 확인 대기.
 - 2026-10-07 (Codex 팔 자세 보정): 사용자 요청으로 `floor_view`의 PWM을 `001=1400`, `002=1750`으로 변경. 배포 문서·기존 검증 기대값을 함께 갱신. `test_elevator_camera.py` 13/13, 이식성 검사 PASS. Jetson 실물 적용·시선 확인 대기.
 - 2026-10-06 (Codex GitHub 배포): `codex/presentation-20260916`의 `9c5ee7e`을 기준으로 새 브랜치 `2026-10-06` 구성. 카메라 목표층 미션·Nav2 검사 기준 변경 25개 파일 반영, 게시할 checkout에서 관련 검사 15/15 통과. push 대상은 `refs/heads/2026-10-06`으로 한정하며 기존 브랜치에는 merge하지 않는다.
 - 2026-10-06 (Codex 후속): 사용자 요청으로 Nav2 도착 허용오차 검사 상한을 현재 현장 설정(위치 0.20m·방향 0.15rad)에 맞춤. 양수 검사·상한 검사 유지, 실제 주행 설정 변경 없음. 관련 오프라인 검사 15/15 재검증 통과, 초기 Nav2 설정/검사 불일치 해소.
