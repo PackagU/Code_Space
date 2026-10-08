@@ -1,0 +1,127 @@
+{
+  "method": "Offline comparison of global-costmap inflation / planner cost weights (2026-09-15).",
+  "candidates": {
+    "baseline": {
+      "inflation_radius": 0.55,
+      "cost_scaling_factor": 3.0,
+      "cost_travel_multiplier": 2.0
+    },
+    "push_A": {
+      "inflation_radius": 1.0,
+      "cost_scaling_factor": 2.0,
+      "cost_travel_multiplier": 3.0
+    },
+    "push_B": {
+      "inflation_radius": 1.0,
+      "cost_scaling_factor": 1.5,
+      "cost_travel_multiplier": 4.0
+    }
+  },
+  "results": {
+    "F2": {
+      "f2_delivery_destination->f2_elevator_staging_v1": {
+        "baseline": {
+          "length_m": 42.45,
+          "min_center_clearance_m": 0.552,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 0.753,
+          "closest_to_notch_m": 1.132,
+          "clearance_at_that_point_m": 0.673,
+          "min_clearance_within_3m_of_notch_m": 0.552
+        },
+        "push_A": {
+          "length_m": 43.5,
+          "min_center_clearance_m": 0.849,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.043,
+          "closest_to_notch_m": 1.591,
+          "clearance_at_that_point_m": 1.082,
+          "min_clearance_within_3m_of_notch_m": 0.886
+        },
+        "push_B": {
+          "length_m": 43.53,
+          "min_center_clearance_m": 0.885,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.043,
+          "closest_to_notch_m": 1.591,
+          "clearance_at_that_point_m": 1.082,
+          "min_clearance_within_3m_of_notch_m": 0.886
+        }
+      }
+    },
+    "F1_v3": {
+      "f1_idle_v2_seed->f1_locker": {
+        "baseline": {
+          "length_m": 11.59,
+          "min_center_clearance_m": 0.552,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.15
+        },
+        "push_A": {
+          "length_m": 11.67,
+          "min_center_clearance_m": 0.618,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.177
+        },
+        "push_B": {
+          "length_m": 11.79,
+          "min_center_clearance_m": 0.618,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.183
+        }
+      },
+      "f1_locker->f1_elevator_entry": {
+        "baseline": {
+          "length_m": 11.5,
+          "min_center_clearance_m": 0.552,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 0.961
+        },
+        "push_A": {
+          "length_m": 11.97,
+          "min_center_clearance_m": 0.618,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.104
+        },
+        "push_B": {
+          "length_m": 12.09,
+          "min_center_clearance_m": 0.618,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.113
+        }
+      },
+      "f1_elevator_exit->f1_idle_v2_seed": {
+        "baseline": {
+          "length_m": 5.17,
+          "min_center_clearance_m": 0.566,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.127
+        },
+        "push_A": {
+          "length_m": 5.68,
+          "min_center_clearance_m": 0.738,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.198
+        },
+        "push_B": {
+          "length_m": 5.72,
+          "min_center_clearance_m": 0.738,
+          "path_cells_below_0.45m": 0,
+          "path_cells_below_0.35m": 0,
+          "mean_center_clearance_m": 1.199
+        }
+      }
+    }
+  }
+}

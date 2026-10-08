@@ -1,0 +1,6 @@
+session,start_kst,map,initial_x,initial_y,initial_yaw,goal_x,goal_y,result,duration_s,collision_warning_count,collision_first_kst,collision_last_kst,notes
+F1_v1_locker,2026-09-14 23:05:35.158,f1_manual_clean_v1.yaml,-3.725,2.075,-1.701,-5.125,-8.625,canceled,100.598,19,2026-09-14 23:06:49.837,2026-09-14 23:06:52.786,"no-valid-path warning 1"
+F1_v2_locker,2026-09-14 23:32:01.271,f1_manual_clean_v2.yaml,-3.725,2.075,-1.701,-5.125,-8.625,canceled,128.412,0,,,"starting point in lethal space 4"
+F2_to_delivery,2026-09-14 23:44:02.950,f2_nav_unknown_v1.yaml,-11.375,-2.525,-0.829,-39.925,-32.625,succeeded,416.172,0,,,""
+F2_return_to_elevator,2026-09-14 23:52:34.068,f2_nav_unknown_v1.yaml,-39.76,-32.54,,-11.375,-2.525,succeeded,512.533,795,2026-09-14 23:54:14.914,2026-09-15 00:00:16.665,"collision interval 361.750 s"
+F1_v1_elevator_to_idle,2026-09-15 00:09:23.230,f1_manual_clean_v1.yaml,-8.725,-0.175,0.919,-3.725,2.075,succeeded,117.192,557,2026-09-15 00:09:33.339,2026-09-15 00:10:01.139,"Nav2 success; photographed physical stop offset"

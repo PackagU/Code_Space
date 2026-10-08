@@ -1,0 +1,10 @@
+{
+  "sx": 1.0397,
+  "sy": 1.0386000000000002,
+  "tx": -108.69999999999999,
+  "ty": -4.2,
+  "score": 0.010606060606060607,
+  "samples": 660,
+  "mean_abs_grayscale_error": 3.8041349559420077,
+  "convention": "annotation_xy = raw_xy * scale_xy + translation_xy; fit on unchanged dark pixels excluding red ink"
+}

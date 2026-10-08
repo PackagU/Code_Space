@@ -1,0 +1,170 @@
+{
+  "status": "manual reconstruction v3; not SLAM, not field validated",
+  "grid_angle_deg": 21.75,
+  "grid_angle_basis": "dominant occupied-cell direction of raw f1_raw_20260914.pgm (whole map 21.75, hall region 21.5-22.0)",
+  "uv_to_raw": "x = u*cos(a) - v*sin(a), y = u*sin(a) + v*cos(a), raw pixel units, image y down",
+  "outline_uv": [
+    [
+      298.8,
+      -118.5
+    ],
+    [
+      477.4,
+      -118.5
+    ],
+    [
+      477.4,
+      204.5
+    ],
+    [
+      410.0,
+      204.5
+    ],
+    [
+      410.0,
+      268.5
+    ],
+    [
+      357.3,
+      268.5
+    ],
+    [
+      357.3,
+      204.5
+    ],
+    [
+      305.2,
+      204.5
+    ],
+    [
+      305.2,
+      129.0
+    ],
+    [
+      256.0,
+      129.0
+    ],
+    [
+      256.0,
+      169.0
+    ],
+    [
+      219.0,
+      169.0
+    ],
+    [
+      219.0,
+      129.0
+    ],
+    [
+      207.9,
+      129.0
+    ],
+    [
+      207.9,
+      40.0
+    ],
+    [
+      298.8,
+      40.0
+    ]
+  ],
+  "outline_raw": [
+    [
+      321.439,
+      0.659
+    ],
+    [
+      487.325,
+      66.84
+    ],
+    [
+      367.635,
+      366.846
+    ],
+    [
+      305.033,
+      341.87
+    ],
+    [
+      281.317,
+      401.314
+    ],
+    [
+      232.369,
+      381.786
+    ],
+    [
+      256.085,
+      322.342
+    ],
+    [
+      207.694,
+      303.036
+    ],
+    [
+      235.671,
+      232.911
+    ],
+    [
+      189.973,
+      214.679
+    ],
+    [
+      175.151,
+      251.832
+    ],
+    [
+      140.785,
+      238.121
+    ],
+    [
+      155.607,
+      200.969
+    ],
+    [
+      145.298,
+      196.855
+    ],
+    [
+      178.277,
+      114.191
+    ],
+    [
+      262.706,
+      147.875
+    ]
+  ],
+  "open_edge_indices": [
+    4
+  ],
+  "inner_walls_uv": [
+    [
+      [
+        219.0,
+        129.0
+      ],
+      [
+        234.0,
+        129.0
+      ]
+    ],
+    [
+      [
+        357.3,
+        204.5
+      ],
+      [
+        383.6,
+        204.5
+      ]
+    ]
+  ],
+  "wall_half_width_px": 0.8,
+  "policies": {
+    "snap": "edge midpoint kept, except the idle-side wall (u=298.8) and corner (v=40.0) kept at v2 position beside f1_idle",
+    "elevator": "rectangle u 219..256, v 129..169 (1.85 m x 2.0 m); door gap u 234..256 from v2",
+    "glass_door": "locked half u 357.3..383.6 on the neck line v=204.5; open half u 383.6..410.0",
+    "values": "map_saver style 254/0/205 with free_thresh 0.19"
+  }
+}

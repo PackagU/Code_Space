@@ -1,0 +1,24 @@
+{
+  "outputs": {
+    "f1_manual_clean_v3.pgm": "d525759b07a8093180aefb42985e061884d014712ecd12c1a9e39c396a2558d5",
+    "f1_manual_clean_v3.yaml": "d701d2b6df578c23093abf41cb40afd5069193df6125713b39093f41bb68ddaa",
+    "f1_manual_clean_v3.png": "8e8f39d6ca44112e7d4d82ba13b628fca90d108459e2a4ecd454c5bef75e6821",
+    "geometry_v3.json": "7ccae7c46b50d06f945eab9633a471125081848ed44ef9dd6598b3f6d0ef5417",
+    "v2_red_vs_v3_black.png": "651926b1305039d4707d65de8fdd7751d9d43a53ece83a55941e79694f2b998b"
+  },
+  "inputs": {
+    "v2_pgm": "3f9a40c42bbdb73933eac76cd187853b8502d2587e398b24b7537e4b8e3ab9d1",
+    "raw_pgm": "be58abad3f25fb597993021f694422ecb26b2204e5bc6ee1afa1181feecbfe73"
+  },
+  "classes": {
+    "occupied": 2198,
+    "free": 69015,
+    "unknown": 145363
+  },
+  "connectivity_cells_only": {
+    "main_hall": true,
+    "elevator_interior": true,
+    "locker_alcove": true
+  },
+  "changed_cells_vs_v2_occupied": 3687
+}

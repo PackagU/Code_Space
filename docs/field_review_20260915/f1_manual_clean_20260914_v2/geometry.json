@@ -1,0 +1,115 @@
+{
+  "coordinate_space": "user annotation image pixels, top-left origin",
+  "wall_width_raw_pixels": 2,
+  "status": "manual reconstruction from user red outline; not measured geometry",
+  "outer_outline": [
+    [
+      250,
+      5
+    ],
+    [
+      407,
+      70
+    ],
+    [
+      264,
+      373
+    ],
+    [
+      209,
+      349
+    ],
+    [
+      184,
+      413
+    ],
+    [
+      133,
+      392
+    ],
+    [
+      157,
+      332
+    ],
+    [
+      103,
+      310
+    ],
+    [
+      137,
+      247
+    ],
+    [
+      89,
+      219
+    ],
+    [
+      80,
+      229
+    ],
+    [
+      88,
+      236
+    ],
+    [
+      65,
+      259
+    ],
+    [
+      38,
+      237
+    ],
+    [
+      68,
+      210
+    ],
+    [
+      34,
+      187
+    ],
+    [
+      92,
+      110
+    ],
+    [
+      155,
+      151
+    ],
+    [
+      165,
+      146
+    ]
+  ],
+  "overlapping_wall_polyline": [
+    [
+      157,
+      332
+    ],
+    [
+      183,
+      340.5
+    ]
+  ],
+  "ambiguous_wedge": [],
+  "overlap_policy": "latest user correction: inner zigzag is NOT a wall; remove it and keep only the outer thin triangular boundary",
+  "entrance_policy": "user confirmed bottom short diagonal is the entrance; open this marked segment to unknown exterior; exact physical width unmeasured",
+  "open_outer_edge_indices": [
+    4
+  ],
+  "elevator_policy": "retain the connection through the unmarked gap between the two red wall ends",
+  "checkpoints_annotation": {
+    "main_hall": [
+      230,
+      230
+    ],
+    "elevator_interior": [
+      64,
+      237
+    ],
+    "entrance_recess": [
+      170,
+      375
+    ]
+  },
+  "glass_door_policy": "v2: glass door at the neck between the hall and the locker corridor, vertices [157,332]-[209,349]. It is always locked on one side. Facing the door toward the locker (map -y), the robot's right half [157,332]->[183,340.5] is a wall; the left half [183,340.5]->[209,349] stays open. Midpoint and door width are unmeasured."
+}

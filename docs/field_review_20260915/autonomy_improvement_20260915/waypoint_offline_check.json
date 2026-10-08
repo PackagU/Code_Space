@@ -1,0 +1,373 @@
+{
+  "status": "offline verification (map copy + Nav2 param approximation); no ROS, no robot",
+  "footprint": [
+    [
+      0.033,
+      0.219
+    ],
+    [
+      0.033,
+      -0.219
+    ],
+    [
+      -0.327,
+      -0.219
+    ],
+    [
+      -0.327,
+      0.219
+    ]
+  ],
+  "nav2_inscribed_radius_m": 0.033,
+  "circumscribed_radius_m": 0.3936,
+  "inflation": {
+    "radius_m": 0.55,
+    "cost_scaling_factor": 3.0
+  },
+  "F2": {
+    "map_yaml_sha256": "b670cd2b8790340e703b747c2b82c2c1540a826a06cba49899527a41eeddc45f",
+    "map_pgm_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31",
+    "poses": {
+      "f2_elevator_entry": {
+        "name": "f2_elevator_entry",
+        "pose": [
+          -11.375,
+          -2.525,
+          2.312744
+        ],
+        "cell_row_col": [
+          955,
+          670
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 0.461,
+        "center_to_nonfree_m": 0.461,
+        "center_inflation_cost_static": 69,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.24,
+        "footprint_edge_to_nonfree_m": 0.24,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "f2_elevator_staging_v1": {
+        "name": "f2_elevator_staging_v1",
+        "pose": [
+          -11.175,
+          -3.075,
+          2.312744
+        ],
+        "cell_row_col": [
+          966,
+          674
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 0.886,
+        "center_to_nonfree_m": 0.886,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.729,
+        "footprint_edge_to_nonfree_m": 0.729,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "f2_delivery_destination": {
+        "name": "f2_delivery_destination",
+        "pose": [
+          -39.925,
+          -32.625,
+          -2.33
+        ],
+        "cell_row_col": [
+          1557,
+          99
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 1.05,
+        "center_to_nonfree_m": 1.05,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.672,
+        "footprint_edge_to_nonfree_m": 0.672,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      }
+    },
+    "connectivity": {
+      "f2_elevator_entry": [
+        {
+          "clearance_m": 0.219,
+          "start_ok": true,
+          "goal_ok": true,
+          "connected": true
+        },
+        {
+          "clearance_m": 0.3935606687665829,
+          "start_ok": true,
+          "goal_ok": true,
+          "connected": true
+        }
+      ],
+      "f2_elevator_staging_v1": [
+        {
+          "clearance_m": 0.219,
+          "start_ok": true,
+          "goal_ok": true,
+          "connected": true
+        },
+        {
+          "clearance_m": 0.3935606687665829,
+          "start_ok": true,
+          "goal_ok": true,
+          "connected": true
+        }
+      ]
+    },
+    "approx_planner_path": {
+      "f2_elevator_entry": {
+        "status": {
+          "start_valid": true,
+          "goal_valid": true,
+          "connected": true
+        },
+        "whole_path": {
+          "cells": 627,
+          "min_center_clearance_m": 0.461,
+          "min_at_xy": [
+            -11.375,
+            -2.525
+          ],
+          "cells_below_0.39m": 0,
+          "cells_below_0.30m": 0
+        },
+        "last_3m_before_goal": {
+          "cells": 60,
+          "min_center_clearance_m": 0.461,
+          "min_at_xy": [
+            -11.375,
+            -2.525
+          ],
+          "cells_below_0.39m": 0,
+          "cells_below_0.30m": 0
+        }
+      },
+      "f2_elevator_staging_v1": {
+        "status": {
+          "start_valid": true,
+          "goal_valid": true,
+          "connected": true
+        },
+        "whole_path": {
+          "cells": 616,
+          "min_center_clearance_m": 0.552,
+          "min_at_xy": [
+            -10.875,
+            -4.575
+          ],
+          "cells_below_0.39m": 0,
+          "cells_below_0.30m": 0
+        },
+        "last_3m_before_goal": {
+          "cells": 58,
+          "min_center_clearance_m": 0.552,
+          "min_at_xy": [
+            -10.875,
+            -4.575
+          ],
+          "cells_below_0.39m": 0,
+          "cells_below_0.30m": 0
+        }
+      }
+    },
+    "overlay": {
+      "file": "f2_staging_overlay.png",
+      "sha256": "d1afae0f9cd55d1fd97aa94288bfc5ba34562e5e952f68d8effdca094e3a6ef1"
+    }
+  },
+  "F1_v2": {
+    "map_yaml_sha256": "5ed28bf0cf438e0e2c085ace005039b71dc7f4474d87ea56e42824baac95b796",
+    "map_pgm_sha256": "3f9a40c42bbdb73933eac76cd187853b8502d2587e398b24b7537e4b8e3ab9d1",
+    "poses": {
+      "f1_idle": {
+        "name": "f1_idle",
+        "pose": [
+          -3.725,
+          2.075,
+          -1.701
+        ],
+        "cell_row_col": [
+          149,
+          295
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 1.43,
+        "center_to_nonfree_m": 1.43,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 1.095,
+        "footprint_edge_to_nonfree_m": 1.095,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "f1_locker": {
+        "name": "f1_locker",
+        "pose": [
+          -5.125,
+          -8.625,
+          -1.69
+        ],
+        "cell_row_col": [
+          363,
+          267
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 1.218,
+        "center_to_nonfree_m": 1.218,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.921,
+        "footprint_edge_to_nonfree_m": 0.921,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "f1_elevator_exit": {
+        "name": "f1_elevator_exit",
+        "pose": [
+          -8.725,
+          -0.175,
+          0.918927
+        ],
+        "cell_row_col": [
+          194,
+          195
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 1.031,
+        "center_to_nonfree_m": 1.031,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.648,
+        "footprint_edge_to_nonfree_m": 0.648,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "f1_elevator_entry": {
+        "name": "f1_elevator_entry",
+        "pose": [
+          -8.725,
+          -0.175,
+          -2.222665
+        ],
+        "cell_row_col": [
+          194,
+          195
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 1.031,
+        "center_to_nonfree_m": 1.031,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.933,
+        "footprint_edge_to_nonfree_m": 0.933,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      }
+    },
+    "idle_right_side_ray": {
+      "first_nonfree_m": 1.54,
+      "at_xy": [
+        -5.252,
+        2.275
+      ],
+      "class": 2
+    },
+    "idle_v2_seed_hints": {
+      "right_0.8m": {
+        "name": "idle_seed_right_0.8m",
+        "pose": [
+          -4.518,
+          2.179,
+          -1.701
+        ],
+        "cell_row_col": [
+          147,
+          279
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 0.699,
+        "center_to_nonfree_m": 0.699,
+        "center_inflation_cost_static": 0,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.362,
+        "footprint_edge_to_nonfree_m": 0.362,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      },
+      "right_1.0m": {
+        "name": "idle_seed_right_1.0m",
+        "pose": [
+          -4.717,
+          2.205,
+          -1.701
+        ],
+        "cell_row_col": [
+          146,
+          275
+        ],
+        "center_class": "free",
+        "center_to_occupied_m": 0.519,
+        "center_to_nonfree_m": 0.519,
+        "center_inflation_cost_static": 58,
+        "center_start_lethal_static": false,
+        "footprint_edge_to_occupied_m": 0.178,
+        "footprint_edge_to_nonfree_m": 0.178,
+        "footprint_cells_occupied": 0,
+        "footprint_cells_unknown": 0
+      }
+    },
+    "connectivity_idle_to_locker": [
+      {
+        "clearance_m": 0.219,
+        "start_ok": true,
+        "goal_ok": true,
+        "connected": true
+      },
+      {
+        "clearance_m": 0.3935606687665829,
+        "start_ok": true,
+        "goal_ok": true,
+        "connected": true
+      }
+    ],
+    "approx_planner_path_idle_to_locker": {
+      "status": {
+        "start_valid": true,
+        "goal_valid": true,
+        "connected": true
+      },
+      "whole_path": {
+        "cells": 215,
+        "min_center_clearance_m": 0.559,
+        "min_at_xy": [
+          -3.725,
+          -7.225
+        ],
+        "cells_below_0.39m": 0,
+        "cells_below_0.30m": 0
+      },
+      "narrowest_point": {
+        "cells": 215,
+        "min_center_clearance_m": 0.559,
+        "min_at_xy": [
+          -3.725,
+          -7.225
+        ],
+        "cells_below_0.39m": 0,
+        "cells_below_0.30m": 0
+      }
+    },
+    "overlay": {
+      "file": "f1_v2_idle_locker_overlay.png",
+      "sha256": "0222bc38f13ef565c88ac190b9f6afdd3b3f3130982bcf96e63ed07404eabc6c"
+    }
+  }
+}
