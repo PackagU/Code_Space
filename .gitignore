@@ -93,6 +93,8 @@ docs/**
 !docs/handover/**
 !docs/_style/
 !docs/_style/**
+!docs/sim_e2e_20261008/
+!docs/sim_e2e_20261008/**
 !docs/.notion_sync.json
 docs/capstone/
 *.hwp

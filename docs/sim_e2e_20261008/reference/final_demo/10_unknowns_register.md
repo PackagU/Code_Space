@@ -28,12 +28,12 @@
 
 | ID | 항목 | 현재 값 | 확인 방법 |
 |---|---|---|---|
-| U-D01 | "192 데스크톱"이 9/15 시뮬 보고서의 데스크톱과 같은 기계인지 | 아직 모름 | 08 준비 1 |
-| U-D02 | 9/15 `sim/real_maps/`가 남아 있는지, checkout 경로 | 아직 모름. GitHub `lee/sim-real-maps`(`44e9fc8`)에는 `sim/` 파일 0개(10/8 확인) | 08 준비 2 |
-| U-D03 | 9/15 `logs/real_map_sim/` bag 보존 | 아직 모름 | 08 준비 2 |
-| U-D04 | OS·CPU·GPU·Docker 이미지·Gazebo 버전 | 아직 모름 (9/15: Ubuntu 22.04.5, i7-12700, 32 GB, GPU 드라이버 없음, Gazebo Classic 11.10.2) | 08 준비 1 |
-| U-D05 | 데스크톱에서 GitHub·Jetson 접근 | 아직 모름 | 08 준비 3 |
-| U-D06 | sudo 가능 여부 | 아직 모름 | 필요할 때만 묻는다 |
+| U-D01 | "192 데스크톱"이 9/15 시뮬 보고서의 데스크톱과 같은 기계인지 | **확인(10/8)**: 같은 기계로 판단. Ubuntu 22.04.5, i7-12700(20 논리 CPU), RAM 32 GB, 호스트 192.168.0.2, 9/15 checkout이 이 기계에 있음 | 08 준비 1 |
+| U-D02 | 9/15 `sim/real_maps/`가 남아 있는지, checkout 경로 | **확인(10/8)**: `~/2026_graduation_project/real_map_sim_workspace`(`lee/sim-real-maps` `44e9fc8` + 미커밋 `sim/`·`docs/sim/`). 58파일을 `~/packagu_sim_backup_20261008_2040/`에 tar 백업, 이 브랜치 `f0a5c09`로 복구(원본 checkout 불변) | 08 준비 2 |
+| U-D03 | 9/15 `logs/real_map_sim/` bag 보존 | **확인(10/8)**: 보존(23 GB, 2,917 항목). 목록만 백업, 복사 안 함 | 08 준비 2 |
+| U-D04 | OS·CPU·GPU·Docker 이미지·Gazebo 버전 | **확인(10/8)**: Ubuntu 22.04.5, i7-12700, 32 GB, GPU RTX 3070(이번에는 `nvidia-smi` 동작, 9/15는 드라이버 없음. 시뮬 컨테이너는 GPU 미사용), 이미지 `ghcr.io/packagu/ros2-humble-slam:humble`(`1fa2473f749e`), Gazebo Classic 11.10.2 | 08 준비 1 |
+| U-D05 | 데스크톱에서 GitHub·Jetson 접근 | **일부 확인(10/8)**: GitHub HTTPS clone 가능(push 결과는 `docs/sim_e2e_20261008/REPORT.md`). Jetson 접근은 시도하지 않음(작업 범위 밖) | 08 준비 3 |
+| U-D06 | sudo 가능 여부 | 아직 모름. 이번 작업에 sudo·설치·이미지 pull 필요 없었음 | 필요할 때만 묻는다 |
 
 ## U-H 로봇 하드웨어 (토요일 현장)
 

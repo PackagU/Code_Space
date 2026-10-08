@@ -12,7 +12,34 @@
 - `scripts/fastdds_lan_peers.xml`, `scripts/run_sim_host.sh`(Jetson 분산 모드)는 쓰지 않는다
 - 컨테이너는 호스트 uid로 돌아 root 소유 파일을 남기지 않는다. 필드용 `ros2_humble` 컨테이너는 건드리지 않는다
 
-## 한 명령 실행
+## 바로 실행 (복사해서 쓰기)
+
+저장소 루트(`cs_sim_e2e/`)에서 실행한다. 결과는 `logs/real_map_sim/<날짜시간>_e2e_...`에 새로 쌓인다. 각 왕복은 실제 약 18~22분이다.
+
+```bash
+# 1) 검증된 기본 왕복 (캐빈 진입·하차만 시뮬 운전자 직접 주행, 나머지 Nav2) — 2026-10-08 완주 확인
+python3 sim/real_maps/run_e2e.py --cabin-mode direct
+
+# 2) 팔·지게팔 포함 왕복 (리프트 상승·하강, 팔 버튼 누르기·접기, 상자 붙이기/놓기 mock, 모두 가정값)
+python3 sim/real_maps/run_e2e.py --cabin-mode direct --arm-sim
+
+# 3) 전 구간 Nav2 왕복 (캐빈 진입·하차도 Nav2) — 10/8 최신 모델에서 F2 캐빈 진입 실패 재현용
+python3 sim/real_maps/run_e2e.py --cabin-mode nav2
+
+# 4) GUI로 보며 한 층 띄우기 (gzclient + RViz, 컨테이너 안에서 같은 uid X11 소켓 사용, xhost 변경 없음)
+#    10/8 확인: RViz 지도·costmap·LiDAR·로봇 20 fps, Gazebo 3D 51 FPS (DISPLAY=:1, SI:localuser 허용 환경)
+bash sim/real_maps/start_sim.sh --floor F1 --params P0 --spawn f1_initial_test --gui
+#    두 층 + 엘리베이터 + 팔: --world building --arm-sim 추가
+python3 sim/real_maps/sim_goal.py --name <출력된 이름> --to f1_locker
+
+# 5) 종료: 이 시뮬이 띄운 프로세스·컨테이너만 정리 (현장 ros2_humble 컨테이너는 건드리지 않음)
+bash sim/real_maps/start_sim.sh --stop
+for c in $(docker ps -a --format '{{.Names}}' | grep '^packagu_sim'); do docker rm -f "$c"; done
+```
+
+결과 표 다시 만들기: `python3 sim/real_maps/summarize_runs.py --pretest 'pre3_*' --e2e '*e2e*' --out results/20261008`
+
+## 한 명령 실행 (세부)
 
 ```bash
 # A층: 한 층 실측 지도 + 로봇 + OpenCR shim + nav_safety_gate + Nav2 (준비 판정까지)

@@ -118,6 +118,10 @@ def provenance(run_dir, files):
               'command': os.environ.get('PACKAGU_SIM_CMD') or ' '.join(sys.argv),
               'container': os.environ.get('HOSTNAME'), 'ros_domain_id': os.environ.get('ROS_DOMAIN_ID'),
               'ros_localhost_only': os.environ.get('ROS_LOCALHOST_ONLY'), 'files': {}}
+    diff = git('diff', 'HEAD') or ''
+    if diff:
+        (snap/'uncommitted.diff').write_text(diff+'\n')
+    record['git_diff_sha256'] = hashlib.sha256(diff.encode()).hexdigest() if diff else None
     for key, path in files.items():
         path = Path(path)
         record['files'][key] = {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -695,7 +699,7 @@ class Stack:
                 time.sleep(.5)
             out['metadata_after_wait'] = (self.bag/'metadata.yaml').exists()
             if not out['metadata_after_wait'] and list(self.bag.glob('*.db3')):
-                rec = subprocess.run(['ros2', 'bag', 'reindex', str(self.bag), 'sqlite3'], capture_output=True,
+                rec = subprocess.run(['ros2', 'bag', 'reindex', '-s', 'sqlite3', str(self.bag)], capture_output=True,
                                      text=True, timeout=300)
                 (self.dir/'bag_reindex.log').write_text(rec.stdout+rec.stderr)
                 out['recovery'] = {'method': 'ros2 bag reindex (simulation-only recovery)', 'exit': rec.returncode,
