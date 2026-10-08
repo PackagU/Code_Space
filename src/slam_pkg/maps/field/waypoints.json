@@ -168,6 +168,22 @@
         "report": "artifacts/autonomy_improvement_20260915/waypoint_offline_check.json (local PC)"
       },
       "pose_validation_status": "position_proposed_heading_copied_from_f2_elevator_entry"
+    },
+    "f2_delivery_left_room4": {
+      "floor": "F2",
+      "frame_id": "map",
+      "x": -24.725,
+      "y": -17.975,
+      "yaw_rad": -2.3963,
+      "source": "user-supplied field coordinate"
+    },
+    "f1_initial_test": {
+      "floor": "F1",
+      "frame_id": "map",
+      "x": -4.518,
+      "y": 2.179,
+      "yaw_rad": -1.701,
+      "source": "user-supplied field coordinate"
     }
   }
 }
