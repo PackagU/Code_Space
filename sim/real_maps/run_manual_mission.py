@@ -456,6 +456,8 @@ class Mission:
 
 
 def main():
+    from isolation import assert_isolated
+    assert_isolated()
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', default='M1_manual_roundtrip_r1')
     parser.add_argument('--goal-timeout', type=float, default=900)

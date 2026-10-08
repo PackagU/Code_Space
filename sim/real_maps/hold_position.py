@@ -7,6 +7,8 @@ from run_manual_mission import Mission
 
 
 def main():
+    from isolation import assert_isolated
+    assert_isolated()
     parser=argparse.ArgumentParser()
     parser.add_argument('--x',type=float,required=True)
     parser.add_argument('--y',type=float,required=True)

@@ -214,7 +214,8 @@ def scenario_list(repeats):
 
 
 def run_case(case, timeout, robot_path=None):
-    robot_path=Path(robot_path) if robot_path is not None else HERE/'generated/robot.urdf'
+    # 9/15 reproduction keeps WORLD odometry (truth as odom); new runs use robot.urdf (encoder).
+    robot_path=Path(robot_path) if robot_path is not None else HERE/'generated/robot_world.urdf'
     directory=LOG/case['name']
     directory.mkdir(parents=True,exist_ok=True)
     (directory/'case.json').write_text(json.dumps(case,indent=2))
@@ -379,6 +380,8 @@ def run_case(case, timeout, robot_path=None):
 
 
 def main():
+    from isolation import assert_isolated
+    assert_isolated()
     parser=argparse.ArgumentParser()
     parser.add_argument('--repeats',type=int,default=3)
     parser.add_argument('--filter',default='',help='case-name substring; empty means complete suite')

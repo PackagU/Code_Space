@@ -1,0 +1,150 @@
+# 실측 지도 Gazebo 월드 치수 (시뮬 전용, 2026-10-08)
+#
+# generate_worlds.py 는 월드 치수를 이 파일에서만 읽는다. 토요일(10/10) 현장 측정 뒤에는
+# 값과 source 만 바꾸고 `python3 sim/real_maps/generate_worlds.py` 로 다시 생성한다.
+#
+# source 표기
+#   [측정값] 날짜·방법      : 실제로 잰 값
+#   [제안값] 근거           : 시뮬을 돌리기 위해 정한 값. 실물 확인 전
+#   아직 모름(임시값)       : 사실이지만 아직 확인하지 않음. 임시값으로 월드를 만든다
+#   지도 기하               : 현장 지도 이미지·생성기에서 계산한 값. 로봇·줄자 측정이 아님
+# 확인 대상 ID는 docs/sim_e2e_20261008/reference/final_demo/10_unknowns_register.md 의 U-E·U-H.
+# 이 파일로 만든 월드의 결과에는 모두 "임시 치수"를 붙인다.
+schema_version: 1
+validation_scope: simulation
+
+walls:
+  height_m: 1.0
+  height_source: "[제안값] 9/15 시뮬과 같은 1.0 m. LiDAR 평면(0.667 m)보다 높으면 Nav2 결과에 영향 없음. 실제 벽 높이 아직 모름"
+
+floors:
+  F1:
+    nav_map: src/slam_pkg/maps/field/f1/f1_manual_clean_v3.yaml
+    world_map: noglass
+    world_map_source: "지도 기하. v3 에서 보관함 유리 고정문 선분 (357.3,204.5)-(383.6,204.5) 만 뺀다(9/15와 같음). LiDAR가 유리를 못 보는 상황 흉내"
+    # 두 층을 한 Gazebo 월드에 둘 때 층별 world 좌표 오프셋 [x, y, z] (m). 지면 진실 평가 때 뺀다.
+    world_offset: [0.0, 0.0, 0.0]
+  F2:
+    nav_map: src/slam_pkg/maps/field/f2/f2_nav_unknown_v1.yaml
+    world_map: raw
+    world_map_source: "지도 기하. f2_raw_20260914.pgm occupied 셀 그대로(잡음 유지)"
+    world_offset: [100.0, 0.0, 0.0]
+    world_offset_source: "[제안값] F1 x 범위 -18.5..7.1, F2 x 범위 -44.9..-0.7 → +100 m 이면 두 층 사이 48 m 이상. LiDAR 최대 8 m 보다 훨씬 멀다"
+  ground_plane_m: 400.0
+
+# F2 문 열린 리허설 변형(f2_door_open). 9/15와 같은 마스크: 통로 중심·축·폭·수직 범위 안 occupied 셀 제거.
+f2_door_open:
+  center: [-11.925, -1.925]
+  axis_rad: 0.741948
+  half_along_m: 0.5
+  half_across_m: 0.4
+  source: "9/15 사용자 승인 시뮬 예외. 문 영역 스캔 두께를 비울 뿐 실측 문짝 두께가 아님(9/15 결과 78셀 제거)"
+
+elevator:
+  # 승강장 문·캐빈 문을 한 쌍의 미닫이 문짝(중앙 열림)으로 근사한다. 두 문 사이 틈은 모델하지 않는다.
+  door_model: "center-opening sliding leaf pair (landing+cabin door merged)"
+  door_model_source: "[제안값] 09 L3 '미닫이 모델 또는 충돌체 on/off로 시작'. 실제 문 구성 U-E01·U-E06 아직 모름"
+  F1:
+    door_center: [-9.512178449257371, -0.9801502255194041]
+    door_axis_rad: -0.37960911230876665
+    door_source: "지도 기하. v3 정책 문 틈 u 234..256, v 129 의 중심(raw px 245,129)을 21.75° 회전해 계산(9/15 doors()와 같음)"
+    opening_width_m: 1.10
+    opening_width_source: "아직 모름(임시값) U-E01. v3 문 틈 22 px × 0.05 m"
+    cabin_inner_m: [1.85, 2.0]
+    cabin_source: "아직 모름(임시값) U-E01. v3 정책 사각형 u 219..256, v 129..169. 사용자 '네모' 확인, 치수는 지도 기하"
+    inside_waypoint: f1_elevator_inside
+  F2:
+    door_center: [-11.925, -1.925]
+    door_axis_rad: 0.741948
+    door_source: "지도 기하. 9/15 F2 리허설 통로 중심·축(f2_elevator_entry yaw 2.312744 - pi/2)"
+    opening_width_m: 1.0
+    opening_width_source: "아직 모름(임시값) U-E01. 9/15 F2 리허설 통로 1.0 m 가정"
+    cabin_inner_m: null
+    cabin_source: "아직 모름 U-E01. raw 스캔 마름모 영역을 그대로 사용(정리 기하 없음, U-X05 미정). f2_elevator_inside 지도 이미지 여유 0.224 m"
+    inside_waypoint: f2_elevator_inside
+  leaf:
+    thickness_m: 0.025
+    height_m: 1.0
+    open_overtravel_m: 0.06
+    source: "[제안값] 9/15 문짝 모델과 같음. 실제 문짝 두께·높이 아직 모름(U-E01)"
+  timing:
+    door_open_s: 2.5
+    door_close_s: 2.5
+    hold_open_s: 30.0
+    travel_per_floor_s: 8.0
+    call_response_s: 1.0
+    source: "아직 모름(임시값) U-E02. 문 시간·열림 유지·층간 이동 시간은 05 T3 측정 뒤 채운다. hold_open 30 s 는 로봇 진입 시간을 보려고 길게 둔 [제안값]"
+  initial_floor: F2
+  initial_floor_source: "[제안값] 첫 호출에서 '도착 대기' 단계를 거치도록 반대층에서 시작"
+  reopen_on_obstruction: true
+  reopen_source: "미정. 문 사이에 물체가 있을 때 다시 열리는지 아직 모름 — true/false 두 경우 모두 시험 가능"
+  threshold:
+    enabled: false
+    gap_m: null
+    step_m: null
+    source: "아직 모름 U-E03 (설계 가정 약 1 cm). 현재 nav_safety_gate·nav2_params 에 문턱 감속 구간 기능이 없어 '감속 구간 동작' 시험 대상이 없다 → 넣지 않음"
+
+locker:
+  modeled: false
+  source: "아직 모름 U-E07 (보관함 3칸 치수·높이·위치). 지도에 그려진 벽만 있다. 적재는 상태 표시만 바꾼다"
+
+glass:
+  f1_locker_fixed_glass: removed_from_world
+  other: "아직 모름 U-E08"
+
+lidar:
+  frame: laser
+  pose_xyz: [-0.117, 0.0, 0.667]
+  pose_source: "URDF delivery_robot.urdf.xacro laser_x/y/z 기본값. 실물 높이 아직 모름 U-H02 (9/10 Jetson TF 옛 URDF 0.770 m)"
+  update_rate_hz: 7.6
+  samples: 1450
+  rate_source: "RPLiDAR A1 현장 관측 약 7.6 Hz, 약 1,450 점/scan (9/15와 같음)"
+  range_min_m: 0.15
+  range_max_m: 8.0
+  range_source: "URDF 값. RPLiDAR A1 사양 최대 12 m 와 다름(표로 기록)"
+  noise_enabled: true
+  noise_stddev_m: 0.01
+  noise_source: "[제안값] URDF 기본 가우시안 0.01 m. 실제 bag 정지 scan 표준편차 미측정(SW2). run 인자 --lidar-noise off 로 끈다"
+
+robot:
+  footprint: [[0.033, 0.219], [0.033, -0.219], [-0.327, -0.219], [-0.327, 0.219]]
+  footprint_source: "nav2_params footprint. 실제 차체 외곽 아직 모름 U-H01"
+  collision_box_m: [0.360, 0.438, 0.250]
+  wheel_radius_m: 0.033
+  wheel_separation_m: 0.4323
+  wheel_separation_source: "drive_calib.yaml 실효 윤거"
+  # 새 시험 기본 = encoder(플러그인 0): 바퀴 관절 속도 적분. 엘리베이터 순간이동 때 바퀴가 돌지 않으므로
+  # 실차처럼 odom 이 연속이다. world(1) 는 참값이 odom 으로 들어가고 순간이동 때 odom 도 같이 뛴다 → 9/15 재현 전용.
+  odometry_source: encoder
+  odometry_profiles: {encoder: 0, world: 1}
+  odometry_source_note: "[제안값] 2026-10-08 Codex 검토 반영: 새 E2E·사전 시험은 encoder. 9/15 재현(run_scenarios.py)은 robot_world.urdf(world). 실차 바퀴 odom 오차 아직 모름 U-H08"
+  # encoder odom 프로필에만 적용하는 볼캐스터·보조 바퀴 접촉 단순화(9/15 재현 robot_world.urdf 는 원본 접촉 유지).
+  # 근거: sim/real_maps/probe_drive_slip.py 2026-10-08 (logs/real_map_sim/slip_probe_20261008/summary.json)
+  #   원본(보조 바퀴 접지·mu 0.5): odom/참값 직진 1.25·회전 1.38 → encoder odom 으로 Nav2 도착 부근 회전 반복
+  #   채택(보조 바퀴 2 mm 띄움·mu 0.3): 직진 1.08·회전 1.03, 정지 크리프 0.4 mm/s(원본 0.5 mm/s 수준)
+  contact:
+    front_aux_caster_lift_m: 0.002
+    caster_mu: 0.3
+    source: "[제안값] 보조 바퀴 지상고 아직 모름 U-H06, 실제 미끄럼 아직 모름 U-H08. mu 0.3 은 8/21 크리프 0 하한. 시뮬 마찰 단순화이며 실물 값이 아님"
+  imu: none
+  imu_source: "9/12 기록상 실차 IMU 미발행. 현재 상태 아직 모름 U-H09"
+  ground_truth_rate_hz: 20.0
+
+# 층 이동·지도 전환 판정 기준. 모두 [제안값] — 현장 기준 아님. run_e2e.py 인자로 덮어쓸 수 있다.
+floor_transfer:
+  odom_continuity_max_m: 0.02
+  odom_continuity_max_rad: 0.02
+  cabin_relative_pose_max_m: 0.02
+  cabin_relative_pose_max_rad: 0.02
+  source: "[제안값] 순간이동 전후 odom 변화(바퀴 정지 → 0 기대)와 캐빈 기준 상대 자세 보존 허용치"
+relocalization:
+  min_new_amcl_samples: 5
+  position_error_max_m: 0.25
+  yaw_error_max_rad: 0.15
+  covariance_xy_max_m2: 0.05
+  covariance_yaw_max_rad2: 0.05
+  tf_stable_window_s: 3.0
+  tf_stable_max_jump_m: 0.05
+  tf_stable_max_jump_rad: 0.05
+  timeout_s: 60.0
+  source: "[제안값] 지도 전환 뒤 새 AMCL 표본(전환 이후 stamp)만으로 판정. 위치 0.25 m 는 9/15 S3 회복 기준과 같음. 기준 미달이면 정지·기록·중단"
