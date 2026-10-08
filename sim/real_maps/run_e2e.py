@@ -423,6 +423,25 @@ class Mission:
         self.nav('F1_exit_to_start', 'f1_initial_test')
 
 
+MIN_WALL_M = .15   # [제안값] 08 doc criterion, applied to every driving stage
+
+
+def criteria(result):
+    """Safety/accuracy criteria, reported separately from route completion ([제안값])."""
+    failed = []
+    if not result.get('completed'):
+        failed.append('not completed')
+    for s in result.get('stages', []):
+        if s.get('min_wall_m') is not None and s['min_wall_m'] < MIN_WALL_M:
+            failed.append(f"{s['stage']} min_wall {s['min_wall_m']:.3f} < {MIN_WALL_M}")
+        for key in ('lethal_start', 'rpm_blocks', 'ready_drops'):
+            if s.get(key):
+                failed.append(f"{s['stage']} {key}={s[key]}")
+        if s.get('kind') == 'relocalization' and s.get('status') != 'CONVERGED':
+            failed.append(f"{s['stage']} not converged")
+    return {'pass': not failed, 'failed': failed, 'min_wall_threshold_m': MIN_WALL_M}
+
+
 def run_once(args, name):
     stack = Stack(name, 'building', 'F1', args.params, 'f1_initial_test', None,
                   args.lidar_noise == 'on', args.odom, arm=args.arm_sim)
@@ -448,15 +467,26 @@ def run_once(args, name):
             result['stages'] = mission.rows
             result['min_wall_m'] = min((r['min_wall_m'] for r in mission.rows if r.get('min_wall_m') is not None),
                                        default=None)
+        result['criteria'] = criteria(result)
         stack.result['e2e'] = result
         stack.finish()
+        result['bag_status'] = stack.result.get('bag', {}).get('status')
+        summary = {k: result.get(k) for k in ('name', 'cabin_mode', 'params', 'odom', 'arm_sim', 'completed',
+                                              'failed_stage', 'sim_s', 'wall_s', 'min_wall_m', 'bag_status', 'error')}
+        summary.update(criteria_pass=result['criteria']['pass'], criteria_fail='; '.join(result['criteria']['failed']),
+                       rtf=(result.get('sim_s') or 0)/result['wall_s'] if result.get('wall_s') else None)
+        with open(stack.dir/'summary.csv', 'w', newline='') as handle:
+            writer = csv.DictWriter(handle, list(summary))
+            writer.writeheader()
+            writer.writerow(summary)
+        (stack.dir/'result.json').write_text(json.dumps(stack.result, indent=2, default=str)+'\n')
     print('E2E_RESULT '+json.dumps({k: v for k, v in result.items() if k != 'stages'}, default=str), flush=True)
     return result
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', default=time.strftime('e2e_%Y%m%d_%H%M'))
+    parser.add_argument('--name', default=None, help='default <YYYYmmdd_HHMMSS>_e2e_<cabin>_<params>[_arm]')
     parser.add_argument('--repeats', type=int, default=1)
     parser.add_argument('--cabin-mode', default='nav2', choices=['nav2', 'direct'])
     parser.add_argument('--arm-sim', action='store_true',
@@ -472,7 +502,9 @@ def main():
     results = []
     try:
         for repeat in range(1, args.repeats+1):
-            name = args.name if args.repeats == 1 else f'{args.name}_r{repeat}'
+            base = args.name or (time.strftime('%Y%m%d_%H%M%S')+f"_e2e_{args.cabin_mode}_{args.params}"
+                                 + ('_arm' if args.arm_sim else ''))
+            name = base if args.repeats == 1 and args.name else f'{base}_r{repeat}'
             results.append(run_once(args, name))
     finally:
         rclpy.try_shutdown()

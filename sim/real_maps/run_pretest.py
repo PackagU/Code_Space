@@ -83,6 +83,13 @@ def run_one(case_id, params, repeat, prefix, timeout, lidar_noise, odom):
     row['pass'] = ok
     stack.result['summary'] = row
     stack.finish()
+    row['bag_status'] = stack.result.get('bag', {}).get('status')
+    stack.result['summary'] = row
+    (stack.dir/'result.json').write_text(json.dumps(stack.result, indent=2, default=str)+'\n')
+    with open(stack.dir/'summary.csv', 'w', newline='') as handle:
+        writer = csv.DictWriter(handle, FIELDS+['bag_status'], extrasaction='ignore')
+        writer.writeheader()
+        writer.writerow(row)
     print('RESULT '+json.dumps(row, default=str), flush=True)
     return row
 
@@ -92,7 +99,7 @@ def main():
     parser.add_argument('--cases', default='G1,G2')
     parser.add_argument('--repeats', type=int, default=1)
     parser.add_argument('--start-repeat', type=int, default=1)
-    parser.add_argument('--prefix', default=time.strftime('pre_%Y%m%d_%H%M'))
+    parser.add_argument('--prefix', default=time.strftime('%Y%m%d_%H%M%S'))
     parser.add_argument('--goal-timeout', type=float, default=300.0, help='[제안값] sim seconds per goal')
     add_common_args(parser)
     args = parser.parse_args()

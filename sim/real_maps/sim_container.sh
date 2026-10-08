@@ -80,7 +80,9 @@ case "${1:-}" in
     echo "removed $NAME (all simulation processes stopped)" ;;
   exec)
     shift; verify >/dev/null
-    exec docker exec -i -w /ros2_ws "$NAME" bash -c \
+    cmd_env=()
+    [[ -n "${PACKAGU_SIM_CMD:-}" ]] && cmd_env=(-e PACKAGU_SIM_CMD)
+    exec docker exec -i "${cmd_env[@]}" -w /ros2_ws "$NAME" bash -c \
       'source /opt/ros/humble/setup.bash && { [[ -f install/setup.bash ]] && source install/setup.bash; true; } && exec "$@"' bash "$@" ;;
   name) echo "$NAME" ;;
   *) echo "usage: $0 up [--gui] | verify | down | exec <cmd...> | name" >&2; exit 2 ;;

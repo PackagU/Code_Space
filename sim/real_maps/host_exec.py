@@ -14,6 +14,8 @@ HERE = Path(__file__).resolve().parent
 def ensure_container(script):
     if os.environ.get('PACKAGU_SIM_ISOLATED') == '1':
         return
+    import shlex
+    os.environ['PACKAGU_SIM_CMD'] = ' '.join(shlex.quote(a) for a in ['python3', *sys.argv])
     gui = ['--gui'] if os.environ.get('SIM_GUI') == '1' else []
     subprocess.run(['bash', str(HERE/'sim_container.sh'), 'up', *gui], check=True)
     os.execvp('bash', ['bash', str(HERE/'sim_container.sh'), 'exec', 'python3', '-u',

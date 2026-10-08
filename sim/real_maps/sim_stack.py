@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -99,6 +100,31 @@ def resolve_pose(value):
 
 def quat_yaw(yaw):
     return math.sin(yaw/2), math.cos(yaw/2)
+
+
+def provenance(run_dir, files):
+    """Run-start provenance: code commit, command, full SHA256 of every input actually used, and
+    snapshots of the robot URDF / world_params so later edits never replace what this run used."""
+    def git(*args):
+        try:
+            return subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True, text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    snap = run_dir/'snapshot'
+    snap.mkdir(exist_ok=True)
+    record = {'started': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'git_head': git('rev-parse', 'HEAD'),
+              'git_branch': git('rev-parse', '--abbrev-ref', 'HEAD'),
+              'git_dirty': [line for line in (git('status', '--porcelain', '--untracked-files=no') or '').splitlines()],
+              'command': os.environ.get('PACKAGU_SIM_CMD') or ' '.join(sys.argv),
+              'container': os.environ.get('HOSTNAME'), 'ros_domain_id': os.environ.get('ROS_DOMAIN_ID'),
+              'ros_localhost_only': os.environ.get('ROS_LOCALHOST_ONLY'), 'files': {}}
+    for key, path in files.items():
+        path = Path(path)
+        record['files'][key] = {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+        if key in ('robot_urdf', 'world_params', 'floor_maps_real', 'nav2_params'):
+            shutil.copyfile(path, snap/path.name)
+    (run_dir/'provenance.json').write_text(json.dumps(record, indent=2)+'\n')
+    return record
 
 
 class Monitor(Node):
@@ -425,12 +451,20 @@ class Stack:
                  'drive_calib': ROOT/'src/drive_pkg/config/drive_calib.yaml', 'waypoints': MAPS/'waypoints.json',
                  'map_pins': MAPS/'map_pins.json', 'world_params': HERE/'world_params.yaml', 'robot_urdf': self.robot}
         files.update({f'map_{f}_yaml': NAV_MAPS[f] for f in self.node.offsets})
+        for f in self.node.offsets:
+            image = yaml.safe_load(NAV_MAPS[f].read_text())['image']
+            files[f'map_{f}_pgm'] = NAV_MAPS[f].parent/image
+        files['world'] = HERE/f'generated/{self.world}.world'
+        if self.world == 'building':
+            files['floor_maps_real'] = HERE/'floor_maps_real.yaml'
+        self.config_files = files
         return {k: sha12(v) for k, v in files.items()}
 
     def start(self):
         assert_isolated()
         node = self.node
         self.result['config_sha256_12'] = self.config_hashes()
+        self.result['provenance'] = provenance(self.dir, self.config_files)
         guard(self.floor, 'pre-nav', self.dir)
         self.processes.start('gazebo', ['gzserver', '--verbose', str(HERE/f'generated/{self.world}.world'),
                                         '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'])
@@ -641,6 +675,49 @@ class Stack:
         row['amcl_pose'] = list(pose_values(node.amcl.pose.pose)) if node.amcl else None
         return row
 
+    # ------------------------------------------------------------ bag validity
+    def required_topics(self):
+        topics = ['/scan', '/odom', '/tf', '/tf_static', '/sim/ground_truth', '/amcl_pose', '/plan',
+                  '/cmd_vel_safe', '/rosout', '/navigate_to_pose/_action/status']
+        if self.world == 'building':
+            topics += ['/elevator/state', '/floor_orchestrator/status', '/map']
+        if self.arm:
+            topics += ['/joint_states', '/sim/parcel/state']
+        return topics
+
+    def check_bag(self):
+        """metadata.yaml after a normal recorder stop; sim-only recovery (ros2 bag reindex) is recorded
+        separately from the original failure. Then the bag contract with the required topics."""
+        out = {'path': str(self.bag), 'original_metadata_present': (self.bag/'metadata.yaml').exists()}
+        if not out['original_metadata_present']:
+            end = time.monotonic()+20
+            while not (self.bag/'metadata.yaml').exists() and time.monotonic() < end:
+                time.sleep(.5)
+            out['metadata_after_wait'] = (self.bag/'metadata.yaml').exists()
+            if not out['metadata_after_wait'] and list(self.bag.glob('*.db3')):
+                rec = subprocess.run(['ros2', 'bag', 'reindex', str(self.bag), 'sqlite3'], capture_output=True,
+                                     text=True, timeout=300)
+                (self.dir/'bag_reindex.log').write_text(rec.stdout+rec.stderr)
+                out['recovery'] = {'method': 'ros2 bag reindex (simulation-only recovery)', 'exit': rec.returncode,
+                                   'metadata_present': (self.bag/'metadata.yaml').exists()}
+        required = self.required_topics()
+        if (self.bag/'metadata.yaml').exists():
+            args = [sys.executable, str(ROOT/'scripts/bag_contract.py'), 'inspect', str(self.bag)]
+            for topic in required:
+                args += ['--require', topic]
+            contract = subprocess.run(args, capture_output=True, text=True, timeout=180)
+            (self.dir/'bag_contract.json').write_text(contract.stdout+contract.stderr)
+            out['contract_exit'] = contract.returncode
+            out['required_topics'] = required
+        if out['original_metadata_present'] or out.get('metadata_after_wait'):
+            out['status'] = 'OK' if out.get('contract_exit') == 0 else 'RECORD_FAILED_CONTRACT'
+        elif out.get('recovery', {}).get('metadata_present'):
+            out['status'] = ('RECORD_FAILED_METADATA_RECOVERED' if out.get('contract_exit') == 0
+                             else 'RECORD_FAILED_METADATA_RECOVERED_CONTRACT_FAILED')
+        else:
+            out['status'] = 'RECORD_FAILED_NO_METADATA'
+        return out
+
     # ------------------------------------------------------------ teardown
     def finish(self):
         node = self.node
@@ -654,17 +731,13 @@ class Stack:
             pass
         if self.recorder is not None:
             self.processes.stop_one(self.recorder)
-            self.result['bag_finalized'] = (self.bag/'metadata.yaml').exists()
+            self.result['bag'] = self.check_bag()
+            self.result['bag_finalized'] = self.result['bag']['original_metadata_present']
             analysis = subprocess.run([sys.executable, str(ROOT/'scripts/analyze_nav_bag.py'), str(self.bag)],
                                       capture_output=True, text=True, timeout=180)
             (self.dir/'analysis.log').write_text(analysis.stdout+analysis.stderr)
             self.result['analysis_exit'] = analysis.returncode
-            contract = subprocess.run([sys.executable, str(ROOT/'scripts/bag_contract.py'), 'inspect', str(self.bag),
-                '--require', '/scan', '--require', '/odom', '--require', '/tf', '--require', '/tf_static',
-                '--require', '/sim/ground_truth', '--require', '/amcl_pose', '--require', '/plan'],
-                capture_output=True, text=True, timeout=180)
-            (self.dir/'bag_contract.json').write_text(contract.stdout+contract.stderr)
-            self.result['bag_contract_exit'] = contract.returncode
+            self.result['bag_contract_exit'] = self.result['bag'].get('contract_exit')
         with open(self.dir/'clearance.csv', 'w', newline='') as handle:
             writer = csv.writer(handle)
             writer.writerow(['sim_t', 'floor', 'true_x', 'true_y', 'true_yaw', 'footprint_wall_m',
