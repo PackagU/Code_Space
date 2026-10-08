@@ -1,0 +1,273 @@
+
+===== A 기본 =====
+2026-10-08T20:13:43+09:00
+hsm-desktop
+192.168.0.7 172.17.0.1 
+ 20:13:43 up 11 min,  1 user,  load average: 0.78, 1.18, 1.01
+               Local time: 목 2026-10-08 20:13:43 KST
+System clock synchronized: yes                       
+              NTP service: active                    
+/dev/mmcblk0p1  117G   30G   83G  27% /
+              total        used        free      shared  buff/cache   available
+Mem:          6.7Gi       2.0Gi       465Mi        46Mi       4.2Gi       4.4Gi
+Swap:         3.3Gi       0.0Ki       3.3Gi
+
+===== B 컨테이너 =====
+packagu_camera_test packagu/ros2-humble-slam:humble-jetson-p02 Exited (137) 24 hours ago
+ros2_humble ghcr.io/packagu/ros2-humble-slam:humble-jetson-rviz Exited (255) 26 years ago
+peaceful_agnesi eec91ea82ae9 Exited (100) 7 weeks ago
+quizzical_banach 32490aeba28e Exited (100) 7 weeks ago
+/home/hsm/Code_Space/src/slam_pkg/maps -> /ros2_ws/maps
+/home/hsm/Code_Space/scripts -> /ros2_ws/scripts
+/home/hsm/Code_Space/src -> /ros2_ws/src
+/home/hsm/Code_Space/test_workspace -> /ros2_ws/test_workspace
+/home/hsm/Code_Space/logs -> /ros2_ws/logs
+
+devices: /dev/rplidar->/dev/rplidar /dev/opencr->/dev/opencr /dev/null->/dev/arm_servo /dev/null->/dev/motor_nano 
+privileged=false network=host created=2026-09-12T04:42:15.340936635Z
+
+===== C Git =====
+c83d092cc32f36df20b97f29483a19f7dfa41ee7
+## lee/hw-design-review...origin/lee/hw-design-review
+c83d092cc feat(arm): press cycle 3종(PRESS_CYCLE_1~3) + 사이클별 포즈 표(POSES_1~3, 공용 HOME) — press_cycle 파라미터로 선택
+6246c89bc feat(arm): 기동 homing(전원 인가 중립 1500 → home 대기) + Kim 실측 포즈값 갱신(pre_press/press/retreat)
+27619b10d docs(readme): 외부 독자용 README 개편 — 미션 사이클·현재 상태(왕복 10/10·분산 3/3·오프라인 28)·로드맵 진행·시스템 구성·검증 원커맨드·저장소 안내 + 히어로 이미지(assets/readme) / 로컬 전용 폴더 gitignore(Learning_Sharing·_workspace·node_modules·verification dist_*) / TODO 회의 안건(저장소 공개 여부)
+432b71bd8 docs: 리뷰 후속 세션 마감 — 최종 스택 데스크톱 10/10(+4/4) 무결점·Jetson 분산 3/3 기록 (improvement_report §1.26 ✅/§1.27 ✅, Roadmap 04/05/06/07, TODO, 인수인계서 2026-08-21, §4.5 원커맨드) / dist-e2e 분산 게이트 60
+2e79e2af1 fix(scripts): pkill -f 자기매칭으로 gzserver 정리가 안 되던 결함(run_sim_host trap·dist-e2e cleanup) — '[g]azebo' 패턴·자기 pid 제외; 분산 run2/3 'Entity already exists' 실패 원인
+71a05c71a fix(dist-e2e): Jetson 정리 pkill 자기매칭 회피([x] 트릭)
+a6f1b8489 fix(pedestrian): 로봇↔보행자 교착 해소 — 4s 이상 막히면 0.8m 물러서고(최대 3회) 그래도 가까우면 퇴장(yield) + 프리즈 감지 오탐(전원 일시정지 중) 정정
+767b950cf fix(smoke): finalize 의 ls|wc 파이프(pipefail rc=2) 로 전 구간 PASS 런이 rc=2 집계·아티팩트 미복사 — 글롭 카운트, FINALIZED 복사 후 설정, 본문 호출 판정 불변
+lee/hw-design-review c83d092cc
+origin/HEAD c83d092cc
+origin/archive/pre-github-main acace92b3
+origin/dev 9f06061e2
+origin/lee/hw-design-review c83d092cc
+origin/lee/l3-cleanup 0056ec3b0
+origin/lee/slam-f3-smoke-hardening f094d83ab
+origin/main 9f06061e2
+remotes(이름만): origin 
+stash 수: 0
+미커밋·untracked 항목 수: 167
+ M README.md
+ M TODO.md
+ M docker/Dockerfile.jetson
+ M docker/README.md
+ M docker/compose/docker-compose.jetson.yml
+ M docker/scripts/entrypoint.sh
+ M docs/deployment/01_portability_policy.md
+ M docs/deployment/02_opencr_serial_protocol.md
+ M scripts/generate_kku_maps.py
+ M scripts/generate_kku_worlds.py
+ M scripts/log_session.py
+ M scripts/run_field_mapping.sh
+ M scripts/run_offline_tests.sh
+ M scripts/sync_docs_to_notion.py
+ M scripts/teleop.sh
+ M scripts/test_arm_sequence.py
+ M scripts/test_diff_drive_odometry.py
+ M scripts/test_field_mapping_launch.py
+ M scripts/test_field_scripts_contract.py
+ M scripts/test_kku_navigation_launch.py
+ M scripts/test_opencr_bridge_dryrun.py
+ M scripts/test_opencr_protocol.py
+ M scripts/test_udev_contract.py
+ M scripts/test_wasd_teleop.py
+ M src/common_pkg/urdf/delivery_robot.urdf.xacro
+ M src/drive_pkg/CMakeLists.txt
+ M src/drive_pkg/config/drive_calib.yaml
+ M src/drive_pkg/drive_pkg/diff_drive_odometry.py
+ M src/drive_pkg/drive_pkg/keyboard_teleop.py
+ M src/drive_pkg/drive_pkg/opencr_bridge_node.py
+ M src/drive_pkg/drive_pkg/opencr_protocol.py
+ M src/drive_pkg/launch/drive_bringup.launch.py
+ M src/drive_pkg/package.xml
+ M src/robot_arm_pkg/launch/arm_sequence.launch.py
+ M src/robot_arm_pkg/package.xml
+ M src/robot_arm_pkg/robot_arm_pkg/arm_sequence.py
+ M src/robot_arm_pkg/robot_arm_pkg/arm_sequence_node.py
+ M src/robot_arm_pkg/robot_arm_pkg/servo_protocol.py
+ M src/slam_pkg/CMakeLists.txt
+ M src/slam_pkg/config/nav2_params.yaml
+ M src/slam_pkg/config/slam_toolbox_params.yaml
+ M src/slam_pkg/launch/kku_navigation.launch.py
+ M src/slam_pkg/package.xml
+?? docker/compose/docker-compose.jetson.lidar.yml
+?? docker/compose/docker-compose.jetson.mapping.yml
+?? docker/compose/docker-compose.jetson.safe.yml
+?? docker/compose/docker-compose.jetson.yml.bak.20260910-163212
+?? docker/compose/jetson.env.example
+?? docs/deployment/04_field_mapping_navigation.md
+?? docs/deployment/05_record_replay_recovery.md
+?? docs/deployment/06_field_web_console.md
+?? docs/deployment/07_integration_contract_field_sheet.md
+?? docs/handover/2026-09-14_navigation_defaults.json
+?? docs/handover/2026-09-14_navigation_defaults.md
+?? scripts/analyze_nav_bag.py
+?? scripts/arm_node_safe_probe.py
+?? scripts/arm_servo_menu.py
+?? scripts/bag_contract.py
+?? scripts/build_handheld_mapping.sh
+?? scripts/check_handheld_mapping.sh
+
+===== D 핵심 파일 SHA256 (앞 12자리) =====
+80787840cd76 src/slam_pkg/config/nav2_params.yaml
+e8cf213b33fb src/slam_pkg/config/nav2_params_pre_wallpush_20260915.yaml
+527f4c587373 src/slam_pkg/config/nav2_params_wall_push_v1.yaml
+1815932defe5 src/slam_pkg/config/nav2_params_speed_v011.yaml
+7fb6b40cb7fd src/slam_pkg/config/nav2_params_speed_v012.yaml
+f2478064f359 src/drive_pkg/config/nav_safety.yaml
+4248deb19979 src/drive_pkg/config/drive_calib.yaml
+9694225dca40 src/slam_pkg/maps/field/waypoints.json
+eb5aaa2976b5 src/slam_pkg/maps/field/map_pins.json
+4c9e663899d2 src/slam_pkg/maps/field/f1/latest_map.txt
+ecd9754248c4 src/slam_pkg/maps/field/f2/latest_map.txt
+d701d2b6df57 src/slam_pkg/maps/field/f1/f1_manual_clean_v3.yaml
+d525759b07a8 src/slam_pkg/maps/field/f1/f1_manual_clean_v3.pgm
+b670cd2b8790 src/slam_pkg/maps/field/f2/f2_nav_unknown_v1.yaml
+f89bfeb9f928 src/slam_pkg/maps/field/f2/f2_raw_20260914.pgm
+없음       src/robot_arm_pkg/config/camera_views.json
+--- latest_map 내용
+/ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml
+/ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml
+--- 지도 폴더 파일 목록
+2026-09-14 02:04 10403288 src/slam_pkg/maps/field/f1/f1_raw_20260914.posegraph
+2026-09-12 14:22 125 src/slam_pkg/maps/field/f3/f3_c192.yaml
+2026-09-14 02:04 133 src/slam_pkg/maps/field/f1/f1_raw_20260914.yaml
+2026-09-14 20:17 133 src/slam_pkg/maps/field/f2/f2_nav_unknown_v1.yaml
+2026-09-14 03:55 133 src/slam_pkg/maps/field/f2/f2_raw_20260914.yaml
+2026-09-14 05:09 136 src/slam_pkg/maps/field/f1/f1_manual_clean_v1.yaml
+2026-09-14 23:15 136 src/slam_pkg/maps/field/f1/f1_manual_clean_v2.yaml
+2026-09-15 20:31 137 src/slam_pkg/maps/field/f1/f1_manual_clean_v3.yaml
+2026-09-14 03:55 14515534 src/slam_pkg/maps/field/f2/f2_raw_20260914.data
+2026-09-14 03:55 1452428 src/slam_pkg/maps/field/f2/f2_raw_20260914.pgm
+2026-09-15 20:39 1495 src/slam_pkg/maps/field/map_pins.json
+2026-09-12 14:22 191385 src/slam_pkg/maps/field/f3/f3_c192.data
+2026-09-14 02:04 216591 src/slam_pkg/maps/field/f1/f1_raw_20260914.pgm
+2026-09-14 05:09 216650 src/slam_pkg/maps/field/f1/f1_manual_clean_v1.pgm
+2026-09-14 23:15 216650 src/slam_pkg/maps/field/f1/f1_manual_clean_v2.pgm
+2026-09-15 20:31 216665 src/slam_pkg/maps/field/f1/f1_manual_clean_v3.pgm
+2026-09-14 03:55 22792484 src/slam_pkg/maps/field/f2/f2_raw_20260914.posegraph
+2026-09-14 02:04 2499010 src/slam_pkg/maps/field/f1/f1_raw_20260914.data
+2026-09-12 14:22 27282 src/slam_pkg/maps/field/f3/f3_c192.pgm.before-dot-clean-20260912T054924Z
+2026-09-12 14:49 27336 src/slam_pkg/maps/field/f3/f3_c192.pgm
+2026-09-12 14:49 320 src/slam_pkg/maps/field/f3/f3_c192.sha256
+2026-09-14 02:04 352 src/slam_pkg/maps/field/f1/f1_raw_20260914.sha256
+2026-09-14 03:55 352 src/slam_pkg/maps/field/f2/f2_raw_20260914.sha256
+2026-09-12 14:22 3587175 src/slam_pkg/maps/field/f3/f3_c192.posegraph
+2026-09-12 14:22 36 src/slam_pkg/maps/field/f3/latest_map.txt
+2026-09-14 20:18 46 src/slam_pkg/maps/field/f2/latest_map.txt
+2026-09-15 20:39 47 src/slam_pkg/maps/field/f1/latest_map.txt
+2026-09-15 22:55 7287 src/slam_pkg/maps/field/waypoints.json
+
+===== E 2026-10-06 흔적 =====
+없음 scripts/floor_arrival_probe.py
+없음 test_workspace/elevator_mission/src/elevator_mission_pkg/elevator_mission_pkg/elevator_camera.py
+없음 test_workspace/elevator_mission/src/elevator_mission_pkg/elevator_mission_pkg/camera_behaviors.py
+없음 test_workspace/elevator_mission/src/elevator_mission_pkg/elevator_mission_pkg/floor_reader_bridge.py
+없음 test_workspace/elevator_mission/src/elevator_mission_pkg/launch/elevator_camera_mission.launch.py
+cat: src/robot_arm_pkg/config/camera_views.json: No such file or directory
+
+===== F 장치 (열지 않음) =====
+ls: cannot access '/dev/rplidar': No such file or directory
+ls: cannot access '/dev/arm_servo': No such file or directory
+ls: cannot access '/dev/motor_nano': No such file or directory
+lrwxrwxrwx 1 root root 7  1월  1  2000 /dev/opencr -> ttyACM0
+crw-rw----+ 1 root video 81, 0  1월  1  2000 /dev/video0
+crw-rw----+ 1 root video 81, 1  1월  1  2000 /dev/video1
+total 0
+lrwxrwxrwx 1 root root 13  1월  1  2000 usb-ROBOTIS_OpenCR_Virtual_ComPort_in_FS_Mode_FFFFFFFEFFFF-if00 -> ../../ttyACM0
+Bus 002 Device 002: ID 0bda:0489 Realtek Semiconductor Corp. 4-Port USB 3.0 Hub
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 001 Device 003: ID 13d3:3549 IMC Networks Bluetooth Radio
+Bus 001 Device 006: ID 1908:2310 GEMBIRD 
+Bus 001 Device 005: ID 0483:5740 STMicroelectronics Virtual COM Port
+Bus 001 Device 004: ID 0bda:8812 Realtek Semiconductor Corp. RTL8812AU 802.11a/b/g/n/ac 2T2R DB WLAN Adapter
+Bus 001 Device 002: ID 0bda:5489 Realtek Semiconductor Corp. 4-Port USB 2.0 Hub
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Error response from daemon: container 756901da5a4f706c9521cbc54289b4de76458bcfef3f8bde9b8845140f33a3ce is not running
+
+===== G 프로세스·포트 =====
+--- 호스트
+1801 /usr/bin/python3 -u /home/hsm/floor_reader/app.py --host 0.0.0.0
+--- 컨테이너
+Error response from daemon: container 756901da5a4f706c9521cbc54289b4de76458bcfef3f8bde9b8845140f33a3ce is not running
+--- 수신 포트 (8765 층수 인식기 등)
+State   Recv-Q   Send-Q     Local Address:Port      Peer Address:Port  Process  
+LISTEN  0        5                0.0.0.0:8765           0.0.0.0:*              
+--- 층수 인식기 API (떠 있을 때만 응답)
+bash: line 99: curl: command not found
+
+--- ROS 노드
+      1 Error response from daemon: container 756901da5a4f706c9521cbc54289b4de76458bcfef3f8bde9b8845140f33a3ce is not running
+
+===== H 빌드 =====
+Error response from daemon: container 756901da5a4f706c9521cbc54289b4de76458bcfef3f8bde9b8845140f33a3ce is not running
+
+===== I 9/17 이후 기록 =====
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/assets
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/docker
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/docs
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/Roadmap
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/src
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/test_workspace
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/tools
+2026-10-07 18:15 /home/hsm/Code_Space-2026-10-06/watchdog_logs
+2026-10-07 18:19 /home/hsm/Code_Space-2026-10-06/build
+2026-10-07 18:19 /home/hsm/Code_Space-2026-10-06/install
+2026-10-07 18:19 /home/hsm/Code_Space-2026-10-06/log
+2026-10-07 19:31 /home/hsm/Code_Space-2026-10-06/scripts
+2026-10-07 19:39 /home/hsm/Code_Space-2026-10-06
+2026-10-08 20:06 /home/hsm
+
+===== J 팔 노드 시작 동작 (코드 읽기) =====
+35:        self.declare_parameter("serial_port", "")
+37:        self.declare_parameter("home_on_start", False)
+38:        self.declare_parameter("simulation_mode", False)
+39:        self.declare_parameter("require_homed", True)
+58:        simulation_mode = bool(self.get_parameter("simulation_mode").value)
+59:        port = str(self.get_parameter("serial_port").value).strip()
+60:        if simulation_mode and port:
+61:            raise RuntimeError("simulation_mode must not receive a physical serial port")
+78:            simulation_mode=simulation_mode,
+79:            require_homed=bool(self.get_parameter("require_homed").value),
+121:        if bool(self.get_parameter("home_on_start").value):
+128:            if not simulation_mode:
+129:                raise RuntimeError("self_test is permitted only with simulation_mode:=true")
+137:            "arm contract ready: driver=%s simulation=%s home_on_start=%s legacy_trigger=%s"
+140:                simulation_mode,
+141:                bool(self.get_parameter("home_on_start").value),
+
+===== K 앱 데이터 =====
+--- /home/hsm/button_arm_test_20260915/data
+2026-09-15 23:29 template_1_0.png
+2026-09-15 23:29 template_1_1.png
+2026-09-15 23:29 template_1_2.png
+2026-09-15 23:29 template_2_0.png
+2026-09-15 23:29 template_2_1.png
+2026-09-15 23:29 template_2_2.png
+2026-09-15 23:29 template_3_0.png
+2026-09-15 23:29 template_3_1.png
+2026-09-15 23:29 template_3_2.png
+2026-09-15 23:29 template_4_0.png
+2026-09-15 23:29 template_4_1.png
+2026-09-15 23:29 template_4_2.png
+2026-09-16 04:33 config.json
+dd81b3c3275c
+--- /home/hsm/floor_reader/data
+2026-09-08 16:26 template_1.png
+2026-09-08 16:27 template_2.png
+2026-09-08 16:27 template_3.png
+2026-09-08 16:27 template_5.png
+2026-09-08 16:27 template_6.png
+2026-09-08 16:34 config.json
+2026-09-08 16:34 template_4.png
+2026-09-08 16:35 events.jsonl
+e6edfd2c6acf
+없음 /home/hsm/Code_Space/tools/floor_reader/data
+없음 /home/hsm/Code_Space/tools/button_arm_test/data
+
+===== L GitHub 도달 (브랜치 머리만) =====
+c83d092cc32f refs/heads/lee/hw-design-review
+
+===== 끝 =====
+2026-10-08T20:13:47+09:00
