@@ -1,0 +1,207 @@
+[
+  {
+    "validation_scope": "simulation",
+    "name": "M1_continue_from_locker_2145",
+    "stages": [
+      {
+        "stage": "package_pickup",
+        "mode": "manual WASD",
+        "floor": "F1",
+        "start_sim_s": 324.5,
+        "nav2_process_stopped": true,
+        "payload_marker": "loaded_by_operator",
+        "arm_validated": false,
+        "key_counts": {
+          "w": 10,
+          "s": 10
+        },
+        "true_pose": [
+          -4.873158865260472,
+          -8.526010573054528,
+          -0.587748526282998
+        ],
+        "end_sim_s": 331.3
+      },
+      {
+        "stage": "locker_to_F1_elevator_front",
+        "mode": "Nav2",
+        "floor": "F1",
+        "start_sim_s": 344.4,
+        "action_status": 4,
+        "end_sim_s": 505.3,
+        "true_pose": [
+          -8.509848714655847,
+          -0.12654502439666626,
+          -2.4079988127187453
+        ]
+      },
+      {
+        "stage": "F1_elevator_entry",
+        "mode": "manual WASD",
+        "floor": "F1",
+        "start_sim_s": 506.2,
+        "nav2_process_stopped": true,
+        "key_counts": {
+          "w": 642,
+          "a": 2,
+          "d": 13
+        },
+        "true_pose": [
+          -10.136619966779769,
+          -2.0393232054951542,
+          -2.333370338619178
+        ],
+        "end_sim_s": 590.9
+      },
+      {
+        "stage": "elevator_F1_to_F2",
+        "mode": "manual floor selection (simulated travel)",
+        "floor": "F1",
+        "start_sim_s": 591.9
+      },
+      {
+        "stage": "F2_elevator_exit",
+        "mode": "manual WASD",
+        "floor": "F2",
+        "start_sim_s": 597.1,
+        "nav2_process_stopped": true,
+        "key_counts": {
+          "a": 23,
+          "w": 502,
+          "d": 18
+        },
+        "true_pose": [
+          -11.403198095119855,
+          -2.482939346235348,
+          -0.9299941264107818
+        ],
+        "end_sim_s": 657.3
+      },
+      {
+        "stage": "F2_to_delivery",
+        "mode": "Nav2",
+        "floor": "F2",
+        "start_sim_s": 668.6
+      }
+    ],
+    "manual_controller": "real keyboard_teleop.py PTY WASD; simulated operator uses ground truth",
+    "payload": "manual handling marker; no arm actuation validation",
+    "floor_travel": "explicit simulation teleport; no elevator hardware validation",
+    "door_world": "F2 1.0m opening exception; original raw A/B world remains unchanged",
+    "continuation_from_user_hold": true,
+    "starting_pose": [
+      -4.8734053388081975,
+      -8.513027374596765,
+      -0.6294121755132008
+    ],
+    "initial_to_locker_autonomous_success": false,
+    "completed": false,
+    "error": "goal timeout: F2_to_delivery",
+    "bag_finalized": true,
+    "analysis_exit": 0,
+    "collision_ahead": 0,
+    "lethal_start": 0,
+    "controller_missed": 3,
+    "rpm_blocks": 0,
+    "ready_drops": 0,
+    "ready": true,
+    "reason": "fresh command and feedback",
+    "truth_samples": 24793,
+    "min_wall_m": 0.04244686104299708
+  },
+  {
+    "validation_scope": "simulation",
+    "name": "M1_from_initial_20260915_2132",
+    "stages": [
+      {
+        "stage": "initial_to_locker",
+        "mode": "Nav2",
+        "floor": "F1",
+        "start_sim_s": 52.3,
+        "action_status": 6,
+        "end_sim_s": 289.4,
+        "true_pose": [
+          -4.909337597399774,
+          -8.52643469714034,
+          -2.201782557556631
+        ]
+      }
+    ],
+    "manual_controller": "real keyboard_teleop.py PTY WASD; simulated operator uses ground truth",
+    "payload": "manual handling marker; no arm actuation validation",
+    "floor_travel": "explicit simulation teleport; no elevator hardware validation",
+    "door_world": "F2 1.0m opening exception; original raw A/B world remains unchanged",
+    "bootstrap_retries": [
+      "AMCL activation failed"
+    ],
+    "completed": false,
+    "error": "goal failed: initial_to_locker",
+    "bag_finalized": true,
+    "analysis_exit": 0,
+    "collision_ahead": 0,
+    "lethal_start": 0,
+    "controller_missed": 1,
+    "rpm_blocks": 0,
+    "ready_drops": 0,
+    "ready": true,
+    "reason": "fresh command and feedback",
+    "truth_samples": 5562,
+    "min_wall_m": 0.37027301476066354
+  },
+  {
+    "validation_scope": "simulation",
+    "name": "M1_full_validation_r1",
+    "stages": [
+      {
+        "stage": "initial_to_locker",
+        "mode": "Nav2",
+        "floor": "F1",
+        "start_sim_s": 24.9,
+        "min_wall_m": 0.37076835090580246,
+        "collision_samples": 0
+      }
+    ],
+    "manual_controller": "real keyboard_teleop.py PTY WASD; simulated operator uses ground truth",
+    "payload": "manual handling marker; no arm actuation validation",
+    "floor_travel": "explicit simulation teleport; no elevator hardware validation",
+    "floor_heading_method": "inside-waypoint heading; preserve cabin-relative pose",
+    "door_world": "F2 1.0m opening exception; original raw A/B world remains unchanged",
+    "completed": false,
+    "error": "goal timeout: initial_to_locker",
+    "bag_finalized": true,
+    "analysis_exit": 0,
+    "bag_contract_exit": 1,
+    "collision_ahead": 0,
+    "lethal_start": 0,
+    "controller_missed": 6,
+    "rpm_blocks": 0,
+    "ready_drops": 0,
+    "ready": true,
+    "reason": "fresh command and feedback",
+    "truth_samples": 18450,
+    "min_wall_m": 0.37076835090580246,
+    "navigation_sequence_completed": false
+  },
+  {
+    "validation_scope": "simulation",
+    "name": "M1_manual_roundtrip_r1",
+    "stages": [],
+    "manual_controller": "real keyboard_teleop.py PTY WASD; simulated operator uses ground truth",
+    "payload": "manual handling marker; no arm actuation validation",
+    "floor_travel": "explicit simulation teleport; no elevator hardware validation",
+    "door_world": "F2 1.0m opening exception; original raw A/B world remains unchanged",
+    "completed": false,
+    "error": "Nav2 initialization failed",
+    "bag_finalized": true,
+    "analysis_exit": 1,
+    "collision_ahead": 0,
+    "lethal_start": 0,
+    "controller_missed": 0,
+    "rpm_blocks": 0,
+    "ready_drops": 0,
+    "ready": true,
+    "reason": "fresh command and feedback",
+    "truth_samples": 1705,
+    "min_wall_m": 0.4187164790838668
+  }
+]

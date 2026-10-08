@@ -1,0 +1,51 @@
+{
+  "validation_scope": "simulation geometry only",
+  "noglass": {
+    "changed_cells": 44,
+    "outside_glass_changed_cells": 0,
+    "original_sha256": "79284ded4d02085a603c190d945912da35c3b34009dc61f2f5a1a84fd4a3f8db",
+    "copied_generator_sha256": "b3ff50469876c4c5478515eb9ec26f8596a6b94e23c77386ac64b1b1cc61d081"
+  },
+  "F1": {
+    "door_open_removed_cells": 0,
+    "occupied_cells": 2154,
+    "merged_rectangles": 736,
+    "raster_mismatch_cells": 0,
+    "max_corner_error_m": 4.577566798522238e-15,
+    "resolution_m": 0.05,
+    "origin": [
+      -18.5,
+      -11.6,
+      0
+    ],
+    "pgm_sha256": "6c1da8ab34cd9f6b2877eaefcc6db4d0d59a70d1a80f5821ccc97fea1a13ee35"
+  },
+  "F2": {
+    "door_open_removed_cells": 0,
+    "occupied_cells": 16453,
+    "merged_rectangles": 5552,
+    "raster_mismatch_cells": 0,
+    "max_corner_error_m": 1.5888218580782548e-14,
+    "resolution_m": 0.05,
+    "origin": [
+      -44.9,
+      -36.9,
+      0
+    ],
+    "pgm_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31"
+  },
+  "F2_manual_door_open": {
+    "door_open_removed_cells": 78,
+    "occupied_cells": 16375,
+    "merged_rectangles": 5525,
+    "raster_mismatch_cells": 0,
+    "max_corner_error_m": 1.5888218580782548e-14,
+    "resolution_m": 0.05,
+    "origin": [
+      -44.9,
+      -36.9,
+      0
+    ],
+    "pgm_sha256": "f89bfeb9f92811e8fa3349051c6e9e8ab3da57bb545089be7f6dd0dc396e4b31"
+  }
+}

@@ -1,0 +1,138 @@
+[
+  {
+    "scope": "simulation",
+    "steps": [
+      {
+        "step": "record_start",
+        "exit": 0
+      },
+      {
+        "step": "record_check",
+        "exit": 0
+      },
+      {
+        "step": "record_stop_original",
+        "exit": 0
+      },
+      {
+        "step": "stop_inner_sim_recorder",
+        "exit": 0
+      },
+      {
+        "step": "bag_contract",
+        "exit": 0
+      },
+      {
+        "step": "analyze_original",
+        "exit": 1
+      }
+    ],
+    "original_stop_metadata_present": false,
+    "bag_finalized": true,
+    "contract_exit": 0,
+    "analysis_exit": 1,
+    "completed": false,
+    "name": "sim_s6_after_reset"
+  },
+  {
+    "scope": "simulation",
+    "source_sha256": "22dfb354191c8e987a952f74110170170f45798aacb5de9decd88dd17022f08d",
+    "steps": [
+      {
+        "step": "record_start_check",
+        "alive": true,
+        "bytes_before": 36864,
+        "bytes_after": 6168576
+      },
+      {
+        "step": "record_stop_inner",
+        "exit": 0
+      }
+    ],
+    "bag_finalized": true,
+    "original_wrapper_exit": 0,
+    "contract_exit": 0,
+    "analysis_exit": 0,
+    "completed": true,
+    "name": "sim_s6_cleanup_nav_active"
+  },
+  {
+    "scope": "simulation",
+    "source_sha256": "22dfb354191c8e987a952f74110170170f45798aacb5de9decd88dd17022f08d",
+    "steps": [
+      {
+        "step": "record_start_check",
+        "alive": true,
+        "bytes_before": 24576,
+        "bytes_after": 6311936
+      },
+      {
+        "step": "record_stop_inner",
+        "exit": 0
+      }
+    ],
+    "bag_finalized": true,
+    "original_wrapper_exit": 0,
+    "contract_exit": 1,
+    "analysis_exit": 1,
+    "completed": false,
+    "name": "sim_s6_fixed_nav_active"
+  },
+  {
+    "scope": "simulation",
+    "source_sha256": "22dfb354191c8e987a952f74110170170f45798aacb5de9decd88dd17022f08d",
+    "steps": [
+      {
+        "step": "record_start_check",
+        "alive": true,
+        "bytes_before": 24576,
+        "bytes_after": 4718592
+      },
+      {
+        "step": "record_stop_inner",
+        "exit": 0
+      }
+    ],
+    "bag_finalized": true,
+    "original_wrapper_exit": 0,
+    "contract_exit": 0,
+    "analysis_exit": 0,
+    "completed": true,
+    "name": "sim_s6_fixed_nav_active_v2"
+  },
+  {
+    "scope": "simulation",
+    "steps": [
+      {
+        "step": "record_start",
+        "exit": 0
+      },
+      {
+        "step": "record_check",
+        "exit": 0
+      },
+      {
+        "step": "record_stop_original",
+        "exit": 0
+      },
+      {
+        "step": "stop_inner_sim_recorder",
+        "exit": 0
+      },
+      {
+        "step": "bag_contract",
+        "exit": 0
+      },
+      {
+        "step": "analyze_original",
+        "exit": 1
+      }
+    ],
+    "original_stop_metadata_present": false,
+    "bag_finalized": true,
+    "contract_exit": 0,
+    "analysis_exit": 1,
+    "completed": false,
+    "name": "sim_s6_nav_active"
+  }
+]
