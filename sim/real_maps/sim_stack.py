@@ -107,7 +107,9 @@ class Monitor(Node):
         super().__init__(name)
         self.set_parameters([Parameter('use_sim_time', value=True)])
         self.world = world
-        self.offsets = {f: WORLD['floors'][f]['world_offset'] for f in BOXES[world]}
+        # Floor offsets exist only in the two-floor world; single-floor worlds sit at the map origin.
+        self.offsets = {f: (WORLD['floors'][f]['world_offset'] if world == 'building' else [0.0, 0.0, 0.0])
+                        for f in BOXES[world]}
         self.boxes = {f: np.array(json.loads((HERE/'generated'/n).read_text())) for f, n in BOXES[world].items()}
         self.doors = json.loads((HERE/'generated/doors.json').read_text()) if world == 'building' else {}
         self.extents = {}
@@ -145,6 +147,9 @@ class Monitor(Node):
                                  lambda m: setattr(self, 'orch', json.loads(m.data)), 10)
         self.create_subscription(Bool, '/drive/ready', lambda m: setattr(self, 'drive_ready', m.data), 10)
         self.create_subscription(Bool, '/nav_safety/ready', lambda m: setattr(self, 'safety_ready', m.data), 10)
+        self.initialpose_t = None
+        self.initialpose_log = []
+        self.create_subscription(PoseWithCovarianceStamped, '/initialpose', self.on_initialpose, 10)
         self.initial = self.create_publisher(PoseWithCovarianceStamped, '/initialpose', latched)
         self.stop_pub = self.create_publisher(Bool, '/nav_safety/stop', 10)
         self.elevator_cmd = self.create_publisher(String, '/sim/elevator/command', 10)
@@ -215,10 +220,15 @@ class Monitor(Node):
         t = msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
         self.amcl_hist.append((t, *pose_values(msg.pose.pose), c[0], c[7], c[35]))
 
+    def on_initialpose(self, msg):
+        self.initialpose_t = self.now()
+        self.initialpose_log.append((self.initialpose_t, *pose_values(msg.pose.pose)))
+
     def on_scan(self, msg):
         self.scan = msg
+        valid = sum(1 for r in msg.ranges if msg.range_min < r < msg.range_max)
         self.scan_stamps.append((msg.header.stamp.sec+msg.header.stamp.nanosec/1e9, time.monotonic(),
-                                 len(msg.ranges)))
+                                 len(msg.ranges), valid/max(1, len(msg.ranges))))
 
     def on_log(self, msg):
         text = msg.msg.lower()
@@ -530,6 +540,10 @@ class Stack:
             report['scan_rate_hz_sim'] = 0.0
         if not 6.5 <= report['scan_rate_hz_sim'] <= 8.7:
             failed.append('scan_rate')
+        # A robot spawned outside the walls sees nothing (all inf) yet still drives; refuse that.
+        report['scan_valid_fraction'] = min((s[3] for s in stamps), default=0.0)
+        if report['scan_valid_fraction'] < .2:
+            failed.append('scan_valid_fraction')
         for parent, child in (('map', 'odom'), ('odom', 'base_footprint'), ('map', 'base_footprint')):
             ok = node.buffer.can_transform(parent, child, Time())
             report[f'tf_{parent}_to_{child}'] = ok

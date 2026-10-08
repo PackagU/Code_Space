@@ -24,15 +24,21 @@ from nav_msgs.msg import Odometry     # noqa: E402
 from run_scenarios import Processes, pose_values   # noqa: E402
 from sim_stack import HERE, LOG, assert_isolated    # noqa: E402
 
-# name: (front aux caster lift m, rear caster mu, front caster mu)
+# name: (front aux caster lift m, rear caster mu, front caster mu[, rolling rear ball])
 VARIANTS = {'V0': (0.0, .5, .5), 'V1': (.002, .5, .5), 'V2': (.002, .3, .3), 'V3': (0.0, .3, .3),
-            'V4': (.002, .1, .1)}
+            'V4': (.002, .1, .1), 'V5': (.002, 1.0, .3, True)}
 STEPS = [('idle', 0.0, 0.0, 10.0), ('straight', .08, 0.0, 6.0), ('stop1', 0.0, 0.0, 2.0),
          ('rotate', 0.0, .25, 8.0), ('stop2', 0.0, 0.0, 2.0), ('arc', .08, .2, 6.0), ('stop3', 0.0, 0.0, 10.0)]
 
 
+def rolling_ball(tree):
+    """Rear ball caster as a rolling ball: two perpendicular revolute joints (x then y)."""
+    from generate_worlds import rolling_rear_caster
+    rolling_rear_caster(tree)
+
+
 def variant_urdf(name, directory):
-    lift, rear_mu, front_mu = VARIANTS[name]
+    lift, rear_mu, front_mu, *rolling = VARIANTS[name]
     # Original 9/15 contacts (robot_world.urdf) with encoder odometry, so variants are absolute.
     tree = ET.parse(HERE/'generated/robot_world.urdf').getroot()
     tree.find(".//plugin[@name='diff_drive']/odometry_source").text = '0'
@@ -43,6 +49,8 @@ def variant_urdf(name, directory):
     for ref, mu in (('caster_wheel', rear_mu), ('caster_wheel_front', front_mu)):
         g = tree.find(f"gazebo[@reference='{ref}']")
         g.find('mu1').text = g.find('mu2').text = str(mu)
+    if rolling and rolling[0]:
+        rolling_ball(tree)
     path = directory/f'robot_{name}.urdf'
     ET.ElementTree(tree).write(path, encoding='utf-8', xml_declaration=False)
     return path

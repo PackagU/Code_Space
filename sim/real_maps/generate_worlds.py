@@ -246,6 +246,28 @@ def doors():
     return specs
 
 
+def rolling_rear_caster(tree):
+    """Replace the fixed rear ball-caster sphere by a ball that rolls (x then y revolute joints).
+
+    A fixed sphere slides with friction and drags the drive wheels into slip; a real ball caster rolls.
+    """
+    joint = tree.find("joint[@name='caster_joint']")
+    xyz = joint.find('origin').get('xyz')
+    tree.remove(joint)
+    roll = ET.SubElement(tree, 'link', name='caster_roll_x')
+    inertial = ET.SubElement(roll, 'inertial')
+    ET.SubElement(inertial, 'mass', value='0.01')
+    ET.SubElement(inertial, 'inertia', ixx='1e-6', iyy='1e-6', izz='1e-6', ixy='0', ixz='0', iyz='0')
+    for name, parent, child, origin, axis in (('caster_joint_x', 'base_link', 'caster_roll_x', xyz, '1 0 0'),
+                                             ('caster_joint_y', 'caster_roll_x', 'caster_wheel', '0 0 0', '0 1 0')):
+        j = ET.SubElement(tree, 'joint', name=name, type='continuous')
+        ET.SubElement(j, 'parent', link=parent)
+        ET.SubElement(j, 'child', link=child)
+        ET.SubElement(j, 'origin', xyz=origin, rpy='0 0 0')
+        ET.SubElement(j, 'axis', xyz=axis)
+        ET.SubElement(j, 'dynamics', damping='0.0005', friction='0.0')
+
+
 def robot(noise, filename, odometry=None):
     import xacro
     lidar, body = PARAMS['lidar'], PARAMS['robot']
@@ -277,9 +299,11 @@ def robot(noise, filename, odometry=None):
         xyz = [float(v) for v in origin.get('xyz').split()]
         xyz[2] += float(contact['front_aux_caster_lift_m'])
         origin.set('xyz', ' '.join(f'{v:.4f}' for v in xyz))
-        for ref in ('caster_wheel', 'caster_wheel_front'):
+        for ref, key in (('caster_wheel', 'rear_caster_mu'), ('caster_wheel_front', 'front_caster_mu')):
             g = tree.find(f"gazebo[@reference='{ref}']")
-            g.find('mu1').text = g.find('mu2').text = str(contact['caster_mu'])
+            g.find('mu1').text = g.find('mu2').text = str(contact[key])
+        if contact['rear_caster'] == 'rolling_ball':
+            rolling_rear_caster(tree)
     sensor = tree.find("gazebo[@reference='laser']/sensor")
     sensor.find('update_rate').text = str(lidar['update_rate_hz'])
     sensor.find('ray/scan/horizontal/samples').text = str(lidar['samples'])

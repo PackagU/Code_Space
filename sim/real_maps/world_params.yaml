@@ -119,13 +119,17 @@ robot:
   odometry_profiles: {encoder: 0, world: 1}
   odometry_source_note: "[제안값] 2026-10-08 Codex 검토 반영: 새 E2E·사전 시험은 encoder. 9/15 재현(run_scenarios.py)은 robot_world.urdf(world). 실차 바퀴 odom 오차 아직 모름 U-H08"
   # encoder odom 프로필에만 적용하는 볼캐스터·보조 바퀴 접촉 단순화(9/15 재현 robot_world.urdf 는 원본 접촉 유지).
-  # 근거: sim/real_maps/probe_drive_slip.py 2026-10-08 (logs/real_map_sim/slip_probe_20261008/summary.json)
-  #   원본(보조 바퀴 접지·mu 0.5): odom/참값 직진 1.25·회전 1.38 → encoder odom 으로 Nav2 도착 부근 회전 반복
-  #   채택(보조 바퀴 2 mm 띄움·mu 0.3): 직진 1.08·회전 1.03, 정지 크리프 0.4 mm/s(원본 0.5 mm/s 수준)
+  # 근거: sim/real_maps/probe_drive_slip.py 2026-10-08 (logs/real_map_sim/slip_probe_20261008{,_b}/summary.json)
+  #   V0 원본(고정 구 캐스터 접지·mu 0.5): odom/참값 직진 1.25·회전 1.38 → encoder odom 으로 G1 도착 부근 회전 반복
+  #   V2 보조 바퀴 2 mm·mu 0.3: 직진 1.08·회전 1.03 → 8% 직진 편향으로 G2 AMCL 이탈·벽 접촉(pre1_G2)
+  #   V5 채택(뒤 볼캐스터를 x·y 두 회전 관절로 구르게, 보조 바퀴 2 mm): 직진 0.999·회전 0.965(URDF 윤거 0.4194
+  #      대 drive_calib 0.4323 비 0.970 과 같음 = 미끄럼 없음), 정지 크리프 0.07~0.66 mm/s(원본 0.5 mm/s 수준)
   contact:
     front_aux_caster_lift_m: 0.002
-    caster_mu: 0.3
-    source: "[제안값] 보조 바퀴 지상고 아직 모름 U-H06, 실제 미끄럼 아직 모름 U-H08. mu 0.3 은 8/21 크리프 0 하한. 시뮬 마찰 단순화이며 실물 값이 아님"
+    rear_caster: rolling_ball
+    rear_caster_mu: 1.0
+    front_caster_mu: 0.3
+    source: "[제안값] 실제 볼캐스터는 구른다(고정 구 미끄럼 끌림 제거). 보조 바퀴 지상고 아직 모름 U-H06, 실제 바퀴 미끄럼·odom 오차 아직 모름 U-H08. 시뮬 단순화이며 실물 값이 아님"
   imu: none
   imu_source: "9/12 기록상 실차 IMU 미발행. 현재 상태 아직 모름 U-H09"
   ground_truth_rate_hz: 20.0
