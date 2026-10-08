@@ -1,0 +1,21 @@
+# Simulation-only floor registry for auto_floor_orchestrator_node (real field maps).
+#
+# The virtual-KKU registry test_workspace/elevator_auto_map_switch/config/floor_maps.yaml is NOT
+# modified (검토 CR-03). Map paths are the pinned field maps under the read-only /ros2_ws/maps
+# mount, so scripts/field_map_guard.py checks the same files. Points copy waypoints.json
+# (*_elevator_inside / *_elevator_exit, yaw rad -> deg). They are image-derived poses, not robot
+# measurements. elevator_inside is the /initialpose seed after the map switch.
+schema_version: 1
+frame_id: map
+default_spawn_point_id: elevator_inside
+floors:
+  F1:
+    map_yaml: /ros2_ws/maps/field/f1/f1_manual_clean_v3.yaml
+    points:
+      elevator_inside: {x: -10.175, y: -2.075, yaw_deg: 52.6506}
+      elevator_exit: {x: -8.725, y: -0.175, yaw_deg: 52.6506}
+  F2:
+    map_yaml: /ros2_ws/maps/field/f2/f2_nav_unknown_v1.yaml
+    points:
+      elevator_inside: {x: -12.475, y: -1.325, yaw_deg: -47.4895}
+      elevator_exit: {x: -11.375, y: -2.525, yaw_deg: -47.4895}

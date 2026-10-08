@@ -152,3 +152,45 @@ relocalization:
   tf_stable_max_jump_rad: 0.05
   timeout_s: 60.0
   source: "[제안값] 지도 전환 뒤 새 AMCL 표본(전환 이후 stamp)만으로 판정. 위치 0.25 m 는 9/15 S3 회복 기준과 같음. 기준 미달이면 정지·기록·중단"
+
+# ---------------------------------------------------------------------------------------------
+# 팔·지게팔·택배 상자 (시뮬 전용 옵션 --arm-sim). 모두 가정값 — 실물 동작·접촉·하중 검증이 아니다.
+# ---------------------------------------------------------------------------------------------
+lift:
+  joint: lift_joint
+  load_up_m: 0.30
+  unload_up_m: 0.30
+  down_m: 0.0
+  tolerance_m: 0.03
+  timeout_s: 30.0
+  source: "[가정값] 보관함 칸·배달 위치 높이 아직 모름 U-E07·U-E11. URDF lift_joint 행정 0~0.5 m, lift_cycle.py 기본 0.30 m 재사용. 실물 리프트 원점·리미트·하중 아직 모름 U-H10"
+
+arm:
+  # 4 DOF 서보 팔(사양서: 리치 60 cm). 자세 PWM 은 src/robot_arm_pkg/robot_arm_pkg/servo_protocol.py 를 읽어서 쓴다(복사 안 함).
+  mount_xyz: [-0.05, 0.15, 0.70]
+  mount_source: "[가정값] 사양·POSES_2 주석 '상단 좌측 장착 팔'. 실제 장착 위치 아직 모름(사양서 §미정, improvement_report §1.17)"
+  joints:
+    - {name: arm_joint_000, servo: '000', axis: [0, 0, 1], parent_offset: [0.0, 0.0, 0.0]}
+    - {name: arm_joint_001, servo: '001', axis: [0, 1, 0], parent_offset: [0.0, 0.0, 0.05]}
+    - {name: arm_joint_002, servo: '002', axis: [0, 1, 0], parent_offset: [0.25, 0.0, 0.0]}
+    - {name: arm_joint_003, servo: '003', axis: [1, 0, 0], parent_offset: [0.25, 0.0, 0.0]}
+  tip_offset: [0.10, 0.0, 0.0]
+  geometry_source: "[가정값] 관절 축 배정(000 몸통 yaw, 001 어깨 pitch, 002 팔꿈치 pitch, 003 손목 roll)과 링크 길이 0.05/0.25/0.25/0.10 m(합 0.60 m)는 사양 리치 60 cm 를 나눈 가정. 실제 관절 배치 아직 모름"
+  pwm_to_angle:
+    center_us: 1500
+    rad_per_us: 0.0015707963
+    sign: {'000': 1, '001': 1, '002': 1, '003': 1}
+    source: "[가정값] 표준 서보 1500 µs = 0°, ±1000 µs = ±90° (0.09°/µs). 실제 PWM→각도 대응·방향·영점 아직 모름(U-H04, Kim 확인 필요)"
+  tolerance_rad: 0.05
+  hold_friction_nm: 5.0
+  collision: false
+  collision_source: "[가정값] 팔 링크는 시각만(충돌 없음). LiDAR 가림 U-H05 와 버튼 실제 접촉은 모델하지 않는다"
+
+parcel:
+  size_m: [0.30, 0.20, 0.20]
+  size_source: "[가정값] 시연 택배 규격 미정(05 준비물 '시연 택배 규격 고정')"
+  carrier_offset_m: [0.25, 0.0, 0.10]
+  carrier_offset_source: "[가정값] 상자가 지게팔 캐리어 앞에 얹힌다고 가정(캐리어 링크 기준)"
+  locker_slot_offset_m: [0.55, 0.0, 0.40]
+  locker_source: "[가정값] f1_locker 정차 자세 기준 앞 0.55 m·높이 0.40 m 에 상자가 있다고 가정. 보관함 칸 치수·위치 아직 모름 U-E07"
+  mode: "attach/detach mock (충돌·질량 없음, 캐리어 자세를 따라 옮김). 실제 접촉·파지·하중 검증 아님"

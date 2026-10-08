@@ -60,11 +60,12 @@ up() {
       --user "$(id -u):$(id -g)" -e HOME=/tmp/simhome -e USER=sim \
       -e ROS_DOMAIN_ID="$DOMAIN" -e ROS_LOCALHOST_ONLY=1 -e PACKAGU_SIM_ISOLATED=1 \
       -e GAZEBO_MODEL_DATABASE_URI= -e PYTHONDONTWRITEBYTECODE=1 \
-      -e ROS_LOG_DIR=/ros2_ws/logs/real_map_sim/ros_logs \
-      -e GAZEBO_LOG_PATH=/ros2_ws/logs/real_map_sim/gazebo_logs \
+      -e ROS_LOG_DIR="/ros2_ws/logs/real_map_sim/ros_logs/$NAME" \
+      -e GAZEBO_LOG_PATH="/ros2_ws/logs/real_map_sim/gazebo_logs/$NAME" \
       "${extra[@]}" \
       -v "$ROOT_DIR:/ros2_ws" \
       -v "$ROOT_DIR/src/slam_pkg/maps:/ros2_ws/maps:ro" \
+      -v "$ROOT_DIR/logs:/ros2_ws/logs" \
       -w /ros2_ws --entrypoint sleep "$IMAGE" infinity >/dev/null
     docker exec "$NAME" mkdir -p /tmp/simhome
   fi

@@ -8,6 +8,7 @@ Every dimension comes from world_params.yaml (with its source). Outputs:
   *_boxes.json                                wall boxes in each floor's MAP frame
   robot.urdf / robot_nonoise.urdf             sim robot, encoder odom (LiDAR noise on / off)
   robot_world.urdf                            WORLD odom (truth as odom) — 9/15 reproduction only
+  robot_arm.urdf                              robot.urdf + simplified 4-DOF arm (--arm-sim, [가정값])
   doors.json, geometry_validation.json
 """
 import hashlib
@@ -268,7 +269,62 @@ def rolling_rear_caster(tree):
         ET.SubElement(j, 'dynamics', damping='0.0005', friction='0.0')
 
 
-def robot(noise, filename, odometry=None):
+def add_arm(tree):
+    """Simplified 4-DOF servo arm (sim-only option). All geometry/axes are [가정값] in world_params arm."""
+    arm = PARAMS['arm']
+
+    def inertial(link, mass=.1):
+        node = ET.SubElement(link, 'inertial')
+        ET.SubElement(node, 'mass', value=str(mass))
+        ET.SubElement(node, 'inertia', ixx='1e-4', iyy='1e-4', izz='1e-4', ixy='0', ixz='0', iyz='0')
+
+    def fixed(name, parent, child, xyz):
+        j = ET.SubElement(tree, 'joint', name=name, type='fixed')
+        ET.SubElement(j, 'parent', link=parent)
+        ET.SubElement(j, 'child', link=child)
+        ET.SubElement(j, 'origin', xyz=' '.join(map(str, xyz)), rpy='0 0 0')
+
+    mount = ET.SubElement(tree, 'link', name='arm_mount')
+    inertial(mount, .05)
+    fixed('arm_mount_joint', 'base_link', 'arm_mount', arm['mount_xyz'])
+    parent = 'arm_mount'
+    joints = arm['joints']
+    for i, spec in enumerate(joints):
+        link = ET.SubElement(tree, 'link', name=f'arm_link_{spec["servo"]}')
+        inertial(link)
+        length = (joints[i+1]['parent_offset'][0] if i+1 < len(joints) else arm['tip_offset'][0]) or .05
+        visual = ET.SubElement(link, 'visual')
+        ET.SubElement(visual, 'origin', xyz=f'{length/2} 0 0', rpy='0 1.5708 0')
+        ET.SubElement(ET.SubElement(visual, 'geometry'), 'cylinder', radius='0.02', length=str(length))
+        j = ET.SubElement(tree, 'joint', name=spec['name'], type='revolute')
+        ET.SubElement(j, 'parent', link=parent)
+        ET.SubElement(j, 'child', link=link.get('name'))
+        ET.SubElement(j, 'origin', xyz=' '.join(map(str, spec['parent_offset'])), rpy='0 0 0')
+        ET.SubElement(j, 'axis', xyz=' '.join(map(str, spec['axis'])))
+        ET.SubElement(j, 'limit', lower='-1.6', upper='1.6', effort='10', velocity='3')
+        ET.SubElement(j, 'dynamics', damping='0.1', friction=str(arm['hold_friction_nm']))
+        g = ET.SubElement(tree, 'gazebo', reference=link.get('name'))
+        ET.SubElement(g, 'gravity').text = 'false'
+        parent = link.get('name')
+    tip = ET.SubElement(tree, 'link', name='arm_tip')
+    inertial(tip, .01)
+    fixed('arm_tip_joint', parent, 'arm_tip', arm['tip_offset'])
+    gazebo = ET.SubElement(tree, 'gazebo')
+    states = ET.SubElement(gazebo, 'plugin', name='arm_joint_state_publisher',
+                           filename='libgazebo_ros_joint_state_publisher.so')
+    ET.SubElement(ET.SubElement(states, 'ros'), 'namespace').text = '/'
+    ET.SubElement(states, 'update_rate').text = '30'
+    for spec in joints:
+        ET.SubElement(states, 'joint_name').text = spec['name']
+    gazebo = ET.SubElement(tree, 'gazebo')
+    traj = ET.SubElement(gazebo, 'plugin', name='arm_trajectory', filename='libgazebo_ros_joint_pose_trajectory.so')
+    ros = ET.SubElement(traj, 'ros')
+    ET.SubElement(ros, 'namespace').text = '/'
+    ET.SubElement(ros, 'remapping').text = 'set_joint_trajectory:=set_arm_trajectory'
+    ET.SubElement(traj, 'update_rate').text = '20'
+
+
+def robot(noise, filename, odometry=None, arm=False):
     import xacro
     lidar, body = PARAMS['lidar'], PARAMS['robot']
     doc = xacro.process_file(str(ROOT / 'src/common_pkg/urdf/delivery_robot.urdf.xacro'), mappings={
@@ -323,6 +379,8 @@ def robot(noise, filename, odometry=None):
     for key, value in {'body_name': 'base_footprint', 'frame_name': 'world',
                        'update_rate': str(body['ground_truth_rate_hz']), 'gaussian_noise': '0.0'}.items():
         ET.SubElement(p3d, key).text = value
+    if arm:
+        add_arm(tree)
     ET.indent(tree)
     # Humble spawn_entity passes a Unicode string to lxml; no encoding declaration.
     ET.ElementTree(tree).write(OUT/filename, encoding='utf-8', xml_declaration=False)
@@ -359,6 +417,7 @@ def main():
     robot(PARAMS['lidar']['noise_enabled'], 'robot.urdf')
     robot(False, 'robot_nonoise.urdf')
     robot(PARAMS['lidar']['noise_enabled'], 'robot_world.urdf', 'world')
+    robot(PARAMS['lidar']['noise_enabled'], 'robot_arm.urdf', arm=True)   # --arm-sim option only
     (OUT/'geometry_validation.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report, indent=2))
 

@@ -1,59 +1,81 @@
-# 실측 지도 Gazebo 시뮬 검증
+# 실측 지도 Gazebo 시뮬 (sim/real_maps)
 
-모든 판정은 시뮬레이션 검증이다. 현장 기본 지도·설정·스크립트·waypoint는 변경하지 않는다.
+모든 판정은 **시뮬레이션 검증**이다. 실물 검증으로 쓰지 않는다. 월드 치수 대부분이 아직 모름(임시값)이라 결과에는 "임시 치수"를 붙인다. 현장 기본 파일(`nav2_params.yaml`, `nav_safety.yaml`, `drive_calib.yaml`, `fieldctl`, `start_field_*.sh`, `map_pins.json`, `latest_map.txt`, `waypoints.json`)과 이성덕 미션 코드는 고치지 않는다.
 
-```bash
-bash sim/real_maps/run_suite.sh
-python3 sim/real_maps/summarize.py
-```
+## 안전: 실제 로봇과 섞이지 않게
 
-AMCL 오차는 ROS message header 시각을 맞춰 지면 진실을 보간한 값으로 확인한다. 정규 조건 종료 후 native ROS Humble 환경에서 다음을 실행한다. ROS가 없으면 SKIP한다.
+같은 LAN에 Jetson이 있다. 모든 시뮬은 `sim_container.sh`가 만든 격리 컨테이너 안에서만 돈다.
 
-```bash
-source /opt/ros/humble/setup.bash
-python3 sim/real_maps/analyze_localization.py
-python3 sim/real_maps/summarize.py
-python3 sim/real_maps/write_report.py
-```
+- Docker `--internal` 네트워크 `packagu_sim_isolated` (LAN·인터넷 경로 없음)
+- `ROS_LOCALHOST_ONLY=1`, `ROS_DOMAIN_ID=77`, 장치 전달·privileged·host network 없음
+- 위 조건이 하나라도 빠지면 셸(`sim_container.sh verify`)과 파이썬(`isolation.assert_isolated`) 양쪽에서 기동을 거부한다
+- `scripts/fastdds_lan_peers.xml`, `scripts/run_sim_host.sh`(Jetson 분산 모드)는 쓰지 않는다
+- 컨테이너는 호스트 uid로 돌아 root 소유 파일을 남기지 않는다. 필드용 `ros2_humble` 컨테이너는 건드리지 않는다
 
-기존 Docker 이미지에서 3패키지 build → 지도/월드/URDF 생성 및 정합 검사 → S1/S2/S3/S5 각 조건 3회 → bag 계측/검사 → action/지면 진실 거리/시간 기록 → field bag 분석 → 프로세스 정리까지 실행한다. Gazebo Classic 11/ROS Humble이 설치된 기존 이미지를 사용하며 패키지를 설치하지 않는다. `PACKAGU_SIM_IMAGE`로 이미지를 지정한다.
-
-`--filter S1_`, `--repeats 1`, `--goal-timeout 900`, `--resume`를 runner 인자로 넘길 수 있다. bag은 `logs/real_map_sim/<조건>/bag`에, 작은 공유용 요약은 `sim/real_maps/results/`에 저장한다. 기존 bag을 덮어쓰지 않는다. `--resume`는 완료 결과가 있는 조건만 건너뛴다. 실행 중단/환경 오류 조건은 bag을 로컬의 별도 폴더로 보존한 뒤 재실행한다.
-
-병렬 반복 실행은 먼저 한 번 build/generate를 끝낸 뒤 `SIM_SKIP_PREPARE=1`을 사용한다. 각 반복은 `PACKAGU_SIM_CONTAINER`, `PACKAGU_SIM_DOMAIN`을 서로 다르게 설정하고 `--filter _r1` 같은 조건 필터를 사용한다. build/generate와 같은 파일은 동시에 변경하지 않는다.
-
-GUI를 함께 켜려면 `SIM_GUI=1`을 사용한다. 실행 중인 서버에는 `bash sim/real_maps/show_gui.sh packagu_real_map_sim 215`로 연결한다. 런처는 native Gazebo·RViz 창이 유지되도록 실행 세션을 유지한다. Gazebo master와 ROS domain은 해당 시뮬 컨테이너에 연결한다. 컨테이너로 GUI를 연결하려고 광범위한 X11 접근 권한을 추가할 필요는 없다. RViz에서 map, plan, costmap, scan 및 로봇을 확인한다. 자동 시험 중에는 GUI에서 pose/goal을 보내지 않는다.
-
-F1 월드만 유리문이 없는 PGM을 사용한다. Nav2는 유리문을 포함한 원본 v3를 사용한다. 벽은 occupied 셀의 가로 run을 세로로 병합한 1 m 높이 box이며 F2 잡음을 보존한다. `generated/`는 재생성 가능한 로컬 산출물이다.
-
-shim은 실제 `OpencrBridgeNode.send_command_tick`과 feedback 파서를 재사용하고 serial transport만 Gazebo 명령/odom에 연결한다. Gazebo가 odom/TF의 유일한 발행자이며 p3d가 `base_footprint`의 지면 진실 pose를 발행한다. bridge의 0.5초 watchdog, 48 rpm 초과 즉시 0/ready false, 60 rpm/s slew를 그대로 사용한다. 실제 펌웨어와 모터 응답은 검증하지 않는다.
-
-`field_pose_capture_sim.py`는 원본 평가/출력 형식을 재사용하되 raw costmap을 구독한다. `--refresh-amcl`은 정지 상태 AMCL의 실제 갱신을 요청하는 S6 리허설 옵션이며 S3 초기 오차 재현 전에는 사용하지 않는다. 원본 field capture와 raw capture 결과를 모두 남긴다. 어느 시뮬 capture에서도 `--save`, `--replace`는 거부한다.
+## 한 명령 실행
 
 ```bash
-python3 sim/real_maps/test_geometry.py
-python3 sim/real_maps/test_pose_capture_sim.py
+# A층: 한 층 실측 지도 + 로봇 + OpenCR shim + nav_safety_gate + Nav2 (준비 판정까지)
+bash sim/real_maps/start_sim.sh --floor F1 --params P0 --spawn f1_initial_test [--gui]
+python3 sim/real_maps/sim_goal.py --name <출력된 이름> --to f1_locker     # goal 1개 + 측정
+bash sim/real_maps/start_sim.sh --stop                                    # 모든 시뮬 프로세스 정리
+
+# 토요일 사전 시험 (실행마다 새 스택)
+python3 sim/real_maps/run_pretest.py --cases G1,G2 --params P0 --repeats 5 --prefix pre3
+
+# C층: End-to-End 왕복 (두 층 한 월드 + 엘리베이터 + 지도 전환)
+python3 sim/real_maps/run_e2e.py --name e2e_r1 [--cabin-mode nav2|direct] [--repeats 3]
+
+# 결과 요약 표 (호스트, ROS 불필요)
+python3 sim/real_maps/summarize_runs.py --pretest 'pre3_*' --e2e 'e2e_*' --out results/20261008
 ```
 
-두 번째 시험은 ROS 메시지가 없으면 SKIP를 출력하고 종료한다. 현장 파일 변경 방지를 위해 공용 offline runner에는 등록하지 않았다.
+호스트에서 실행한 파이썬 러너는 격리 컨테이너를 올린 뒤 그 안에서 자신을 다시 실행한다(`host_exec.py`). 병렬 실행은 `PACKAGU_SIM_CONTAINER=packagu_sim_e2e_b`처럼 컨테이너 이름을 다르게 준다. 컨테이너마다 `ROS_LOCALHOST_ONLY`라 서로도 섞이지 않는다. 처음 실행하면 `colcon build`(common_pkg·slam_pkg·drive_pkg·auto_floor_orchestrator_pkg)와 월드 생성을 자동으로 한다. 강제로 다시 하려면 `SIM_REBUILD=1`, `SIM_REGENERATE=1`.
 
-## 수동 배달 왕복
+옵션: `--params P0|P1|v011|v012`(P0 = `nav2_params_pre_wallpush_20260915.yaml`, P1 = 현재 Jetson 기본 wall_push `nav2_params.yaml`), `--lidar-noise on|off`, `--odom encoder|world`. params는 `src/slam_pkg/config/` 절대경로로 넘긴다(install share에 빌드 뒤 추가한 파일이 없을 수 있음).
+
+## 구성
+
+| 파일 | 역할 |
+|---|---|
+| `world_params.yaml` | 월드·엘리베이터·LiDAR·로봇·판정 기준 치수. 값마다 출처(`[측정값]`·`[제안값]`·`아직 모름`). 토요일 측정 뒤 값만 바꾸고 다시 생성 |
+| `generate_worlds.py` | occupied 셀 → 행 run-length 병합 상자 벽(높이 1.0 m). raster 복원·모서리·층 오프셋 오차 검사(0.05 m 넘으면 멈춤). F1 noglass, F2 raw, F2 door_open, 두 층 `building.world`, 로봇 URDF 3종 |
+| `sim_container.sh` / `isolation.py` | 격리 컨테이너와 격리 검사 |
+| `sim_stack.py` | 스택 기동(9/15 순서 STARTUP: discovery 대기 → localization → initial pose → navigation), 준비 판정(scan 주기·TF `map→odom→base_footprint`·AMCL·Nav2 lifecycle·`/drive/ready`), 측정(지면 진실 footprint–벽 거리, 코너, collision-ahead, recovery, 48 rpm 차단, 자연스러움 지표, RTF), 정리 |
+| `opencr_shim.py` | 실제 `OpencrBridgeNode.send_command_tick` 재사용(0.5 s timeout, 48 rpm 초과 시 비율 축소 없이 0·ready false, 60 rpm/s slew) |
+| `elevator_sim_node.py` | 시뮬 전용 엘리베이터: 닫힘 → 호출 → 도착 대기 → 열림 → 열림 유지 → 닫힘 → 이동 → 목적층 열림. 미닫이 문짝 2장, 끼임 시 재열림 on/off, 캐빈 안 로봇을 위치·yaw 그대로 다른 층 캐빈으로 이동. `/elevator/state` 발행 |
+| `fake_floor_reader.py` | 가짜 층수 인식기. `tools/floor_reader/app.py`와 같은 `GET /api/state` 형식·이벤트 gate, 값은 `/elevator/state`에서 |
+| `floor_maps_real.yaml` | orchestrator용 시뮬 전용 층 지도 표(F1 v3, F2 nav_unknown, 캐빈 초기 pose). 가상 KKU `floor_maps.yaml`은 그대로 |
+| `run_pretest.py` | G1·G2·G3·G5 사전 시험 |
+| `run_e2e.py` | 왕복 러너(goal당 300 s [제안값], 실패 시 정지·기록·중단, 지도 전환 뒤 새 AMCL 표본 판정) |
+| `probe_drive_slip.py` | encoder odom 대 지면 진실 미끄럼·크리프 진단 |
+| `summarize_runs.py` | 결과 표(`results/`) |
+| `run_scenarios.py`, `run_manual_mission.py`, `run_suite.sh` 등 | 9/15 S1~S6·수동 왕복 러너(WORLD odom 재현용, 격리 컨테이너 안에서만) |
+
+## 명령 경로
+
+```text
+Nav2 /cmd_vel → nav_safety_gate(실제 코드·nav_safety.yaml) → /cmd_vel_safe → OpenCR shim → /sim/cmd_vel_drive → Gazebo diff drive
+```
+
+지면 진실은 p3d `/sim/ground_truth`(world 기준, 20 Hz)이며 평가에만 쓴다. Nav2에는 넣지 않는다. 두 층 월드에서는 층별 `world_offset`(F2 +100 m)을 빼서 지도 좌표로 바꾼다.
+
+## odom과 접촉 모델
+
+- 새 시험(사전 시험·E2E)은 **encoder odom**(diff drive `odometry_source` 0). 엘리베이터 이동 때 바퀴가 돌지 않으므로 실차처럼 odom이 연속이다. E2E는 이동 전후 odom 변화와 캐빈 기준 상대 자세(위치·yaw)를 검사한다
+- 9/15 재현(`run_scenarios.py`)은 `robot_world.urdf`(WORLD odom = 참값이 odom)
+- encoder odom에서는 9/15 캐스터 모델(고정 구, 미끄럼 마찰)이 바퀴를 끌어 odom이 직진 25%·회전 38% 과대였다. 뒤 볼캐스터를 구르는 공(x·y 회전 관절)으로 바꾸고 보조 바퀴를 2 mm 띄웠다(`world_params.yaml robot.contact`, [제안값]). 근거는 `probe_drive_slip.py` 결과
+
+## 지도 전환 뒤 진행 조건
+
+orchestrator READY나 `/initialpose` 발행만으로 하차 goal을 보내지 않는다. `/initialpose` 이후 stamp의 새 AMCL 표본(`/request_nomotion_update`로 요청)으로 위치·방향 오차(지면 진실 대비), 공분산, `map→base_footprint` TF 안정 구간을 모두 확인한다. 기준은 `world_params.yaml relocalization`([제안값]). 제한 시간 안에 못 맞추면 정지·기록·중단한다.
+
+## 시험
 
 ```bash
-SIM_GUI=1 SIM_MODE=manual bash sim/real_maps/run_suite.sh --name M1_manual_roundtrip_r1
+bash sim/real_maps/run_sim_tests.sh   # ROS 없으면 해당 시험 SKIP (scripts/run_offline_tests.sh 규칙)
 ```
 
-Nav2 → 실제 PTY WASD → Nav2 전환과 양쪽 문 위치 검증을 포함한다. 원본 F2 A/B 월드는 유지하고 수동 승하차 전용 월드만 1.0 m 개구부의 스캔 문 영역을 비운다. 자세한 명령은 `docs/sim/2026-09-15_manual_delivery_roundtrip.md`에 있다. 임의의 사용자 중단은 완주로 세지 않는다.
+## 기록 위치
 
-```bash
-python3 sim/real_maps/run_operational_rehearsal.py --container packagu_real_map_sim --name sim_s6_nav_active
-python3 sim/real_maps/write_report.py
-```
-
-S6는 Nav2가 활성화된 주행 구간에서 실행한다. 수동 정차 구간만 녹화하면 action status가 없어 원본 분석은 실패한다. 보정 후에도 metadata와 contract/analysis 결과를 확인한다.
-
-원본 녹화의 hidden 토픽 누락·내부 recorder 종료 결함에 대한 시뮬 전용 보정 리허설은 다음과 같다. 원본 파일은 수정하지 않고 로컬 임시 복사본을 사용한다.
-
-```bash
-python3 sim/real_maps/record_rehearsal_sim.py --container packagu_real_map_sim --name sim_s6_fixed_review
-```
+bag·dense CSV·로그는 gitignore된 `logs/real_map_sim/<실행 이름>/`(실행마다 새 이름, 덮어쓰지 않음). 공유용 작은 요약만 `results/`에 둔다.

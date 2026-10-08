@@ -35,7 +35,7 @@ from rclpy.time import Time
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from nav2_msgs.action import NavigateToPose
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import JointState, LaserScan
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Empty
 from rcl_interfaces.msg import Log
@@ -67,7 +67,8 @@ TOPICS = ['/clock', '/scan', '/odom', '/tf', '/tf_static', '/sim/ground_truth', 
           '/cmd_vel', '/cmd_vel_safe', '/sim/cmd_vel_drive', '/sim/shim_stats', '/rosout', '/drive/ready',
           '/nav_safety/status', '/nav_safety/stopped', '/navigate_to_pose/_action/status', '/initialpose',
           '/map', '/elevator/state', '/floor_orchestrator/status', '/sim/elevator/command',
-          '/sim/mission_stage', '/sim/payload_state']
+          '/sim/mission_stage', '/sim/payload_state', '/joint_states', '/sim/parcel/state', '/set_arm_trajectory',
+          '/set_lift_trajectory']
 LOG_EVENTS = {'collision ahead': 'collision_ahead', 'starting point in lethal space': 'lethal_start',
               'control loop missed': 'controller_missed', 'running spin': 'recovery_spin',
               'running backup': 'recovery_backup', 'running wait': 'recovery_wait',
@@ -126,6 +127,8 @@ class Monitor(Node):
         self.cmd = (0.0, 0.0)
         self.elevator = self.orch = None
         self.drive_ready = self.safety_ready = None
+        self.joints = {}
+        self.parcel = None
         self.measure = False
         self.samples = []
         self.events = collections.Counter()
@@ -145,6 +148,9 @@ class Monitor(Node):
         self.create_subscription(String, '/elevator/state', lambda m: setattr(self, 'elevator', json.loads(m.data)), 10)
         self.create_subscription(String, '/floor_orchestrator/status',
                                  lambda m: setattr(self, 'orch', json.loads(m.data)), 10)
+        self.create_subscription(JointState, '/joint_states',
+                                 lambda m: self.joints.update(dict(zip(m.name, m.position))), 20)
+        self.create_subscription(String, '/sim/parcel/state', lambda m: setattr(self, 'parcel', json.loads(m.data)), 10)
         self.create_subscription(Bool, '/drive/ready', lambda m: setattr(self, 'drive_ready', m.data), 10)
         self.create_subscription(Bool, '/nav_safety/ready', lambda m: setattr(self, 'safety_ready', m.data), 10)
         self.initialpose_t = None
@@ -377,7 +383,7 @@ class Stack:
     """One simulation run directory; owns or attaches to the simulation processes."""
 
     def __init__(self, name, world='f1', floor='F1', params='P0', spawn='f1_initial_test', initial=None,
-                 lidar_noise=True, odom='encoder', record=True, attach=False):
+                 lidar_noise=True, odom='encoder', record=True, attach=False, arm=False):
         if Path(name).name != name or not name:
             raise SystemExit('invalid run name')
         self.name, self.world, self.floor, self.params = name, world, floor, params
@@ -387,18 +393,22 @@ class Stack:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.spawn = resolve_pose(spawn)
         self.initial = resolve_pose(initial) if initial is not None else self.spawn
-        if odom == 'world':
+        if arm:
+            if odom != 'encoder' or not lidar_noise:
+                raise SystemExit('--arm-sim uses robot_arm.urdf (encoder odom, LiDAR noise on) only')
+            self.robot = HERE/'generated/robot_arm.urdf'
+        elif odom == 'world':
             self.robot = HERE/'generated/robot_world.urdf'
         else:
             self.robot = HERE/'generated'/('robot.urdf' if lidar_noise else 'robot_nonoise.urdf')
-        self.record, self.odom_profile, self.lidar_noise = record, odom, lidar_noise
+        self.record, self.odom_profile, self.lidar_noise, self.arm = record, odom, lidar_noise, arm
         self.node = Monitor(world, 'real_map_sim_attach' if attach else 'real_map_sim_monitor')
         self.node.progress_path = self.dir/'progress.json'
         self.processes = Processes(self.dir)
         self.nav = self.recorder = None
         self.bag = self.dir/'bag'
         self.result = {'name': name, 'validation_scope': 'simulation', 'world': world, 'floor': floor,
-                       'params': params, 'odometry': odom, 'lidar_noise': lidar_noise,
+                       'params': params, 'odometry': odom, 'lidar_noise': lidar_noise, 'arm_sim': arm,
                        'provisional_dimensions': True, 'error': None}
 
     @classmethod
@@ -458,6 +468,9 @@ class Stack:
                 'auto_floor_orchestrator_node', '--ros-args', '-p', 'use_sim_time:=true',
                 '-p', f'floor_maps_yaml:={HERE/"floor_maps_real.yaml"}', '-p', 'dry_run_map_load:=false',
                 '-p', f'current_floor:={self.floor}', '-p', 'target_floor:=F2'])
+            if self.arm:
+                self.processes.start('parcel', [sys.executable, str(HERE/'parcel_mock.py'),
+                                                '--ros-args', '-p', 'use_sim_time:=true'])
         self.start_nav()
         self.result['readiness'] = self.readiness()
         if not self.result['readiness']['ready']:
@@ -685,6 +698,7 @@ def main():
     parser.add_argument('--spawn', default='f1_initial_test', help='waypoint name')
     parser.add_argument('--initial', default=None, help='AMCL initial pose waypoint (default = spawn)')
     parser.add_argument('--no-record', action='store_true')
+    parser.add_argument('--arm-sim', action='store_true', help='robot_arm.urdf + parcel mock (building world)')
     add_common_args(parser)
     args = parser.parse_args()
     world = args.world or args.floor.lower()
@@ -693,7 +707,7 @@ def main():
         raise SystemExit(f'spawn {args.spawn} is on {spawn[3]}, not {args.floor}')
     rclpy.init()
     stack = Stack(args.name, world, args.floor, args.params, args.spawn, args.initial,
-                  args.lidar_noise == 'on', args.odom, not args.no_record)
+                  args.lidar_noise == 'on', args.odom, not args.no_record, arm=args.arm_sim)
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(1))
     code = 0

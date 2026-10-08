@@ -17,7 +17,7 @@ class WorldParamsTests(unittest.TestCase):
         def walk(node, path):
             if isinstance(node, dict):
                 numeric = [k for k, v in node.items() if isinstance(v, (int, float, list)) and not isinstance(v, bool)]
-                if numeric and path not in ('', 'floors', 'robot.odometry_profiles'):
+                if numeric and path not in ('', 'floors', 'robot.odometry_profiles', 'arm.pwm_to_angle.sign'):
                     self.assertTrue(any('source' in k for k in node), f'{path} has values without a source')
                 for k, v in node.items():
                     walk(v, f'{path}.{k}' if path else k)

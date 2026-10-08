@@ -29,6 +29,9 @@ def pretest(patterns):
     rows = []
     for pattern in patterns:
         for path in sorted(LOG.glob(f'{pattern}/result.json')):
+            if (path.parent/'INVALID.txt').exists():   # e.g. pre1/pre2 G2 offset bug — never aggregated
+                print(f'excluded (INVALID.txt): {path.parent.name}')
+                continue
             data = json.loads(path.read_text())
             if 'summary' in data:
                 rows.append(data['summary'])
@@ -71,6 +74,9 @@ def e2e(patterns):
     runs = []
     for pattern in patterns:
         for path in sorted(LOG.glob(f'{pattern}/result.json')):
+            if (path.parent/'INVALID.txt').exists():
+                print(f'excluded (INVALID.txt): {path.parent.name}')
+                continue
             data = json.loads(path.read_text())
             if 'e2e' in data:
                 runs.append(data['e2e'])

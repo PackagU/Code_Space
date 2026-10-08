@@ -5,7 +5,7 @@
 #   bash sim/real_maps/start_sim.sh --floor F1 --params P0 --spawn f1_initial_test [--gui]
 #   bash sim/real_maps/start_sim.sh --world building --floor F1 --spawn f1_initial_test   # two floors + elevator
 #   bash sim/real_maps/start_sim.sh --stop
-# Options: --name NAME --initial WAYPOINT --lidar-noise on|off --odom encoder|world --no-record
+# Options: --name NAME --initial WAYPOINT --lidar-noise on|off --odom encoder|world --no-record --arm-sim
 # Env: SIM_REBUILD=1 (force colcon build), SIM_REGENERATE=1 (force world generation)
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -20,7 +20,7 @@ while (($#)); do
     --world) WORLD="$2"; shift 2 ;;
     --name) NAME="$2"; shift 2 ;;
     --initial|--lidar-noise|--odom) EXTRA+=("$1" "$2"); shift 2 ;;
-    --no-record) EXTRA+=("$1"); shift ;;
+    --no-record|--arm-sim) EXTRA+=("$1"); shift ;;
     --gui) GUI=1; shift ;;
     --stop) STOP=1; shift ;;
     -h|--help) sed -n 2,10p "$0"; exit 0 ;;
