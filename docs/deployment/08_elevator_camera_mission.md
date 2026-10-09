@@ -94,10 +94,10 @@ python3 tools/button_arm_test/app.py --source /dev/video0 \
   --host 127.0.0.1 --http-port 8091 --ros-arm
 ```
 
-Windows PowerShell에서 SSH 전달을 유지한다. VS Code SSH의 Ports에서 원격 8091을 전달해도 된다.
+Windows PowerShell에서 SSH 전달을 유지한다. `JETSON_USER`, `JETSON_IP`를 본인의 SSH 계정과 주소로 바꾼다. VS Code SSH의 Ports에서 원격 8091을 전달해도 된다.
 
 ```powershell
-ssh -N -L 18091:127.0.0.1:8091 hsm@192.168.0.7
+ssh -N -L 18091:127.0.0.1:8091 JETSON_USER@JETSON_IP
 ```
 
 브라우저에서 `http://localhost:18091`을 연다.
