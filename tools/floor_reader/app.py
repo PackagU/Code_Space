@@ -89,8 +89,9 @@ class Gate:
         return False
 
 class Reader:
-    def __init__(self, source):
-        DATA.mkdir(exist_ok=True)
+    def __init__(self, source, data=None):
+        self.data = Path(data) if data is not None else DATA
+        self.data.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.frame = None
         self.mask = None
@@ -103,12 +104,12 @@ class Reader:
         self.stream_id = uuid.uuid4().hex
         self.status = {'floor':'UNKNOWN', 'error':'카메라 연결 중', 'score':0}
         self.templates = {s:[normalize(pattern(s))] for s in ['B1','B2']+[str(i) for i in range(1,21)]}
-        for p in DATA.glob('template_*.png'):
+        for p in self.data.glob('template_*.png'):
             label = p.stem[len('template_'):]
             ref = cv2.imread(str(p), 0)
             if ref is not None and ref.shape == (96,160):
                 self.templates.setdefault(label, []).append(ref)
-        cfg = DATA/'config.json'
+        cfg = self.data/'config.json'
         if cfg.exists():
             try:
                 self.roi = json.loads(cfg.read_text()).get('roi')
@@ -145,32 +146,39 @@ class Reader:
             if now-last < .1:
                 continue
             last = now
-            with self.lock:
-                self.frame = frame
-                self.frame_seq += 1
-                try:
-                    crop = self.crop(frame)
-                    self.mask = normalize(crop) if crop is not None else None
-                    label, score, margin = classify(self.mask, self.templates)
-                except (cv2.error, ValueError, TypeError) as exc:
-                    self.mask = None
-                    self.gate.reset()
-                    self.status = {'floor':'UNKNOWN', 'score':0, 'updated':time.time(),
-                                   'error':'영역 처리 오류: 영역을 다시 지정하세요'}
-                    print('Frame processing error: '+str(exc), flush=True)
-                    continue
-                self.status = {'floor':label, 'score':round(score,3), 'margin':round(margin,3),
-                               'error':None, 'updated':time.time(),
-                               'frame_seq':self.frame_seq, 'stream_id':self.stream_id}
-                if self.gate.update(label, self.target, now):
-                    self.seq += 1
-                    event = {'event':'TARGET_FLOOR_DETECTED', 'floor':label, 'seq':self.seq,
-                             'timestamp':time.time(), 'motion_authorized':False}
-                    self.last_event = event
-                    with (DATA/'events.jsonl').open('a') as f:
-                        f.write(json.dumps(event)+'\n')
-                    print(json.dumps(event), flush=True)
+            self.process(frame, now)
         cap.release()
+        self.camera_lost()
+
+    def process(self, frame, now=None):
+        """Consume a fresh frame, including frames from the shared button website camera."""
+        with self.lock:
+            self.frame = frame
+            self.frame_seq += 1
+            try:
+                crop = self.crop(frame)
+                self.mask = normalize(crop) if crop is not None else None
+                label, score, margin = classify(self.mask, self.templates)
+            except (cv2.error, ValueError, TypeError) as exc:
+                self.mask = None
+                self.gate.reset()
+                self.status = {'floor':'UNKNOWN', 'score':0, 'updated':time.time(),
+                               'error':'영역 처리 오류: 영역을 다시 지정하세요'}
+                print('Frame processing error: '+str(exc), flush=True)
+                return
+            self.status = {'floor':label, 'score':round(score,3), 'margin':round(margin,3),
+                           'error':None, 'updated':time.time(),
+                           'frame_seq':self.frame_seq, 'stream_id':self.stream_id}
+            if self.gate.update(label, self.target, time.monotonic() if now is None else now):
+                self.seq += 1
+                event = {'event':'TARGET_FLOOR_DETECTED', 'floor':label, 'seq':self.seq,
+                         'timestamp':time.time(), 'motion_authorized':False}
+                self.last_event = event
+                with (self.data/'events.jsonl').open('a') as f:
+                    f.write(json.dumps(event)+'\n')
+                print(json.dumps(event), flush=True)
+
+    def camera_lost(self):
         with self.lock:
             self.mask = None
             self.frame = None
@@ -263,7 +271,7 @@ def handler(reader):
                             if a.shape != (4,2) or not np.isfinite(a).all() or (a<0).any() or (a>1).any() or not cv2.isContourConvex(a) or abs(cv2.contourArea(a)) < .0005:
                                 raise ValueError('네 모서리를 순서대로 넓게 지정하세요')
                         reader.roi = p
-                        (DATA/'config.json').write_text(json.dumps({'roi':p}))
+                        (reader.data/'config.json').write_text(json.dumps({'roi':p}))
                     elif self.path in ('/target','/enroll'):
                         label = str(obj.get('label','')).strip().upper()
                         if not label or len(label)>3 or any(c not in 'B0123456789' for c in label):
@@ -275,7 +283,7 @@ def handler(reader):
                         else:
                             if reader.mask is None or time.time()-reader.status.get('updated',0)>2:
                                 raise ValueError('표시창 영역과 카메라 영상을 먼저 확인하세요')
-                            cv2.imwrite(str(DATA/('template_'+label+'.png')),reader.mask)
+                            cv2.imwrite(str(reader.data/('template_'+label+'.png')),reader.mask)
                             reader.templates[label] = [reader.mask.copy()]
                     else:
                         return self.send({'error':'not found'},code=404)

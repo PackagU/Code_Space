@@ -191,7 +191,12 @@ class ArmSequenceNode(Node):
         try:
             status = self._contract.submit(msg.data, self._now_ms())
         except ValueError as exc:
-            status = self._contract.snapshot("rejected", error=f"invalid_command:{exc}")
+            try:
+                command = json.loads(msg.data)
+                request = {'request_id': command.get('request_id', ''), 'action': command.get('action', '')}
+            except (ValueError, TypeError, AttributeError):
+                request = {}
+            status = self._contract.snapshot("rejected", error=f"invalid_command:{exc}", request=request)
         status["source"] = "mission"
         self._publish(status)
 
@@ -242,7 +247,8 @@ class ArmSequenceNode(Node):
                 self._now_ms(),
             )
             status["source"] = "shutdown"
-            self._publish(status)
+            if self.context.ok():
+                self._publish(status)
         if self._driver is not None:
             self._driver.close()
 

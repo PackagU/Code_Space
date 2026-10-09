@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import json
 import time
+import subprocess
 from pathlib import Path
 
 import rclpy
@@ -92,6 +93,14 @@ class DeliveryMissionNode(Node):
         self.declare_parameter("door_state_topic", "/elevator/door_state")
         self.declare_parameter("call_press_cycle", 1)
         self.declare_parameter("destination_press_cycle", 2)
+        self.declare_parameter("vision_button_press", True)
+        self.declare_parameter("camera_web_url", "http://127.0.0.1:8091")
+        self.declare_parameter("routing_mode", "orthogonal")
+        self.declare_parameter("observed_target_floor", "")
+        self.declare_parameter('field_map_guard', False)
+        self.declare_parameter('field_project_root', '')
+        self.declare_parameter('field_pins', '')
+        self.declare_parameter('field_registry', '')
 
         mission_id = self.get_parameter("mission_id").value
         dry_run = bool(self.get_parameter("dry_run_nav2").value)
@@ -122,13 +131,14 @@ class DeliveryMissionNode(Node):
             from std_msgs.msg import String
             from rclpy.qos import QoSProfile, DurabilityPolicy
             self.arrival_gate = ElevatorArrivalGate(
-                self.mission.target_floor,
+                self.get_parameter('observed_target_floor').value or self.mission.target_floor,
                 require_door_confirmation=bool(self.get_parameter("require_door_confirmation").value))
             qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
             self._inhibit_pub = self.create_publisher(String, "/mission/drive_inhibit", qos)
             self._camera_state_pub = self.create_publisher(String, "/elevator/camera_state", 10)
             self.create_subscription(String, self.get_parameter("floor_observation_topic").value,
                                      self._on_floor_observation, 10)
+            self.create_subscription(String, '/delivery_mission/stop', self._on_stop, 10)
             if self.arrival_gate.require_door_confirmation:
                 self.create_subscription(String, self.get_parameter("door_state_topic").value,
                                          self._on_door_state, 10)
@@ -149,25 +159,28 @@ class DeliveryMissionNode(Node):
         start_pose_id = self.registry.initial_pose_id(m.start_floor)
         if self.camera_mode:
             from elevator_mission_pkg.camera_behaviors import (
-                ArmCommand, WaitDoorOpen, GuardedNavigate, PrepareCameraExit,
+                ArmCommand, WaitDoorOpen, GuardedNavigate, PrepareCameraExit, VisionButtonPress, WaitCameraWebsite,
             )
             direction = "UP" if int(m.target_floor.lstrip("F")) > int(m.start_floor.lstrip("F")) else "DOWN"
             boarding = self._navigate_route(
                 m.start_floor, m.elevator_entry_point, m.elevator_inside_point)
             boarding_steps = ([WaitDoorOpen(self), GuardedNavigate(self, boarding)]
                               if self.arrival_gate.require_door_confirmation else [boarding])
+            def press(target, button, cycle):
+                if bool(self.get_parameter('vision_button_press').value):
+                    return VisionButtonPress(self, target, button, cycle, self.arrival_gate.target)
+                return ArmCommand(self, 'press', target=target, button=button, press_cycle=cycle)
             return [
+                WaitCameraWebsite(self),
                 ArmCommand(self, "home"),
                 ArmCommand(self, "view", view="front_view"),
                 self._navigate_route(m.start_floor, start_pose_id, m.pickup_point),
                 WaitForAck(self, m.mock_load_event),
                 self._navigate_route(m.start_floor, m.pickup_point, m.elevator_entry_point),
-                ArmCommand(self, "press", target="call", button=direction,
-                           press_cycle=int(self.get_parameter("call_press_cycle").value)),
+                press('call', direction, int(self.get_parameter('call_press_cycle').value)),
                 ArmCommand(self, "view", view="front_view"),
                 *boarding_steps,
-                ArmCommand(self, "press", target="destination", button=m.target_floor,
-                           press_cycle=int(self.get_parameter("destination_press_cycle").value)),
+                press('destination', self.arrival_gate.target, int(self.get_parameter('destination_press_cycle').value)),
                 PrepareCameraExit(self, m.target_floor, m.elevator_inside_point,
                                   self._navigate_single_goal(m.target_floor, m.elevator_exit_point)),
                 self._navigate_route(m.target_floor, m.elevator_exit_point, m.destination_point),
@@ -190,7 +203,11 @@ class DeliveryMissionNode(Node):
         ]
 
     def _navigate_route(self, floor, start_point_id, goal_point_id):
-        route = self.router.route(floor, start_point_id, goal_point_id)
+        mode = self.get_parameter('routing_mode').value
+        if mode not in ('nav2', 'orthogonal'):
+            raise ValueError('routing_mode must be nav2 or orthogonal')
+        route = ([self.registry.get(floor, goal_point_id)] if mode == 'nav2'
+                 else self.router.route(floor, start_point_id, goal_point_id))
         return NavigateRoute(
             self,
             route,
@@ -206,6 +223,27 @@ class DeliveryMissionNode(Node):
             route_name=f"{floor}:{goal_point_id}",
             dry_run=self.dry_run,
         )
+
+    def check_navigation_goal(self, point):
+        if not bool(self.get_parameter('field_map_guard').value):
+            return True
+        root = Path(self.get_parameter('field_project_root').value)
+        name = point.point_id
+        if name in ('elevator_entry', 'elevator_inside', 'elevator_exit'):
+            name = point.floor.lower() + '_' + name
+        try:
+            result = subprocess.run([sys.executable, str(root/'scripts/field_map_guard.py'),
+                'check', '--stage', 'goal', '--waypoint', name,
+                '--pins', self.get_parameter('field_pins').value,
+                '--registry', self.get_parameter('field_registry').value],
+                cwd=root, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return True
+            self.get_logger().error('field map identity check failed: ' + (result.stdout+result.stderr)[-1200:])
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self.get_logger().error('field map identity check unavailable: ' + str(exc))
+        self.set_drive_inhibit('field_map_identity_failed')
+        return False
 
     def _tick(self):
         if self.camera_mode:
@@ -248,6 +286,11 @@ class DeliveryMissionNode(Node):
             state = {}
         self.arrival_gate.observe_floor(state, time.monotonic(), time.time())
 
+    def _on_stop(self, msg):
+        self.shutdown()
+        self._done = True
+        self._publish_camera_state()
+
     def _on_door_state(self, msg):
         try:
             state = json.loads(msg.data)
@@ -261,24 +304,40 @@ class DeliveryMissionNode(Node):
         now, wall = time.monotonic(), time.time()
         ready = gate.confirmed(now, wall) if gate.looking else gate.can_exit(now, wall)
         msg = String()
-        msg.data = json.dumps({"current_floor": gate.target if ready else "UNKNOWN",
+        msg.data = json.dumps({"current_floor": self.mission.target_floor if ready else "UNKNOWN",
+                               "observed_floor": gate.target if ready else "UNKNOWN",
                                "door_state": "camera_confirmed" if ready else "unknown",
-                               "source": "camera_verified", "stamp": wall})
+                               "source": "camera_verified", "stamp": wall,
+                               "target_floor": gate.target, "mission_id": self.mission.mission_id,
+                               "map_floor": self.mission.target_floor,
+                               "mission_active": not self._done,
+                               'confirmed_frames': gate.count,
+                               'required_frames': gate.required_frames,
+                               "step": self.sequence[self.index].name if self.index < len(self.sequence) else 'complete',
+                               "exit_condition_met": bool(ready)})
         self._camera_state_pub.publish(msg)
 
     def shutdown(self):
         if self.camera_mode:
+            self._done = True
+            if not self.context.ok():
+                return
             self.set_drive_inhibit("mission_stopped")
             if self.index < len(self.sequence) and hasattr(self.sequence[self.index], "cancel"):
                 self.sequence[self.index].cancel()
+            self._publish_camera_state()
 
 
 def main():
-    rclpy.init()
+    from rclpy.signals import SignalHandlerOptions
+    # Keep DDS alive long enough to publish stop/cancel before destroying the context.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = DeliveryMissionNode()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
         node.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()

@@ -16,10 +16,24 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:3px 4px;t
 small,#metrics{color:#8aa0b2}pre{white-space:pre-wrap;font-size:12px;max-height:160px;overflow:auto}
 .jog td:first-child{width:3.5em}.jog button{padding:4px 7px;min-width:3em}
 </style>
-<h1>엘리베이터 버튼 인식 · 누르기 시험</h1><p id="mode">연결 중</p>
+<h1>엘리베이터 버튼 · 층수 인식</h1><p id="mode">연결 중</p>
+<section><button onclick="api('/api/display',{mode:'buttons'}).catch(err)">버튼 인식 화면</button>
+<button onclick="api('/api/display',{mode:'floor'}).catch(err)">층수 인식 화면</button>
+<button class="pose" onclick="api('/api/view',{view:'front_view'}).catch(err)">팔 정면 보기</button>
+<button class="pose" onclick="api('/api/view',{view:'floor_view'}).catch(err)">팔 층수 보기</button>
+<p id="robot-state">카메라 연결 중</p><p id="mission-state"></p></section>
 <div class="wrap">
 <div><canvas id="view" width="640" height="480"></canvas>
 <p id="message"></p><p id="metrics"></p>
+<section><h2>층수 확인</h2>
+<p id="floor-status">층수 인식 대기</p><p id="floor-detail"></p>
+<button class="floor-setting" onclick="resetFloor()">층수 영역 다시 지정</button>
+<small>층수 화면에서 표시창의 좌상 → 우상 → 우하 → 좌하를 클릭하세요. 흰 글자·검은 배경만 포함하세요.</small>
+<p>목표 표시층 <input class="floor-setting" id="floor-target" value="4" size="3"><button class="floor-setting" onclick="api('/floor/target',{label:$('#floor-target').value}).catch(err)">목표 적용</button></p>
+<p>현재 글자 등록 <input class="floor-setting" id="floor-label" value="4" size="3"><button class="floor-setting" onclick="api('/floor/enroll',{label:$('#floor-label').value}).catch(err)">층수 글자 등록</button></p>
+<img id="floor-mask" width="160" height="96" alt="층수 인식 영역">
+<p><a href="/floor/test" target="_blank" style="color:#76cfff">시험용 층수 표시창 열기</a></p>
+<small>화면의 층수 확인 조건은 판정 시험입니다. 실제 하차는 자동 미션의 지도 전환·정면 복귀 이후 진행합니다.</small></section>
 <section><h2>인식 결과</h2><table><thead><tr><th>#</th><th>인식</th><th>거리</th><th>비율</th><th>누름 PWM (000/001/002/003)</th></tr></thead><tbody id="rows"></tbody></table></section>
 </div>
 <div>
@@ -38,8 +52,8 @@ small,#metrics{color:#8aa0b2}pre{white-space:pre-wrap;font-size:12px;max-height:
 <table><tbody id="points"></tbody></table><p id="model"></p></section>
 <section><h2>③ 조그 (누름 자세 찾기)</h2>
 <table class="jog"><tbody id="jog"></tbody></table>
-<button onclick="api('/api/goto',{pose:'home'}).catch(err)">home</button>
-<button onclick="api('/api/goto',{pose:'press_ready'}).catch(err)">press_ready</button>
+<button class="pose" onclick="api('/api/goto',{pose:'home'}).catch(err)">home</button>
+<button class="pose" onclick="api('/api/goto',{pose:'press_ready'}).catch(err)">press_ready</button>
 <button id="read" onclick="api('/api/read',{}).catch(err)">위치 읽기</button>
 <br><button class="save" onclick="saveMenu('6')">현재 자세 → 메뉴 6 press 저장</button>
 <button class="save" onclick="saveMenu('7')">현재 자세 → 메뉴 7 press2 저장</button>
@@ -50,16 +64,19 @@ small,#metrics{color:#8aa0b2}pre{white-space:pre-wrap;font-size:12px;max-height:
 보이는 숫자를 왼쪽 위→오른쪽 아래 순서로<br>
 <input id="labels" value="1234" size="5" maxlength="4"><button onclick="enroll()">등록</button><button onclick="clearT()">등록 초기화</button>
 <p id="samples"></p><small>숫자당 3번 등록 권장 (위치·조명 조금씩 바꿔서).</small></section>
+
 </div></div>
 <script>
 const $=s=>document.querySelector(s),canvas=$('#view'),ctx=canvas.getContext('2d');
 const NAMES={'1':'1','2':'2','3':'3','4':'4',UP:'▲',DOWN:'▼'},IDS=['000','001','002','003'];let state={},polling=false,sending=false,errorUntil=0;
+let floorPoints=[];
 const pwm=p=>p?IDS.map(i=>p[i]).join(' / '):'-';
 const MISSIONS=[['hall','up','탑승 전 · 올라감','▲'],['hall','down','탑승 전 · 내려감','▼'],['car','up','내부 · 올라감','4'],['car','down','내부 · 내려감','1']];
 for(const [stage,direction,text,sym] of MISSIONS){const b=document.createElement('button');b.innerHTML=text+' → <b>'+sym+'</b>';b.dataset.k=stage+'-'+direction;b.onclick=()=>api('/api/mission',{stage,direction}).then(()=>$('#result').textContent='').catch(err);$('#targets').append(b)}
 async function api(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const body=await r.json();if(!r.ok)throw Error(body.error);return body}
 function err(e){$('#message').textContent='⚠ '+e.message;errorUntil=Date.now()+6000}
-canvas.onclick=e=>{const r=canvas.getBoundingClientRect();api('/api/select',{point:[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]}).catch(err)};
+canvas.onclick=async e=>{const r=canvas.getBoundingClientRect(),p=[(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];try{if(state.view_mode==='floor'){floorPoints.push(p);$('#floor-detail').textContent='영역 지정 '+floorPoints.length+'/4';if(floorPoints.length===4){await api('/floor/roi',{points:floorPoints});floorPoints=[]}}else await api('/api/select',{point:p})}catch(e){floorPoints=[];err(e)}};
+async function resetFloor(){floorPoints=[];try{await api('/api/display',{mode:'floor'});await api('/floor/roi',{points:null})}catch(e){err(e)}}
 const point=p=>api('/api/point',{pose:p}).catch(err);
 const delPoint=i=>{if(confirm('보정점 P'+(i+1)+' 삭제?'))api('/api/point/delete',{index:i}).catch(err)};
 const saveMenu=m=>{const c=state.commanded;if(c&&confirm('servo_test.py 메뉴 '+m+' 누름 자세를 '+pwm(c)+'(으)로 저장할까요?'))api('/api/save_menu',{menu:m}).catch(err)};
@@ -71,14 +88,23 @@ async function press(){if(sending)return;if(state.execute&&!confirm('실제 팔�
 $('#jog').innerHTML=IDS.map(i=>`<tr><td>${i}</td><td id="c${i}">-</td><td>${[-50,-10,10,50].map(d=>`<button onclick="jog('${i}',${d})">${d>0?'+':''}${d}</button>`).join('')}</td></tr>`).join('');
 async function tick(){if(polling)return;polling=true;try{
  state=await(await fetch('/api/state')).json();const m=$('#mode');m.textContent=state.mode+(state.busy?' · 동작 중':'');m.className=state.execute?'exec':'';
- for(const b of document.querySelectorAll('#targets button'))b.classList.toggle('on',b.dataset.k===state.mission);
+ const robot=state.robot||{},ar=robot.arm||{},mission=robot.mission||{},floor=state.floor||{};
+ $('#robot-state').textContent='화면: '+(state.view_mode==='floor'?'층수 인식':'버튼 인식')+(ar.current_view?' · 팔 자세: '+({front_view:'정면 보기',floor_view:'층수 보기'}[ar.current_view]||ar.current_view):'');
+ $('#mission-state').textContent=mission.mission_active?'자동 배송 진행 · 목표 표시층 '+mission.target_floor+' · 배송 지도 '+mission.map_floor+' · '+mission.step:'수동 시험 / 자동 미션 대기';
+ for(const b of document.querySelectorAll('.pose,.jog button,button.save'))b.disabled=state.busy||!!mission.mission_active;
+ const confirmation=mission.mission_active?mission:floor;
+ $('#floor-status').textContent=floor.error||'현재 층: '+floor.floor+' · 연속 확인 '+confirmation.confirmed_frames+'/'+confirmation.required_frames+' · '+(mission.mission_active?'미션 하차 조건 ':'층수 조건 ')+(confirmation.exit_condition_met?'성립':'대기');
+ if(!floorPoints.length)$('#floor-detail').textContent='목표 '+floor.target+' · 일치 점수 '+floor.score+' · '+(floor.roi?'영역 지정됨':'영역 지정 필요');
+ $('#floor-mask').src='/floor/mask.png?t='+Date.now();
+ for(const b of document.querySelectorAll('#targets button')){b.classList.toggle('on',b.dataset.k===state.mission);b.disabled=state.busy||!!mission.mission_active;}
+ for(const b of document.querySelectorAll('.floor-setting'))b.disabled=!!mission.mission_active;
  const t=NAMES[state.target],st=$('#status'),rd=state.ready;
  if(state.error){st.textContent=state.error;st.className='warn'}
  else if(rd&&state.token){st.textContent=t+' 찾음 → 누르기 준비됨';st.className='ok'}
  else if(rd){st.textContent=t+' 찾음 · '+rd.reason;st.className='warn'}
  else{const n=state.observations.filter(o=>o.label===state.target).length;st.textContent=n>1?t+' '+n+'개 보임 (중복)':t+' 찾는 중';st.className=''}
  $('#detail').textContent=rd&&rd.press?'누름 PWM '+pwm(rd.press):'';
- $('#press').disabled=sending||!state.token||state.busy;
+ $('#press').disabled=sending||!state.token||state.busy||!!mission.mission_active;
  $('#rows').innerHTML=state.observations.map((o,i)=>`<tr><td>${i+1}</td><td>${o.label==='UNKNOWN'?'?':NAMES[o.label]}</td><td>${o.distance}</td><td>${o.ratio}</td><td>${o.press?pwm(o.press):'<small>'+o.reason+'</small>'}</td></tr>`).join('');
  const s=state.selected;$('#sel').textContent=s?'선택: 버튼 '+(NAMES[s.label]||'?')+' @ ('+s.px.join(', ')+')':'선택 없음 — 영상에서 버튼 클릭';
  for(const id of ['p6','p7','pc'])$('#'+id).disabled=!s||state.busy;$('#pc').disabled=!s||!state.commanded||state.busy;
@@ -86,11 +112,11 @@ async function tick(){if(polling)return;polling=true;try{
  $('#arrows').textContent=['UP','DOWN'].map(l=>NAMES[l]+' → '+(state.arrow_poses&&state.arrow_poses[l]?pwm(state.arrow_poses[l]):'미저장')).join('   ');
  $('#model').textContent='보정 모델: '+({single:'1점 (그 버튼만)',line:'2점 직선 보간',affine:'평면 보간'}[state.model]||'없음');
  for(const i of IDS)$('#c'+i).textContent=state.commanded?state.commanded[i]:'?';
- for(const b of document.querySelectorAll('.jog button,button.save'))b.disabled=!state.commanded||state.busy;$('#read').disabled=!state.execute||state.busy;
+ for(const b of document.querySelectorAll('.jog button,button.save'))b.disabled=!state.commanded||state.busy||!!mission.mission_active;$('#read').disabled=!state.execute||state.busy||!!mission.mission_active;
  if(Date.now()>errorUntil)$('#message').textContent=state.message;
  $('#samples').textContent='등록 샘플: '+Object.entries(state.samples).map(([k,v])=>k+'='+v).join('  ');
  $('#metrics').textContent='프레임 '+state.frames+' · 처리 '+state.processing_ms+' ms · 값 출처 '+state.source.split('/').pop();
- if(!state.error){const im=new Image();im.src='/frame.jpg?t='+Date.now();await im.decode();ctx.drawImage(im,0,0,640,480)}
+ if(!state.error){const im=new Image();im.src='/frame.jpg?t='+Date.now();await im.decode();ctx.drawImage(im,0,0,640,480);if(state.view_mode==='floor'){const p=floorPoints.length?floorPoints:(floor.roi||[]);ctx.strokeStyle='#35efb2';ctx.lineWidth=3;ctx.beginPath();p.forEach(([x,y],i)=>{if(i)ctx.lineTo(x*640,y*480);else ctx.moveTo(x*640,y*480)});if(p.length===4)ctx.closePath();ctx.stroke()}}
 }catch(e){$('#press').disabled=true;$('#status').textContent='서버 연결 대기'}finally{polling=false}}
 setInterval(tick,300);tick();
 </script></html>

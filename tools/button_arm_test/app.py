@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import secrets
+import sys
 import threading
 import time
 from pathlib import Path
@@ -19,6 +20,13 @@ import vision
 from vision import ARROWS, DIGITS, Gate
 
 ROOT = Path(__file__).resolve().parent
+PROJECT = ROOT.parents[1]
+sys.path.insert(0, str(PROJECT))
+sys.path.insert(0, str(PROJECT/'src/robot_arm_pkg'))
+sys.path.insert(0, str(PROJECT/'scripts'))
+from tools.floor_reader import app as floor_app
+from floor_arrival_probe import FloorArrivalProbe
+from robot_arm_pkg import servo_protocol as ros_protocol
 cv2.setNumThreads(1)
 MAX_SAMPLES = 3
 TEMPLATE = re.compile(r'template_([1-4])_([0-2])')
@@ -75,10 +83,20 @@ class App:
         self.error = '카메라 연결 중'
         self.processing_ms = 0.
         self.frames = 0
+        self.captured_at = 0.
         self.source = arm.load_source(args.servo_source)
+        self.ros_enabled = bool(getattr(args, 'ros_arm', False))
+        self.physical = args.execute or self.ros_enabled
+        if self.ros_enabled:
+            self.source['home'] = dict(ros_protocol.HOME)
         self.session = arm.Session(self.source, args.port, driver_factory) if args.execute else None
         # Commanded pose is unknown on a real arm until read/home; the preview arm starts at home.
-        self.commanded = None if args.execute else dict(self.source['home'])
+        self.commanded = None if self.physical else dict(self.source['home'])
+        self.view_mode, self.last_ros_view = 'buttons', ''
+        self.camera_views = json.loads((PROJECT/'src/robot_arm_pkg/config/camera_views.json').read_text())
+        self.floor = floor_app.Reader(args.source, getattr(args, 'floor_data', str(self.data/'floor')))
+        self.floor_target = self.floor.target
+        self.floor_probe = FloorArrivalProbe(self.floor_target, time.time())
         self.restore()
 
     # ---- persistence -------------------------------------------------
@@ -89,7 +107,7 @@ class App:
             self.points = cfg.get('points', [])
             self.model = calib.fit(self.points)
             self.arrow_poses = {k: v for k, v in cfg.get('arrow_poses', {}).items() if k in ARROWS}
-            if cfg.get('target') in MISSIONS.values():
+            if cfg.get('target') in (*ARROWS, *DIGITS):
                 self.target = cfg['target']
         for file in sorted(self.data.glob('template_*.png')):
             match = TEMPLATE.fullmatch(file.stem)
@@ -124,8 +142,8 @@ class App:
         self.set_target(MISSIONS[stage, direction])
 
     def set_target(self, label):
-        if label not in MISSIONS.values():
-            raise ValueError('목표는 UP, DOWN, 4(내부 올라감), 1(내부 내려감) 중 하나')
+        if label not in (*ARROWS, *DIGITS):
+            raise ValueError('목표는 UP, DOWN 또는 1~4')
         self.target = label
         self.invalidate()
         self.save_config()
@@ -177,6 +195,8 @@ class App:
             raise ValueError('현재 자세를 모릅니다. 위치 읽기 또는 home 이동 먼저')
         source = arm.save_menu_press(self.args.servo_source, arm.protocol.__file__,
                                      self.source, menu, self.commanded)
+        if self.ros_enabled:
+            source['home'] = dict(ros_protocol.HOME)
         self.source = source
         if self.session:
             self.session.source = source
@@ -247,10 +267,12 @@ class App:
         start = time.monotonic()
         if frame.shape[:2] != (480, 640):
             frame = cv2.resize(frame, (640, 480))
+        self.floor.process(frame, start)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         buttons = vision.reading_order(vision.find_buttons(gray))
         with self.lock:
             self.updated, self.error = start, None
+            self.captured_at = time.time()
             if self.frames == 0:
                 self.message = '버튼을 화면에 보이게 하고 숫자 등록·좌표 보정을 진행하세요'
             self.frames += 1
@@ -335,6 +357,7 @@ class App:
         finally:
             if cap is not None:
                 cap.release()
+            self.floor.camera_lost()
 
     def watchdog(self):
         while not self.shutdown.wait(.2):
@@ -348,24 +371,46 @@ class App:
         if not self.fresh() or self.display is None:
             return b''
         if self.jpeg_frame != self.frames:
-            ok, jpeg = cv2.imencode('.jpg', self.display, [cv2.IMWRITE_JPEG_QUALITY, 65])
+            image = self.floor.frame if self.view_mode == 'floor' else self.display
+            if image is None:
+                return b''
+            ok, jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 65])
             self.jpeg, self.jpeg_frame = (jpeg.tobytes() if ok else b''), self.frames
         return self.jpeg
 
     def state(self):
         with self.lock:
             fresh = self.fresh()
-            return {'mode': '실제 팔 모드' if self.args.execute else '미리보기 (팔 안 움직임)',
-                    'execute': bool(self.args.execute),
+            robot = self.session.snapshot() if self.ros_enabled and self.session else {}
+            current_view = robot.get('arm', {}).get('current_view', '')
+            if current_view and current_view != self.last_ros_view:
+                self.last_ros_view = current_view
+                self.set_display('floor' if current_view == 'floor_view' else 'buttons')
+            measured = robot.get('arm', {}).get('measured_pwm')
+            if measured:
+                self.commanded = dict(measured)
+            elif self.ros_enabled:
+                self.commanded = None
+            with self.floor.lock:
+                floor = dict(self.floor.status, roi=self.floor.roi, target=self.floor.target)
+            if self.floor_target != self.floor.target:
+                self.floor_target = self.floor.target
+                self.floor_probe = FloorArrivalProbe(self.floor_target, time.time())
+            condition = self.floor_probe.check(floor, time.monotonic(), time.time())
+            return {'mode': ('ROS 연동 (팔 노드 사용)' if self.ros_enabled else
+                            '실제 팔 모드' if self.args.execute else '미리보기 (팔 안 움직임)'),
+                    'execute': bool(self.physical), 'ros_arm': self.ros_enabled,
+                    'view_mode': self.view_mode, 'floor': dict(floor, **condition), 'robot': robot,
                     'error': self.error or (None if fresh else '영상 갱신 대기 / 멈춤'),
                     'target': self.target, 'points': self.points, 'label_menu': self.label_menu, 'arrow_poses': self.arrow_poses,
-                    'mission': next('%s-%s' % k for k, v in MISSIONS.items() if v == self.target),
+                    'mission': next(('%s-%s' % k for k, v in MISSIONS.items() if v == self.target), 'custom'),
                     'model': self.model['kind'] if self.model else None,
                     'selected': self.selected, 'commanded': self.commanded, 'jog_steps': JOG_STEPS,
                     'samples': {label: len(self.prepared.get(label, [])) for label in DIGITS},
                     'observations': self.observations if fresh else [],
                     'ready': self.ready if fresh else None, 'token': self.token if fresh else None,
                     'busy': self.busy, 'message': self.message, 'frames': self.frames,
+                    'captured_at': self.captured_at,
                     'processing_ms': self.processing_ms,
                     'servo_sha256': self.source['sha256'], 'source': self.source['path']}
 
@@ -374,7 +419,9 @@ class App:
         """Caller holds the lock. Dry-run applies `after` at once; real mode runs in a worker."""
         if self.busy:
             raise ValueError('팔 동작 중')
-        if not self.args.execute:
+        if self.ros_enabled and self.session and self.session.snapshot()['mission'].get('mission_active'):
+            raise ValueError('자동 미션 중에는 수동 팔 조작을 사용할 수 없습니다')
+        if not self.physical:
             if after:
                 after(None)
             self.message = name + ' · 미리보기 (시리얼 열지 않음)'
@@ -406,9 +453,23 @@ class App:
         self.worker.start()
 
     def set_commanded(self, pose):
-        def after(_):
-            self.commanded = dict(pose)
+        def after(result):
+            self.commanded = dict(result if self.ros_enabled and result else pose)
         return after
+
+    def set_display(self, mode):
+        if mode not in ('buttons', 'floor'):
+            raise ValueError('화면은 buttons 또는 floor')
+        self.view_mode, self.jpeg_frame = mode, -1
+
+    def camera_view(self, name):
+        if name not in ('front_view', 'floor_view'):
+            raise ValueError('정면 보기 또는 층수 보기')
+        pose = self.camera_views[name]
+        self.set_display('floor' if name == 'floor_view' else 'buttons')
+        self.run_job(name, lambda report: (self.session.view(name, self.cancel) if self.ros_enabled
+                                          else self.session.move(pose, 2000, self.cancel)),
+                     self.set_commanded(pose))
 
     def jog(self, joint, delta):
         if joint not in arm.IDS or delta not in JOG_STEPS:
@@ -429,7 +490,7 @@ class App:
                      self.set_commanded(pose))
 
     def read_positions(self):
-        if not self.args.execute:
+        if not self.physical:
             raise ValueError('미리보기 모드에는 실제 위치가 없습니다')
         def after(positions):
             self.commanded = dict(positions)
@@ -441,7 +502,7 @@ class App:
         ready = dict(self.ready)
         steps = arm.plan(self.source, ready['press'])
         self.invalidate()
-        if not self.args.execute:
+        if not self.physical:
             self.message = '누르기 명령 미리보기 완료 · 팔 포트 열지 않음'
             return {'dry_run': True, 'button': ready, 'steps': steps}
         self.run_job('버튼 %s 누르기' % ready['label'],
@@ -452,17 +513,19 @@ class App:
     def stop(self):
         self.cancel.set()
         self.invalidate()
-        if self.session and not self.busy:
+        if self.session and (self.ros_enabled or not self.busy):
             threading.Thread(target=self.session.stop_idle, daemon=True).start()
         self.message = '중지 요청 · 실제 정지는 현장에서 확인하세요'
 
 
 def handler(app):
-    class Handler(BaseHTTPRequestHandler):
+    class Handler(floor_app.handler(app.floor)):
         def log_message(self, *args):
             pass
         def send(self, value, kind='application/json', code=200):
             body = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
+            if isinstance(body, str):
+                body = body.encode()
             self.send_response(code)
             self.send_header('Content-Type', kind)
             self.send_header('Content-Length', str(len(body)))
@@ -471,6 +534,11 @@ def handler(app):
             self.wfile.write(body)
         def do_GET(self):
             path = urlparse(self.path).path
+            if path == '/floor/test':
+                return self.send(floor_app.TEST_PAGE.replace('/pattern.png', '/floor/pattern.png'), 'text/html; charset=utf-8')
+            if path.startswith('/floor/'):
+                self.path = self.path[len('/floor'):]
+                return super().do_GET()
             if path == '/':
                 return self.send((ROOT/'index.html').read_bytes(), 'text/html; charset=utf-8')
             if path == '/api/state':
@@ -481,6 +549,11 @@ def handler(app):
                 return self.send(jpeg, 'image/jpeg', 200 if jpeg else 503)
             return self.send({'error': '없는 경로'}, code=404)
         def do_POST(self):
+            if urlparse(self.path).path.startswith('/floor/'):
+                if app.ros_enabled and app.session and app.session.snapshot()['mission'].get('mission_active'):
+                    return self.send({'error':'자동 미션 중에는 층수 설정을 바꿀 수 없습니다'}, code=400)
+                self.path = self.path[len('/floor'):]
+                return super().do_POST()
             try:
                 origin = self.headers.get('Origin')
                 if origin and urlparse(origin).netloc != self.headers.get('Host'):
@@ -498,8 +571,23 @@ def handler(app):
                         app.stop()
                     elif app.busy:
                         raise ValueError('팔 동작 중에는 다른 명령을 받을 수 없습니다')
+                    elif (app.ros_enabled and app.session and app.session.snapshot()['mission'].get('mission_active')
+                          and path not in ('/api/target', '/api/display')):
+                        raise ValueError('자동 미션 중에는 수동 조작·보정을 사용할 수 없습니다')
                     elif path == '/api/mission':
                         app.set_mission(data['stage'], data['direction'])
+                    elif path == '/api/target':
+                        app.set_target(data['label'])
+                        app.set_display('buttons')
+                        if data.get('floor_target'):
+                            with app.floor.lock:
+                                app.floor.target = str(data['floor_target']).lstrip('F')
+                                app.floor.gate.reset()
+                                app.floor.last_event = None
+                    elif path == '/api/display':
+                        app.set_display(data['mode'])
+                    elif path == '/api/view':
+                        app.camera_view(data['view'])
                     elif path == '/api/enroll':
                         result['samples'] = app.enroll(data['labels'])
                     elif path == '/api/clear':
@@ -521,6 +609,8 @@ def handler(app):
                     elif path == '/api/read':
                         app.read_positions()
                     elif path == '/api/press':
+                        if app.ros_enabled and app.session and app.ready:
+                            app.session.button = app.ready['label']
                         result = app.press(data.get('token'))
                     else:
                         raise ValueError('없는 명령')
@@ -540,9 +630,13 @@ def main():
     parser.add_argument('--servo-source', default=str(ROOT/'servo_test.py'),
                         help='servo_test.py 경로. import 없이 AST로 값만 읽는다')
     parser.add_argument('--execute', action='store_true', help='실제 팔 시리얼 명령 허용')
+    parser.add_argument('--ros-arm', action='store_true', help='시리얼을 열지 않고 기존 ROS 팔 노드 사용')
+    parser.add_argument('--floor-data', default=str(PROJECT/'tools/floor_reader/data'))
     parser.add_argument('--field-approved', action='store_true', help='현장 안전 확인 후에만 지정')
     parser.add_argument('--port', default='/dev/arm_servo')
     args = parser.parse_args()
+    if args.ros_arm and (args.execute or args.host != '127.0.0.1' or args.source.startswith('synthetic')):
+        parser.error('ROS 연동은 localhost + 실제 카메라로 실행하며 --execute와 함께 쓰지 않습니다')
     if args.execute:
         if not args.field_approved:
             parser.error('실제 모드는 --field-approved 필요')
@@ -552,6 +646,13 @@ def main():
             parser.error('/dev/arm_servo 실제 장치 필요')
     app = App(args)
     server = ThreadingHTTPServer((args.host, args.http_port), handler(app))  # fail on busy port before moving
+    if args.ros_arm:
+        try:
+            import ros_arm
+            app.session = ros_arm.Session(app.source)
+        except Exception:
+            server.server_close()
+            raise
     if args.execute:
         # Same startup as servo_test.py: read all joints, wait for Enter, home over 3000 ms.
         try:
@@ -570,6 +671,7 @@ def main():
     for thread in threads:
         thread.start()
     print('http://%s:%s · %s' % (args.host, args.http_port,
+          'ROS ARM · 팔 포트는 ROS 노드가 사용' if args.ros_arm else
           'PHYSICAL (home 완료)' if args.execute else 'DRY-RUN · 팔 포트를 열지 않음'), flush=True)
     try:
         server.serve_forever(poll_interval=.2)

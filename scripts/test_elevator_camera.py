@@ -42,6 +42,14 @@ class FakeArm:
 
 
 class Tests(unittest.TestCase):
+    def test_field_map_guard_rejection_prevents_nav2_goal(self):
+        _, behaviors = self.ros_behaviors()
+        node = types.SimpleNamespace(check_navigation_goal=lambda point: False)
+        nav = behaviors.NavigateRoute(node, [object()], 'field')
+        nav._client = types.SimpleNamespace(wait_for_server=lambda **kw: True,
+            send_goal_async=lambda goal: self.fail('goal sent despite failed map identity'))
+        self.assertEqual(nav.update(), behaviors.FAILURE)
+
     def ros_behaviors(self):
         # Minimal message/action interfaces; the actual behavior implementations run below.
         for name in ("geometry_msgs.msg", "rclpy.parameter", "std_msgs.msg", "std_srvs.srv",

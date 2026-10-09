@@ -1,0 +1,9 @@
+# Same ROS container and one webcam. Do not enable the standalone floor_reader profile.
+services:
+  ros2:
+    devices:
+      - ${CAMERA_DEVICE:-/dev/video0}:/dev/packagu_camera
+    environment:
+      - CAMERA_SOURCE=/dev/packagu_camera
+    volumes:
+      - ${PACKAGU_TOOLS:-../../tools}:/ros2_ws/tools:rw

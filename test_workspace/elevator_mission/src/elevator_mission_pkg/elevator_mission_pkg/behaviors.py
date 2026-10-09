@@ -158,6 +158,9 @@ class NavigateRoute(Behavior):
         if not self._sent:
             if not self._client.wait_for_server(timeout_sec=0.1):
                 return RUNNING
+            guard = getattr(self.node, 'check_navigation_goal', None)
+            if guard is not None and not guard(self.route[self._index]):
+                return FAILURE
             goal = self._make_goal(self.route[self._index])
             self._goal_future = self._client.send_goal_async(goal)
             self._sent = True

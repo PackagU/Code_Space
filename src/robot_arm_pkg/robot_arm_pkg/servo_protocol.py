@@ -82,6 +82,19 @@ HOME_POSE = "home"
 HOMING_DURATION_MS = 2000
 
 
+def calibrated_press_poses(press):
+    """Use the website's taught pose with the existing approach, retreat and ROS home."""
+    offset = {joint: POSES_1['pre_press'][joint] - POSES_1['press'][joint]
+              for joint in SERVO_IDS}
+    pre = {joint: press[joint] + offset[joint] for joint in SERVO_IDS}
+    poses = {'home': dict(HOME), 'press_ready': dict(POSES_1['press_ready']),
+             'pre_press': pre, 'press': dict(press), 'retreat': dict(pre)}
+    for pose in poses.values():
+        for joint, pwm in pose.items():
+            check_pwm(joint, pwm)
+    return poses
+
+
 def check_pwm(servo_id, pwm):
     if servo_id not in SERVO_IDS:
         raise ValueError(f"알 수 없는 모터 ID: {servo_id}")

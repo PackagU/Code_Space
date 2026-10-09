@@ -115,10 +115,20 @@ class ArmExecutionContract:
             return self.snapshot("rejected", error="busy", request=command)
 
         self.active = command
-        if command["action"] in ("press", "view") and self.require_homed and not self.homed:
+        if command["action"] in ("press", "view", "move") and self.require_homed and not self.homed:
             return self._fail("home_not_measured")
         if not self.hardware_connected and not self.simulation_mode:
             return self._fail("hardware_unavailable")
+
+        if command["action"] == "read":
+            try:
+                self.last_positions = (dict(self.last_positions or sp.HOME) if self.simulation_mode
+                                       else dict(self.driver.read_positions()))
+            except Exception as exc:
+                return self._fail("feedback_read_failed:" + type(exc).__name__)
+            self.active = None
+            return self.snapshot("completed", request=command, completion_basis=(
+                "simulation_timing" if self.simulation_mode else "controller_position_response"))
 
         if command["action"] == "view":
             name = command["view"]
@@ -127,14 +137,19 @@ class ArmExecutionContract:
             self._cycle = ((name, self.view_duration_ms, True),)
             self._poses = self.camera_views
             self.phase = "camera_moving"
+        elif command["action"] == "move":
+            self._cycle = (("manual_target", command["duration_ms"], True),)
+            self._poses = {"manual_target": command["pose"]}
+            self.phase = "manual_moving"
         elif command["action"] in ("home", "stow"):
             self._cycle = ((sp.HOME_POSE, sp.HOMING_DURATION_MS, True),)
             self._poses = {sp.HOME_POSE: sp.HOME}
             self.phase = "stowing"
         else:
             cycle_id = command["press_cycle"]
-            self._cycle = sp.get_cycle(cycle_id)
-            self._poses = sp.get_poses(cycle_id)
+            self._cycle = sp.get_cycle(1 if "press_pose" in command else cycle_id)
+            self._poses = (sp.calibrated_press_poses(command["press_pose"])
+                           if "press_pose" in command else sp.get_poses(cycle_id))
             self.phase = "pressing"
         self.state = "busy"
         self.current_view = ""

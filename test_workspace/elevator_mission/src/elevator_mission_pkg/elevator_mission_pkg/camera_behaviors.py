@@ -6,6 +6,7 @@ import uuid
 from std_msgs.msg import String
 
 from elevator_mission_pkg.behaviors import Behavior, RUNNING, SUCCESS, FAILURE, SwitchFloor
+from elevator_mission_pkg.camera_web_client import CameraWebClient
 
 
 class ArmCommand(Behavior):
@@ -44,6 +45,8 @@ class ArmCommand(Behavior):
         if not self.sent:
             if self.node.count_subscribers("/packagu_arm/command") == 0:
                 return RUNNING
+            if self.node.count_subscribers("/packagu_arm/command") != 1:
+                return FAILURE
             msg = String()
             msg.data = json.dumps(self.command)
             self.pub.publish(msg)
@@ -61,6 +64,70 @@ class ArmCommand(Behavior):
                 return FAILURE
             return SUCCESS
         return RUNNING
+
+
+class WaitCameraWebsite(Behavior):
+    name = 'WaitCameraWebsite'
+
+    def initialise(self):
+        super().initialise()
+        self.started = time.monotonic()
+        self.web = CameraWebClient(self.node.get_parameter('camera_web_url').value)
+
+    def update(self):
+        self.node.set_drive_inhibit('camera_website_startup')
+        try:
+            state = self.web.request('/api/state')
+            arm = state.get('robot', {}).get('arm', {})
+            if (not state.get('error') and state.get('frames', 0) > 0
+                    and state.get('ros_arm') is True and arm.get('hardware_connected') is True
+                    and arm.get('simulation_mode') is False):
+                return SUCCESS
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        return FAILURE if time.monotonic() - self.started > 20 else RUNNING
+
+
+class VisionButtonPress(Behavior):
+    """Wait for the website's fresh target detection, then use its calibrated PWM."""
+    def __init__(self, node, target, button, press_cycle, target_floor):
+        super().__init__(node)
+        self.name = 'VisionButtonPress:' + button
+        self.label = button.lstrip('F') if target == 'destination' else button
+        self.target, self.cycle, self.floor = target, press_cycle, target_floor
+        self.web = CameraWebClient(node.get_parameter('camera_web_url').value)
+        self.arm, self.selected = None, False
+
+    def initialise(self):
+        super().initialise()
+        self.started, self.since = time.monotonic(), time.time()
+
+    def cancel(self):
+        if self.arm:
+            self.arm.cancel()
+
+    def update(self):
+        self.node.set_drive_inhibit('button_recognition_or_press')
+        if time.monotonic() - self.started > 45:
+            self.cancel()
+            return FAILURE
+        try:
+            if not self.selected:
+                self.web.select(self.label, self.floor)
+                self.selected = True
+                return RUNNING
+            if self.arm is None or not self.arm.sent:
+                pose = self.web.pose(self.label, self.since)
+                if pose is None:
+                    return RUNNING
+                if self.arm is None:
+                    self.arm = ArmCommand(self.node, 'press', target=self.target, button=self.label,
+                                          press_cycle=self.cycle, press_pose=pose)
+                else:
+                    self.arm.command['press_pose'] = pose
+            return self.arm.tick()
+        except (OSError, ValueError, TypeError):
+            return RUNNING
 
 
 class WaitDoorOpen(Behavior):

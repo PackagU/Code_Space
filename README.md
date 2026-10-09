@@ -25,6 +25,8 @@ Jetson에서 ROS 2 Humble, SLAM Toolbox, Nav2를 실행하고 OpenCR로 차동 �
 | `tools/floor_reader/` | 카메라 ROI·템플릿 비교 기반 층수 인식과 목표층 이벤트 |
 | `tools/field_tests/` | 현장 회전·RPM·주행 확인에 사용한 별도 스크립트 |
 
+기존 현장 주행에 정면/층수 팔 자세와 목표층 하차를 연결한 실행 방법은 [카메라 배송 미션](docs/deployment/08_elevator_camera_mission.md)에 있다. 버튼·층수 인식은 기존 8091 웹사이트 하나로 제공하며, 실제 4층은 기존 F2 지도와 연결한다.
+
 직전 GitHub 코드에서 바뀐 사항은 주행 시작 시 빈 속도 인자를 생략하는 수정과 `f2_delivery_left_room4`·`f1_initial_test` 목표 추가다. 젯슨 홈에 따로 있던 버튼·팔·층수 인식 코드와 등록 데이터를 함께 포함했다. [파일별 설명](docs/presentation_20260916/CODE_CHANGES.md)
 
 ## 발표용 지도

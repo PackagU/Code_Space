@@ -135,8 +135,10 @@ class AppTests(unittest.TestCase):
                 state.select([.5, .5])               # not on a button
             state.set_mission('car', 'down')                # always floor 1
             self.assertEqual(state.target, '1')
-            with self.assertRaises(ValueError):
-                state.set_target('2')
+            state.set_target('2')
+            self.assertEqual(state.state()['mission'], 'custom')
+            self.assertEqual(state.state()['target'], '2')
+            state.set_target('1')
             self.stable(state, synth.scene(('2', '1', '3', '4'), 1002)[0])
             press = state.ready['press']     # '1' now sits where press2 was taught (±few px)
             for i in arm.IDS:

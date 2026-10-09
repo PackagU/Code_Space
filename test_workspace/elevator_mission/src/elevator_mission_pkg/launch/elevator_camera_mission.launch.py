@@ -1,10 +1,11 @@
 """Real camera mission: no elevator simulator and one ROS serial owner for the arm."""
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
+from launch.conditions import IfCondition
 
 
 def generate_launch_description():
@@ -12,7 +13,20 @@ def generate_launch_description():
         DeclareLaunchArgument("serial_port", default_value=""),
         DeclareLaunchArgument("camera_pose_config", default_value=PathJoinSubstitution([
             FindPackageShare("robot_arm_pkg"), "config", "camera_views.json"])),
-        DeclareLaunchArgument("reader_url", default_value="http://127.0.0.1:8765/api/state"),
+        DeclareLaunchArgument("web_port", default_value="8091"),
+        DeclareLaunchArgument("reader_url", default_value=["http://127.0.0.1:", LaunchConfiguration('web_port'), "/floor/api/state"]),
+        DeclareLaunchArgument("camera_web_url", default_value=["http://127.0.0.1:", LaunchConfiguration('web_port')]),
+        DeclareLaunchArgument("start_web", default_value="true"),
+        DeclareLaunchArgument("project_root", default_value="."),
+        DeclareLaunchArgument("camera_source", default_value="disabled"),
+        DeclareLaunchArgument("vision_button_press", default_value="true"),
+        DeclareLaunchArgument("points_yaml", default_value=""),
+        DeclareLaunchArgument("missions_yaml", default_value=""),
+        DeclareLaunchArgument("observed_target_floor", default_value=""),
+        DeclareLaunchArgument("routing_mode", default_value="nav2"),
+        DeclareLaunchArgument('field_map_guard', default_value='false'),
+        DeclareLaunchArgument('field_pins', default_value=''),
+        DeclareLaunchArgument('field_registry', default_value=''),
         DeclareLaunchArgument("door_state_topic", default_value="/elevator/door_state"),
         DeclareLaunchArgument("require_door_confirmation", default_value="false"),
         DeclareLaunchArgument("mission_id", default_value="parcel_to_208"),
@@ -22,6 +36,10 @@ def generate_launch_description():
         DeclareLaunchArgument("destination_press_cycle", default_value="2"),
     ]
     return LaunchDescription(args + [
+        ExecuteProcess(cmd=['python3', PathJoinSubstitution([LaunchConfiguration('project_root'),
+            'tools', 'button_arm_test', 'app.py']), '--source', LaunchConfiguration('camera_source'),
+            '--host', '127.0.0.1', '--http-port', LaunchConfiguration('web_port'), '--ros-arm'],
+            output='screen', condition=IfCondition(LaunchConfiguration('start_web'))),
         Node(package="robot_arm_pkg", executable="arm_sequence", output="screen", parameters=[{
             "serial_port": ParameterValue(LaunchConfiguration("serial_port"), value_type=str),
             "camera_pose_config": LaunchConfiguration("camera_pose_config"),
@@ -46,5 +64,15 @@ def generate_launch_description():
                      LaunchConfiguration("require_door_confirmation"), value_type=bool),
                  "call_press_cycle": ParameterValue(LaunchConfiguration("call_press_cycle"), value_type=int),
                  "destination_press_cycle": ParameterValue(LaunchConfiguration("destination_press_cycle"), value_type=int),
+                 "vision_button_press": ParameterValue(LaunchConfiguration('vision_button_press'), value_type=bool),
+                 "camera_web_url": LaunchConfiguration('camera_web_url'),
+                 "routing_mode": LaunchConfiguration('routing_mode'),
+                 'field_map_guard': ParameterValue(LaunchConfiguration('field_map_guard'), value_type=bool),
+                 'field_project_root': LaunchConfiguration('project_root'),
+                 'field_pins': ParameterValue(LaunchConfiguration('field_pins'), value_type=str),
+                 'field_registry': ParameterValue(LaunchConfiguration('field_registry'), value_type=str),
+                 "observed_target_floor": ParameterValue(LaunchConfiguration('observed_target_floor'), value_type=str),
+                 "points_yaml": ParameterValue(LaunchConfiguration('points_yaml'), value_type=str),
+                 "missions_yaml": ParameterValue(LaunchConfiguration('missions_yaml'), value_type=str),
              }]),
     ])

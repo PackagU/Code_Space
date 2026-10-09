@@ -16,6 +16,17 @@ REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 BUTTON_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,16}$")
 
 
+def validate_command_pose(pose):
+    from . import servo_protocol as sp
+    if not isinstance(pose, dict) or set(pose) != set(sp.SERVO_IDS):
+        raise ValueError("pose requires all four servo IDs")
+    for joint, value in pose.items():
+        if type(value) is not int:
+            raise ValueError("PWM must be an integer")
+        sp.check_pwm(joint, value)
+    return dict(pose)
+
+
 def normalize_floor(value):
     """"F1"/"f1"/"1" → "F1". 실패 시 ValueError."""
     text = str(value).strip().upper()
@@ -42,8 +53,16 @@ def parse_arm_command(command_json):
     if not REQUEST_ID_PATTERN.fullmatch(request_id):
         raise ValueError("request_id must be 1-64 safe characters")
     action = str(command.get("action", "")).strip().lower()
-    if action not in ("press", "home", "stow", "cancel", "view"):
-        raise ValueError("action must be press, home, stow, cancel, or view")
+    if action not in ("press", "home", "stow", "cancel", "view", "move", "read"):
+        raise ValueError("unknown arm action")
+    if action == "read":
+        return {"request_id": request_id, "action": action}
+    if action == "move":
+        pose = validate_command_pose(command.get("pose"))
+        duration = command.get("duration_ms", 2000)
+        if type(duration) is not int or not 1 <= duration <= 5000:
+            raise ValueError("duration_ms must be 1-5000")
+        return dict(request_id=request_id, action=action, pose=pose, duration_ms=duration)
     if action == "view":
         view = command.get("view")
         if view not in ("front_view", "floor_view"):
@@ -72,13 +91,18 @@ def parse_arm_command(command_json):
         raise ValueError("press_cycle must be 1 (menu 6) or 2 (menu 7)") from exc
     if cycle not in (1, 2):
         raise ValueError("press_cycle must be 1 (menu 6) or 2 (menu 7)")
-    return {
+    result = {
         "request_id": request_id,
         "action": action,
         "target": target,
         "button": button,
         "press_cycle": cycle,
     }
+    if "press_pose" in command:
+        from . import servo_protocol as sp
+        result["press_pose"] = validate_command_pose(command["press_pose"])
+        sp.calibrated_press_poses(result["press_pose"])
+    return result
 
 
 class FloorReadyTrigger:
