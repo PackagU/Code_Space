@@ -32,14 +32,48 @@ bash sim/real_maps/start_sim.sh --floor F1 --params P0 --spawn f1_initial_test -
 #    두 층 + 엘리베이터 + 팔: --world building --arm-sim 추가
 python3 sim/real_maps/sim_goal.py --name <출력된 이름> --to f1_locker
 
-# 5) 종료: 이 시뮬이 띄운 프로세스·컨테이너만 정리 (현장 ros2_humble 컨테이너는 건드리지 않음)
+# 5) 자율 왕복 시연: 사람 개입 없이 로봇이 카메라로 찾고 팔로 누르고 지게팔로 집는다 (아래 "자율 시퀀스")
+#    3배속 + 장식 월드(자동) + 팔레트 택배 2개 + GUI (Gazebo 추적 카메라·RViz·팔 끝 카메라 창, 화면 왼쪽 절반 자동 배치)
+python3 sim/real_maps/run_e2e.py --cabin-mode direct --arm-sim --load pallet --parcels 2 --speed 3 --gui
+
+# 5-1) 짧은 자율 점검 (왕복 아님): 택배 집기 → 엘리베이터 입장 → 탑승(내부 버튼·층 확인·하차)
+python3 sim/real_maps/autonomy_smoke.py --steps pickup,entry,ride --speed 3 [--gui]
+
+# 6) 종료: 이 시뮬이 띄운 프로세스·컨테이너만 정리 (현장 ros2_humble 컨테이너는 건드리지 않음)
 bash sim/real_maps/start_sim.sh --stop
 for c in $(docker ps -a --format '{{.Names}}' | grep '^packagu_sim'); do docker rm -f "$c"; done
 ```
 
+시연 옵션:
+
+- `--speed X`: 목표 실시간 배율. 물리 step(1 ms)은 그대로 두고 Gazebo `real_time_update_rate`만 측정하며 맞춘다. 2026-10-12 측정에서 전체 스택(Nav2 포함)은 제한을 풀면 약 5.9배까지 나왔고, 1배속이 0.92배였던 것은 1000 Hz 대기 때문이었다. step을 키워 빠르게 하면(5 ms) 엘리베이터 안 정지 중 미끄럼으로 odom 연속성 기준을 넘었다(0.0203 m > 0.02 m). 1이 아닌 배속 실행은 `EXPLORATORY.txt`를 남겨 1배속 통계와 분리한다. 목표 시간 제한은 모두 시뮬 시간 기준이라 배속과 무관하다
+- `--dressed`: `building_dressed.world`. 캐빈 바닥·스테인리스 벽 마감·손잡이·조작반, 승강장 호출 버튼·문틀, F1 픽업 구역 바닥 테이프, F2 배달 매트. 모두 `<visual>`만 있고 충돌체가 없어 LiDAR(ray 센서)·물리·판정은 `building.world`와 같다. 생성 때 두 월드의 충돌체가 같은지 검사하고 다르면 멈춘다. 위치·치수는 `world_params.yaml dressing`의 [가정값]
+- `--load pallet` (기본): f1_locker 정차 자세 앞 바닥에 2방향 팔레트(가운데 포켓 폭 0.32 m·높이 0.10 m)와 택배. 리프트 0에서 캐리어가 포켓에 들어간 상태로 붙이고 0.08 m 들어 운반(높이 유지), 배달 지점에서 0으로 내린 뒤 놓는다. 보관함은 모델하지 않는다. `--load box`는 10/8 선반 상자 방식(재현용)
+- `--parcels 1|2|3`: 팔레트 위 택배 수(3번째는 첫 상자 위에 쌓임). 모두 attach/detach mock이라 접촉·하중·포켓 정렬은 검증하지 않는다. Nav2 도착 오차(약 0.3 m)만큼 팔레트가 캐리어로 순간 이동하며 그 거리는 `attach_gap_m`으로 기록된다
+- `--gui`: gzclient(카메라가 로봇을 위에서 추적) + RViz + `--arm-sim`이면 팔 끝 카메라(`/arm_camera/image_raw`, `rqt_image_view`). Gazebo에는 카메라 시야 범위가 선으로 그려진다. 카메라 센서는 화면(GL)이 있어야 렌더링되므로 GUI 실행에서만 `robot_arm_cam.urdf`를 쓴다. 카메라 장착 위치·화각·해상도는 [가정값]. 호스트 X11 소켓을 같은 uid로 마운트(xhost 변경 없음). 창 배치는 호스트의 `arrange_gui.py`(Wnck)가 이 컨테이너 창만 옮긴다
+
+- `--lift-stop ultrasonic|fixed`: 운반 높이 정하는 방식. `ultrasonic`(기본)은 몸체 앞 가상 초음파(마스트 x 0.15 m·높이 0.55 m, 시뮬은 적재물 상자와의 기하 광선 계산)가 택배 윗면을 보면 리프트를 멈춘다. `fixed`는 정해진 높이만 든다. 어느 쪽이든 택배 윗면 상한 0.60 m(`lift.carry`, 팔·카메라를 가리지 않는 높이 [가정값])를 넘지 않는다
+
 결과 표 다시 만들기: `python3 sim/real_maps/summarize_runs.py --pretest 'pre3_*' --e2e '*e2e*' --out results/20261008`
 
+## 자율 시퀀스 (`--arm-sim --load pallet`)
+
+Nav2 구간 사이의 모든 동작을 `tools/jetson_skill_tests/skilltests/`의 상태 머신이 한다. Jetson 현장 시험과 **같은 코드**이고, 시뮬은 `sim_adapters.py`(SimIO), 현장은 `ros_adapters.py`(RosIO)만 다르다. 운전자 직접 주행·mock 버튼·문 명령은 쓰지 않는다. 로봇이 쓰는 정보는 팔 카메라 영상, 관절, encoder odom, LiDAR, 사전에 가르친 위치(prior)뿐이다.
+
+| 단계 | 상태 순서 |
+|---|---|
+| 택배 집기 | 보관 구역 도착 → 오른쪽 90° → 지게팔 내림 → 몸체를 0°·±20°로 돌리며 고정 보기 자세로 택배 찾기 → 가장 오른쪽(입구 쪽) 택배 → 팔레트 앞면 두 번 보고 정렬 → 포켓 진입 → 붙이기 → 초음파로 멈출 때까지 들기 |
+| 엘리베이터 입장 | 버튼 구역 → 고정 자세로 호출 버튼판 찾기(로비 ▲, 목표층 ▼) → 누르기 사이클 팔 끝이 버튼에 닿는 정지 자세 계산 → 정렬점에서 다시 보기 → 곧게 접근 → 착지 오차 확인(깊이만 조금 틀리면 앞뒤 조정) → 티칭 사이클로 누르기 → 램프·문 열림 확인 → 문 밖 대기 → LiDAR 문 틈 2회 확인 → 실제 문 틈에 맞춰 다시 섬 → 문 축으로 곧게 진입 |
+| 탑승(누르기) | 오른쪽 90° → 고정 캐빈 자세로 층 버튼 찾기 → 버튼판을 정면으로 바라보도록 차체 위치·방향 정렬 → 팔 받침·손목은 정면 고정, 어깨·팔꿈치 위아래 각도만 사용해 누르기 → 후진 후 요청 버튼 램프 영상 확인 → 캐빈 중앙으로 복귀 → 문 정면 → 팔 들어 문 위 표시창 보기 |
+| 탑승(하차) | 표시창 7-세그먼트로 목표층 확인 → 지도 전환·로봇 쪽 초기 자세 시드·재정위 확인 → 층 재확인 → 문 틈 2회 확인 → 실제 문 틈에 맞춰 곧게 하차 → 하차 지점. 문이 닫히면 왼쪽으로 돌아 현재층 버튼을 다시 누른다 |
+
+팔은 미리 정한 각도로만 움직인다(사용자 2026-10-13): 보기 자세 7개는 `world_params.yaml arm.view_poses`(PWM), 누르기는 젯슨과 같은 `servo_protocol.py` 사이클. 시연 버튼판(층 버튼 20.5 x 16 cm, 승하차 13.5 x 20.5 cm)은 그 사이클의 팔 끝 높이(약 0.68 m)에 붙는다. 팔·LiDAR·지게팔 배치는 사용자 사진 추정값(`photo_body()`).
+
+엘리베이터 노드는 팔 끝 위치(관절 상태 + 정운동학)가 캡 중심 2.5 cm 안·캡 면 0.4 cm 앞~6 cm 뒤에 들어올 때만 눌림으로 처리한다. 버튼 램프·층 표시창은 노드가 월드 모델을 움직여 켠다. 엘리베이터 문 열림 유지는 60 s(`elevator.timing.hold_open_s`)다. 실제 엘리베이터의 5~10 s로는 로봇의 누르기→대기점→진입 순서가 끝나기 전에 문이 닫힌다. 현장 측정이나 유지 연장 방법이 필요하다(아직 모름 U-E02).
+
 ## 한 명령 실행 (세부)
+
+누름 성공이 카메라로 확인된 버튼은 `logs/button_press_memory/sim.json`에 층·종류·라벨별로 기억한다. 버튼 map 좌표와 누름 순간 차체 map 위치·방향, 팔 PWM을 저장한다. 다음 실행에서도 현재 카메라로 같은 버튼을 확인해야 한다. 지도·팔 설정 변경 시 이전 기억은 무효다. 실행별 사본은 결과 폴더의 `button_press_memory.json`이다.
 
 ```bash
 # A층: 한 층 실측 지도 + 로봇 + OpenCR shim + nav_safety_gate + Nav2 (준비 판정까지)
@@ -74,7 +108,14 @@ python3 sim/real_maps/summarize_runs.py --pretest 'pre3_*' --e2e 'e2e_*' --out r
 | `fake_floor_reader.py` | 가짜 층수 인식기. `tools/floor_reader/app.py`와 같은 `GET /api/state` 형식·이벤트 gate, 값은 `/elevator/state`에서 |
 | `floor_maps_real.yaml` | orchestrator용 시뮬 전용 층 지도 표(F1 v3, F2 nav_unknown, 캐빈 초기 pose). 가상 KKU `floor_maps.yaml`은 그대로 |
 | `run_pretest.py` | G1·G2·G3·G5 사전 시험 |
-| `run_e2e.py` | 왕복 러너(goal당 300 s [제안값], 실패 시 정지·기록·중단, 지도 전환 뒤 새 AMCL 표본 판정) |
+| `run_e2e.py` | 왕복 러너(goal당 300 s [제안값], 실패 시 정지·기록·중단, 지도 전환 뒤 새 AMCL 표본 판정). `--arm-sim --load pallet`이면 자율 시퀀스 |
+| `autonomy_smoke.py` | 자율 시퀀스 짧은 점검(택배 집기·입장·탑승), 통계 제외 |
+| `sim_adapters.py` | 공용 상태 머신용 시뮬 어댑터(주행·안전 검사, 팔 자세·누르기, 카메라 인식, 리프트, 적재) |
+| `perception.py` / `arm_geometry.py` | 카메라 인식(공용 `vision_core` 사용) / 팔 [가정값] 기하·정운동학·역운동학 |
+| `arm_lift.py` | 팔 궤적·리프트 명령, 초음파 정지 들기(`carry_up`) |
+| `parcel_mock.py` | 팔레트·택배 배치, attach/detach mock, 가상 초음파 `/sim/ultrasonic_front` |
+| `dressing.py` | 시각 전용 장식, 버튼·램프·7-세그먼트 층 표시창 모델 |
+| `arrange_gui.py` | 호스트에서 이 컨테이너 창만 화면 왼쪽 절반에 배치 |
 | `probe_drive_slip.py` | encoder odom 대 지면 진실 미끄럼·크리프 진단 |
 | `summarize_runs.py` | 결과 표(`results/`) |
 | `run_scenarios.py`, `run_manual_mission.py`, `run_suite.sh` 등 | 9/15 S1~S6·수동 왕복 러너(WORLD odom 재현용, 격리 컨테이너 안에서만) |
@@ -106,3 +147,25 @@ bash sim/real_maps/run_sim_tests.sh   # ROS 없으면 해당 시험 SKIP (script
 ## 기록 위치
 
 bag·dense CSV·로그는 gitignore된 `logs/real_map_sim/<실행 이름>/`(실행마다 새 이름, 덮어쓰지 않음). 공유용 작은 요약만 `results/`에 둔다.
+
+## 2026-10-13 Codex 수정본
+
+- F2 두 층 월드만 `generated/f2_sim_flat.yaml`과 같은 평면 벽을 사용한다. 지정 영역 밖 0셀 변경, 원본 F2 지도와 단층 G2 기준 월드는 유지한다. 설정은 `world_params.yaml f2_cleanup`, 정리 근거는 `geometry_validation.json F2_flat`. 호출판은 F1/F2 모두 오른쪽이다.
+- Nav2는 빈 포크·적재 팔레트까지 포함하는 실행별 프로파일을 사용한다. 적재/하역 뒤 다음 goal 전에 양쪽 costmap 외곽을 갱신한다. 최소 벽 거리 평가도 같은 외곽이다.
+- 카메라는 기존 팔 끝 카메라 하나다. 누름 확인은 요청한 버튼 위치의 램프 영상만 사용한다. 누름 유지 중 또는 물러나 다시 보는 영상에서 불을 확인하고 미확인 시 제한된 횟수만 재시도한 뒤 정지·중단한다. 층 표시창은 도착층 확인 전용이다. 사용자 요청에 따라 시뮬 램프는 실행 초기화 전까지 켜짐 상태를 유지하며 실물 종이컵에 불이 있다는 뜻은 아니다.
+
+```bash
+PACKAGU_SIM_CONTAINER=packagu_sim_codex_20261013 python3 sim/real_maps/run_e2e.py --cabin-mode direct --arm-sim --load pallet --parcels 2 --speed 3 --gui
+```
+
+새 체크아웃에서는 먼저 `bash sim/real_maps/start_sim.sh --floor F1 --gui`로 빌드·월드 생성을 한다. 원커맨드 재시험 스크립트는 `run_codex_validation.sh`를 사용한다.
+
+## 엘리베이터 내부부터 종료까지
+
+사용자 2026-10-13 요청: 이미 탑승·적재한 상태를 시험 초기 조건으로 만들고 F1 층 버튼 → F2 하차·배달·하역 → F2 호출·탑승 → F1 복귀·출발점 도착만 검증한다. 앞부분 픽업·F1 호출/입장은 이 모드의 검증 범위 밖이다. 카메라는 기존 팔 끝 카메라만 사용한다.
+
+```bash
+bash sim/real_maps/run_codex_validation.sh --start-stage cabin
+```
+
+`SIM_GUI=0`은 Gazebo/RViz 창을 끄며 팔 카메라 렌더링은 유지한다. 기본 `SIM_SPEED=max`는 물리 step 1 ms를 유지하고 Gazebo 시간 제한을 푼다. 실제 배속은 머신 부하에 따라 달라진다([Gazebo 물리 설정](https://classic.gazebosim.org/tutorials?tut=physics_params)). `SIM_SPEED=3`처럼 수치로 고정할 수도 있다.

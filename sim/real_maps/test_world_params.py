@@ -40,6 +40,26 @@ class WorldParamsTests(unittest.TestCase):
         self.assertEqual(robot['odometry_source'], 'encoder')
         self.assertEqual(robot['odometry_profiles'], {'encoder': 0, 'world': 1})
 
+    def test_all_views_and_press_cycles_are_pitch_only_and_face_the_wall(self):
+        import arm_geometry as ag
+        import sys
+        sys.path.insert(0, str(HERE.parents[1]/'tools/jetson_skill_tests'))
+        from skilltests.geometry import press_stance
+        arm = PARAMS['arm']
+        sp = ag.servo_protocol(HERE.parents[1])
+        for name, pose in arm['view_poses'].items():
+            if isinstance(pose, list):
+                self.assertEqual(pose[0], 1500, name)
+                self.assertEqual(pose[3], 1500, name)
+        for cycle in (1, 2):
+            tip = ag.taught_press(arm, sp, cycle)
+            self.assertAlmostEqual(tip['yaw'], 0.0)
+            for angle in (0.0, .742, 1.8, -2.1):
+                normal = (math.cos(angle), math.sin(angle))
+                stance = press_stance((2.0, 1.0), normal, tip['xy'], tip['yaw'], .01)
+                self.assertAlmostEqual(math.cos(stance[2]), -normal[0])
+                self.assertAlmostEqual(math.sin(stance[2]), -normal[1])
+
     def test_relocalization_gate_criteria(self):
         reloc = PARAMS['relocalization']
         for key in ('min_new_amcl_samples', 'position_error_max_m', 'yaw_error_max_rad', 'covariance_xy_max_m2',
@@ -58,6 +78,8 @@ class WorldParamsTests(unittest.TestCase):
         for floor in ('F1', 'F2'):
             self.assertLess(data['building'][floor]['max_offset_error_m'], .05)
         self.assertEqual(data['noglass']['changed_cells'], 44)
+        if 'building_dressed' in data:   # --dressed is visual-only: identical collisions to building.world
+            self.assertTrue(data['building_dressed']['collisions_identical_to_building'])
         self.assertEqual(data['F2_door_open']['door_open_removed_cells'], 78)
 
     def test_cabin_waypoints_exist(self):

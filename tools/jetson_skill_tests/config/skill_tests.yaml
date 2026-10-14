@@ -1,0 +1,214 @@
+# Jetson 현장 스킬 시험 설정. 같은 상태기계를 시뮬(sim/real_maps)과 젯슨에서 쓴다.
+# [현장 측정] 실측해서 바꿀 값, [현장 보정] 카메라·팔 티칭으로 맞출 값, [현장 티칭] 지도 위 위치, [제안값] 시뮬 기본값.
+# 위치는 "waypoint:<이름>"으로 src/slam_pkg/maps/field/waypoints.json(읽기만 함)을 참조하거나 [x, y, yaw]/[x, y, z]로 적는다.
+
+topics:
+  cmd_vel: /cmd_vel          # nav_safety_gate 입력. 모터 토픽(/cmd_vel_safe 이후)을 직접 쓰지 않는다
+  odom: /odom
+  scan: /scan
+
+limits:
+  max_v: 0.08                # [제안값] m/s, 시뮬과 같음
+  max_w: 0.30                # [제안값] rad/s
+  drive_timeout_s: 120
+
+safety:                      # 모든 주행 명령을 이 여유로 검사(앞·뒤 통로, 회전 때 쓸리는 몸체+짐 영역)
+  front_m: 0.05
+  rear_m: 0.05
+  sweep_m: 0.03
+  odom_max_age_s: 0.5        # 이보다 오래된 odom/scan 이면 즉시 정지
+  scan_max_age_s: 0.6
+
+robot:
+  lidar_xy: [-0.117, 0.0]    # [현장 측정] URDF 값. 실제 RPLiDAR 장착 위치로 바꾼다
+  lidar_yaw: 0.0
+  half_width_m: 0.219        # [현장 측정] 몸체 반폭(nav2 footprint)
+  rear_extent_m: 0.327       # [현장 측정] 몸 중심-뒤 끝
+  front_extent_empty_m: 0.26 # [현장 측정] 빈 지게팔 앞 끝(바퀴축 기준). 사진 추정 0.26
+  front_extent_loaded_m: 0.345 # [현장 측정] 팔레트를 실었을 때 앞 끝(바퀴축 기준). 시뮬: 기둥 앞면 0.06 + 0.005 + 팔레트 0.28
+  load_half_width_m: 0.20    # [현장 측정] 실은 팔레트 반폭
+
+arm:
+  command_topic: /packagu_arm/command   # robot_arm_pkg arm_sequence (JSON)
+  status_topic: /packagu_arm/status
+  timeout_s: 30
+  view_settle_s: 0.8
+  # 상태기계의 팔 자세 이름 -> 티칭된 카메라 자세. arm_sequence 는 front_view / floor_view 만 받는다.
+  # 택배·팔레트를 아래로 보는 자세가 따로 필요하면 Kim 이 camera_views.json 과 arm_sequence 허용 목록을 함께 늘려야 한다.
+  views:
+    hall_view: front_view
+    cabin_view: front_view
+    hall_press_view: front_view   # [현장 티칭 필요] 정면 고정 받침(1500), 위아래 각도만 조정
+    cabin_press_view: front_view  # [현장 티칭 필요] 정면 고정 받침(1500), 위아래 각도만 조정
+    display_view: floor_view
+    parcel_view: front_view
+    pallet_view: front_view
+  press_cycle:               # 누르기는 티칭된 사이클(servo_protocol.py PRESS_CYCLES). 실물 팔 역기구학은 아직 없음
+    call: 1
+    destination: 2
+
+vision:
+  frame_url: http://127.0.0.1:8765/frame.jpg       # tools/floor_reader 가 여는 웹캠 영상(한 웹캠 공유)
+  floor_state_url: http://127.0.0.1:8765/api/state
+  frame_max_age_s: 0.8
+  floor_max_age_s: 0.8
+  digit_templates: tools/button_arm_test/data       # 버튼 숫자 등록 템플릿(읽기만 함)
+  prior_max_m: 0.6          # 찾은 버튼이 사전 위치에서 이보다 멀면 다른 물체로 보고 버림
+  button_protrusion_m: 0.025 # [현장 측정] 버튼 면이 벽에서 나온 거리(시연 버튼: 캡 약 2 cm + 판)
+  # [현장 보정] 티칭 자세별 카메라 자세(몸 중심 기준 xyz, yaw +왼쪽, pitch +아래, 수평 화각). 3D 위치가 여기에 달려 있다
+  views:
+    front_view: {xyz: [0.20, -0.11, 0.85], yaw_rad: 0.0, pitch_rad: 0.35, hfov_rad: 1.13}
+    floor_view: {xyz: [0.20, -0.11, 0.85], yaw_rad: 0.0, pitch_rad: -0.35, hfov_rad: 1.13}
+  lit_hsv: [[[90, 80, 150], [130, 255, 255]]]       # [현장 보정] 불 켜진 버튼 LED 색(흰 캡과 구분되는 색)
+  lit_patch_px: 12
+  lit_min_fraction: 0.30
+  lit_min_increase: 0.15     # 누르기 전 같은 버튼보다 이만큼 늘어야 '불 켜짐'
+  parcel_hsv: [[[8, 90, 50], [22, 200, 255]]]        # [현장 보정] 골판지
+  pallet_hsv: [[[50, 90, 40], [85, 255, 255]]]       # [현장 보정] 팔레트 색
+  min_blob_px: 400
+  parcel_mid_z_m: 0.22       # [현장 측정] 팔레트 위 택배 높이 중간
+
+floors:                      # 도착층 지도로 바뀌었는지(auto_floor_orchestrator)와 AMCL 수렴 확인
+  status_topic: /floor_orchestrator/status
+  set_parameters_service: /floor_orchestrator_node/set_parameters
+  amcl_topic: /amcl_pose
+  ready_timeout_s: 90
+  amcl_max_age_s: 2.0
+  amcl_cov_xy_max: 0.05
+  amcl_cov_yaw_max: 0.05
+  amcl_min_samples: 3        # 새 시드(또는 READY) 뒤 찍힌 수렴 표본이 이만큼 있어야 도착층 좌표를 씀
+  initialpose_topic: /initialpose
+  reseed_initialpose: true   # READY 뒤 로봇이 아는 캐빈 정지 자세(문 축 위·문을 향함)로 AMCL 다시 시드(--execute 만)
+  seed_cov_xy: 0.04
+  seed_cov_yaw: 0.02
+
+lift:
+  mode: ultrasonic           # ultrasonic | fixed (사용자 2026-10-12: 택배가 팔·카메라를 가리지 않게). 유일한 모드 설정
+  cmd_topic: ''              # 미연결: 리프트 드라이버(std_msgs/Float32 목표 높이 m) 토픽이 생기면 적는다
+  pos_topic: ''              # std_msgs/Float32 현재 높이 m
+  ultrasonic_topic: ''       # sensor_msgs/Range, 몸체 앞 초음파 (ultrasonic 모드에서만 필요)
+  fixed_m: 0.08
+  max_m: 0.45
+  step_m: 0.01
+  step_timeout_s: 2.0
+  detect_range_m: 0.50
+  load_top_offset_m: 0.295   # [현장 측정] 리프트 높이 + 이 값 = 택배 윗면. 상한 검사에 쓴다
+  tolerance_m: 0.01
+  max_age_s: 0.5
+  timeout_s: 20
+
+tests:
+  common:
+    # [현장 보정] 티칭 누르기 사이클(arm.press_cycle)이 버튼을 누르는 팔 끝: 바퀴축 기준 xy(+y 왼쪽), 높이 z,
+    # 수평 방향 yaw(+왼쪽). 재는 법: 로봇을 세워 두고 사이클을 돌려 '누름 유지' 순간 팔 끝(누르개) 위치·방향을 잰다.
+    # 아래 기본값은 시뮬 가정 기하(sim/real_maps world_params arm)로 servo_protocol.py 각도를 계산한 값이다.
+    press_tip:
+      call: {xy: [0.493, -0.110], z: 0.681, yaw: 0.0}          # 사이클 1 정면 고정, 시뮬 가정값; 실측 필요
+      destination: {xy: [0.493, -0.110], z: 0.681, yaw: 0.0}   # 사이클 2 정면 고정, 시뮬 가정값; 실측 필요
+    press_push_m: 0.01          # 팔 끝이 버튼 면을 지나 들어가는 깊이(계획값)
+    press_height_tol_m: 0.10    # 버튼 높이(카메라 추정, 보기 자세 관절 오차로 ±7 cm 흔들림)와 팔 끝 높이 차가 이보다 크면 누르지 않고 실패
+    press_envelope_m: [0.012, 0.02, 0.06]   # [현장 보정] 멈춘 자리에서 팔 끝 착지 오차 허용: 깊이, 옆, 방향(rad)
+    front_stop_m: 0.02
+    press_view: {call: hall_press_view, destination: cabin_press_view}   # 정렬점에서 다시 볼 때 자세
+    depth_adjust_max_m: 0.05    # 깊이만 이 이내로 어긋나면 앞뒤로만 조금 움직여 맞춤(더 크면 물러나 다시)
+    reaim_m: 0.02               # 정렬점에서 다시 본 뒤 계획이 이보다 많이 바뀌면 다시 정렬
+    recheck_max: [0.20, 0.10, 0.2]   # 다시 본 버튼이 이보다 많이 다르면(옆 m, 높이 m, 벽 방향 rad) 같은 버튼이 아님 → 버림(1 m 첫 관측 오차 10~13 cm 관측)
+    # 누름 확인 근거: door(LiDAR 로 문 열림), lamp(카메라로 불 켜짐). 시연 버튼은 불이 안 들어오므로 비워 두면
+    # 사이클 완료로 받고, 뒤따르는 문 열림 대기(입장)·층 표시 확인(하차)이 실제 확인이 된다.
+    confirm_by: {call: [], destination: []}  # 실물 종이컵: 시뮬 램프 판정과 구분. 아직 물리 눌림 확인 인터페이스 없음
+    press_visual_required: true  # 2026-10-13 사용자: 영상으로 요청 버튼·팔 끝 정렬 확인, 미확인 재시도
+    line_up_m: 0.25
+    press_retries: 1
+    back_off_m: 0.30
+    look_back_steps: 2          # 버튼이 화면에 없으면 팔 접고 look_back_m 후진(뒤 LiDAR 검사) 뒤 다시 보기
+    look_back_m: 0.10
+    display_ahead_m: 1.2        # 문을 향해 섰을 때 층 표시가 정면으로 이만큼 앞(높이는 *display_prior_map 의 z)
+    door_confirm_margin_m: 0.3  # 버튼 앞(문 옆)에서 문 열림을 볼 때: 문 중심 너머 이만큼 더 보이면 열림
+    confirm_window_s: 12.0      # 누른 뒤 불 켜짐·문 열림을 이 시간 동안 반복 확인(호출 램프는 도착 순간 꺼짐)
+    slow_v: 0.05
+    cabin_v: 0.08
+    door_timeout_s: 90
+    call_retries: 1
+    door_open_margin_m: 0.6
+    door_align_m: 0.7           # 문 중심 법선 위, 문 밖 대기 지점 거리
+    door_through_m: 0.55        # 문을 지나 안으로 들어가는 거리(그다음 캐빈 중앙으로)
+    door_width_m: [0.7, 1.4]    # LiDAR 로 본 문 열린 폭이 이 범위일 때만 문으로 믿고 가운데로 다시 맞춤
+    door_jamb_range_diff_m: 0.35  # 양쪽 문틀까지 거리 차가 이보다 크면(가까운 사람 등) 문으로 믿지 않음
+    door_match_m: 0.45          # LiDAR 로 본 문이 티칭한 문에서 이보다 멀거나
+    door_match_rad: 0.45        # 방향이 이보다 다르면 다른 틈으로 보고 버림(지도 문 축 오차 0.3 m·0.32 rad 관측)
+    door_lateral_tol_m: 0.12    # 하차 때 실제 문 축에서 이 이내면 곧게 나가고, 더 벗어나면 문 안쪽 축 위 점으로 먼저 감
+    door_centre_tol_m: 0.03     # 문 틈 가운데에서 이보다 벗어나면 문 밖에서 옆으로 다시 맞춘 뒤 진입
+    floor_confirm_frames: 5     # 기존 미션 ElevatorArrivalGate 와 같은 5프레임
+    floor_reconfirm_frames: 3   # 하차 직전 다시 확인
+    floor_period_s: 0.2
+    floor_timeout_s: 300
+  # 층별 값은 floors.<층> 에 둔다(run_test.py --floor F1|F2). 기본값은 시뮬 생성 기하(map 좌표)이며 [현장 티칭]으로 바꾼다.
+  # 로비(F1)에서는 올라가기(UP), 목표층(F2)에서 돌아올 때는 내려가기(DOWN) 호출 버튼을 누른다(사용자 2026-10-13).
+  # 호출 버튼판은 승강장에서 볼 때 문 오른쪽, 층 버튼판은 엘리베이터 내부 기준 왼쪽 벽. 누를 캡(로비 ▲, 목표층 ▼,
+  # 층 버튼 1·2 줄)은 티칭 누르기 사이클의 팔 끝 높이(press_tip.*.z)에 맞춰 붙인다.
+  elevator_entry:
+    floors:
+      F1:
+        floor: F1
+        call_label: UP
+        call_button_prior_map: [-10.23, -0.62, 0.681]   # [현장 티칭] 호출 버튼(▲) 위치(map)
+        button_view_pose_map: [-9.86, 0.31, -1.946]     # [현장 티칭] 버튼을 볼 자리(map, 버튼 1 m 앞)
+        door_centre_map: [-9.51, -0.98]                 # [현장 측정] 승강장 문 중심(map)
+        door_normal_map: [0.371, 0.929]                 # [현장 측정] 문 선에 수직(부호는 자동으로 캐빈 쪽)
+        cabin_centre_map: waypoint:f1_elevator_inside
+      F2:
+        floor: F2
+        call_label: DOWN
+        call_button_prior_map: [-11.33, -1.31, 0.681]   # [현장 티칭] 호출 버튼(▼)
+        button_view_pose_map: [-10.66, -2.05, 2.313]
+        door_centre_map: [-11.93, -1.93]
+        door_normal_map: [-0.676, 0.737]
+        cabin_centre_map: waypoint:f2_elevator_inside
+  elevator_ride:
+    floors:
+      F1:                                               # F1 에서 타서 F2 로
+        floor: F1
+        target_floor: F2
+        target_label: '2'
+        target_button_prior_map: [-11.11, -1.65, 0.681] # [현장 티칭] 층 버튼 2(map, 캐빈 안 왼쪽 벽)
+        door_centre_map: [-9.51, -0.98]
+        door_normal_map: [0.371, 0.929]
+        cabin_centre_map: waypoint:f1_elevator_inside
+        display_prior_map: [-9.56, -1.10, 1.13]         # [현장 티칭] 출발층 지도에서 층수 화면(입구 위)
+        exit_display_prior_map: [-12.01, -1.83, 1.13]   # [현장 티칭] 도착층 지도에서 층수 화면
+        exit_pose_map: waypoint:f2_elevator_exit
+        exit_door_centre_map: [-11.93, -1.93]           # [현장 측정] 도착층 문 중심(map)
+        exit_door_normal_map: [-0.676, 0.737]
+        exit_cabin_centre_map: waypoint:f2_elevator_inside
+        exit_button_prior_map: [-11.80, -0.91, 0.681]   # [현장 티칭] 도착층 캐빈의 같은 층 버튼(문 다시 열기)
+      F2:                                               # F2 에서 타서 F1 로
+        floor: F2
+        target_floor: F1
+        target_label: '1'
+        target_button_prior_map: [-11.87, -0.84, 0.681]
+        door_centre_map: [-11.93, -1.93]
+        door_normal_map: [-0.676, 0.737]
+        cabin_centre_map: waypoint:f2_elevator_inside
+        display_prior_map: [-12.01, -1.83, 1.13]
+        exit_display_prior_map: [-9.56, -1.10, 1.13]
+        exit_pose_map: waypoint:f1_elevator_exit
+        exit_door_centre_map: [-9.51, -0.98]
+        exit_door_normal_map: [0.371, 0.929]
+        exit_cabin_centre_map: waypoint:f1_elevator_inside
+        exit_button_prior_map: [-11.15, -1.74, 0.681]
+  parcel_pickup:
+    approach_pose_map: waypoint:f1_locker             # 택배 구역 들어간 자리(이미 그 근처면 이동 생략)
+    approach_tol_m: 0.30
+    scan_dist_m: 0.95
+    scan_yaws_rad: [0.0, 0.35, -0.35]                 # 몸체를 돌려 카메라 시야를 좌·중·우로 바꾼다
+    scan_z_m: 0.2
+    same_parcel_m: 0.25
+    predock_m: 0.85
+    face_looks: 2
+    face_z_m: 0.05
+    pallet_face_width_m: [0.30, 0.50]
+    pallet_depth_m: 0.28        # [현장 측정] 시뮬 팔레트(포크 길이에 맞춤)
+    fork_centre_ahead_m: 0.205  # [현장 측정] 포켓에 넣었을 때 팔레트 중심이 바퀴축 앞으로 떨어진 거리(기둥 앞면 0.06 + 0.005 + 0.14)
+    dock_v: 0.05
+    undock_m: 0.30             # [현장 측정] 적재 후 직선 후진, Nav2 회전 전에 벽 여유 확보
+    arm_clear_top_m: 0.60       # [현장 측정] 택배 윗면 허용 높이(팔·카메라를 가리지 않는 높이)

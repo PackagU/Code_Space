@@ -70,10 +70,12 @@ elevator:
   timing:
     door_open_s: 2.5
     door_close_s: 2.5
-    hold_open_s: 30.0
-    travel_per_floor_s: 8.0
-    call_response_s: 1.0
-    source: "아직 모름(임시값) U-E02. 문 시간·열림 유지·층간 이동 시간은 05 T3 측정 뒤 채운다. hold_open 30 s 는 로봇 진입 시간을 보려고 길게 둔 [제안값]"
+    hold_open_s: 60.0
+    travel_per_floor_s: 45.0
+    call_response_s: 20.0
+    call_confirmation_source: "[제안값] 시뮬 호출 응답 대기 20 s: 이미 같은 층에 있는 엘리베이터의 호출 램프도 도착 처리 시 끄되, 기존 팔 카메라로 누르고 물러나 점등을 확인할 시간을 둠. 실제 엘리베이터 호출 지연의 실측값이 아님"
+    visual_confirmation_source: "[제안값] 시뮬 이동 시간 45 s: 버튼을 누르고 물러나 같은 버튼 램프를 팔 카메라로 확인한 뒤 중앙으로 돌아올 시간을 둠. 실제 이동 시간 검증 아님. 관절 hold는 실제 층 위치 전환 직전 3 s부터 중지하고, 팔 쓰기 중단 확인 신호와 1 s 안정화 뒤 위치를 전환함. 이동 전체에서 중지하면 카메라 자세가 드리프트함. 목적층 도착 시 그 층 버튼 램프를 끔"
+    source: "아직 모름(임시값) U-E02. 문 시간·열림 유지·층간 이동 시간은 05 T3 측정 뒤 채운다. hold_open 60 s [제안값](2026-10-13 30→60): 로봇이 팔로 호출 버튼을 누르고(후진·확인 포함) 입구 앞 대기 지점까지 와서 문 선을 지나는 데 0.08 m/s·0.3 rad/s 로 약 45 s 가 걸려 30 s 로는 문이 먼저 닫혔다. 실제 열림 유지(보통 5~10 s)가 짧으면 이 순서로는 못 탄다 → 현장 측정·열림 연장 필요"
   initial_floor: F2
   initial_floor_source: "[제안값] 첫 호출에서 '도착 대기' 단계를 거치도록 반대층에서 시작"
   reopen_on_obstruction: true
@@ -130,6 +132,9 @@ robot:
     rear_caster_mu: 1.0
     front_caster_mu: 0.3
     source: "[제안값] 실제 볼캐스터는 구른다(고정 구 미끄럼 끌림 제거). 보조 바퀴 지상고 아직 모름 U-H06, 실제 바퀴 미끄럼·odom 오차 아직 모름 U-H08. 시뮬 단순화이며 실물 값이 아님"
+  top_deck:
+    top_z_m: 0.40
+    source: "[사진 추정] 2026-10-13 옆 사진: 상판(팔 받침이 놓인 흰·검은 판) 높이 약 0.40 m(몸체 길이 0.30 m 축척). URDF 섀시(0.053~0.303 m) 위 시각 전용 상판, 충돌체 없음(팔 실행 URDF 만). 실측 아님"
   imu: none
   imu_source: "9/12 기록상 실차 IMU 미발행. 현재 상태 아직 모름 U-H09"
   ground_truth_rate_hz: 20.0
@@ -164,11 +169,34 @@ lift:
   tolerance_m: 0.03
   timeout_s: 30.0
   source: "[가정값] 보관함 칸·배달 위치 높이 아직 모름 U-E07·U-E11. URDF lift_joint 행정 0~0.5 m, lift_cycle.py 기본 0.30 m 재사용. 실물 리프트 원점·리미트·하중 아직 모름 U-H10"
+  # 팔레트 적재 뒤 리프트 높이(--lift-stop). 택배를 너무 올리면 팔(0.70 m 장착)·팔 카메라를 가려 버튼을 못 누른다
+  # (사용자 2026-10-12 실물 관찰). ultrasonic: 몸체(마스트) 앞 초음파가 택배 윗면을 보면 멈춤. fixed: 조금만 올림.
+  # 지게팔 기둥·포크 위치(시뮬 전용 덮어쓰기, src URDF 는 그대로 0.165). 사진: 기둥은 몸체 앞면에 붙어 있고 포크 끝은
+  # 몸체 앞면에서 약 0.22 m 앞(축 기준 0.26 m).
+  mast_x_m: 0.02
+  fork_tip_x_m: 0.26
+  mast_source: "[사진 추정] 2026-10-13 옆 사진. URDF lead_screw_base_joint x 0.165 는 몸체 앞 0.09 m 떨어진 기둥이라 팔레트가 0.13 m 더 튀어나와 몸체 위 팔이 버튼에 닿지 않음. 기둥(두께 0.08)은 몸체 앞면에 붙어 x -0.02~0.06, 팔레트는 기둥 앞면에서 0.005 m 앞(Codex 2차: 기둥·팔레트 겹침 수정). 실측 아님"
+  carry:
+    mode: ultrasonic
+    fixed_lift_m: 0.08
+    load_top_offset_m: 0.295
+    max_lift_m: 0.45
+    speed_mps: 0.05
+    hold_tolerance_m: 0.01
+    source: "[가정값] 사용자 2026-10-12 '초음파로 택배가 일정 높이 이상 못 올라오게 하거나 지게팔을 조금만 올림'. 상승 속도·최대 높이 아직 모름(U-H10)"
+  ultrasonic:
+    mount_xyz: [0.062, 0.0, 0.55]
+    field_of_view_rad: 0.26
+    range_min_m: 0.02
+    range_max_m: 4.0
+    detect_range_m: 0.50
+    rate_hz: 10
+    source: "[가정값] 몸체 앞 지게팔 기둥(기둥 앞면 0.06 m 와 팔레트 뒷면 0.065 m 사이), 높이 0.55 m에 앞을 보는 초음파(HC-SR04 급 화각·거리). 시뮬은 가상 센서: 들고 있는 택배·팔레트 상자와의 기하 거리만 계산(벽·사람은 안 봄, Gazebo 센서 아님). 실제 장착 높이·모델 아직 모름"
 
 arm:
   # 4 DOF 서보 팔(사양서: 리치 60 cm). 자세 PWM 은 src/robot_arm_pkg/robot_arm_pkg/servo_protocol.py 를 읽어서 쓴다(복사 안 함).
-  mount_xyz: [-0.05, 0.15, 0.70]
-  mount_source: "[가정값] 사양·POSES_2 주석 '상단 좌측 장착 팔'. 실제 장착 위치 아직 모름(사양서 §미정, improvement_report §1.17)"
+  mount_xyz: [-0.06, -0.11, 0.42]
+  mount_source: "[사진 추정] 2026-10-13 사용자 사진(옆·위)과 지적('팔은 오른쪽, 공중에 뜨고 너무 앞으로 나옴'): 팔 받침 서보는 상판 오른쪽 앞. 몸체 길이 0.30 m(hardware_spec)를 축척으로 몸체 앞면에서 약 0.09 m 뒤(x -0.06), 중심에서 오른쪽 약 0.11 m(y -0.11), 상판 약 0.40 m 위 어깨축 약 0.47 m(받침 z 0.42 + 어깨 0.05). 실측 아님(improvement_report §1.17). 이전 값 [0.12, 0.15, 0.70]은 왼쪽·몸체 앞 0.09 m 허공이었음. 현장 servo_protocol.py POSES_2 주석은 '상단 좌측 장착 팔'이라 팀 확인 필요"
   joints:
     - {name: arm_joint_000, servo: '000', axis: [0, 0, 1], parent_offset: [0.0, 0.0, 0.0]}
     - {name: arm_joint_001, servo: '001', axis: [0, 1, 0], parent_offset: [0.0, 0.0, 0.05]}
@@ -180,11 +208,36 @@ arm:
     center_us: 1500
     rad_per_us: 0.0015707963
     sign: {'000': 1, '001': 1, '002': 1, '003': 1}
-    source: "[가정값] 표준 서보 1500 µs = 0°, ±1000 µs = ±90° (0.09°/µs). 실제 PWM→각도 대응·방향·영점 아직 모름(U-H04, Kim 확인 필요)"
+    offset_rad: {'001': -0.8, '002': -0.8, source: "[사진 추정] 아래 pwm_to_angle.source 참조"}
+    source: "[가정값] 표준 서보 1500 µs = 0°, ±1000 µs = ±90° (0.09°/µs). 실제 PWM→각도 대응·방향·영점 아직 모름(U-H04, Kim 확인 필요). 2026-10-13 어깨·팔꿈치 영점 -0.8 rad([사진 추정]): 사진의 접힌 자세(HOME 으로 해석)는 위팔이 거의 수직이라, 영점 0 이면 어깨가 위로 54°까지만 가서 몸체 위(어깨 0.47 m) 장착에서 버튼 누르기 거리 범위가 0.49~0.51 m 로 좁았음. -0.8 이면 HOME 위팔 82°·아래팔 47° 위(끝 0.97 m), 누르기 범위 층 버튼 0.34~0.51·호출 UP 0.30~0.48·DOWN 0.36~0.52 m"
+  # 보는 자세는 미리 정한 PWM(000 받침, 001 어깨, 002 팔꿈치, 003 손목) — 필요할 때마다 계산해 겨누지 않는다(사용자 2026-10-13).
+  # 모두 팔을 세운 자세(팔 끝이 장착점 앞 0.2 m 이내·높이 0.97~1.05 m, 관절 한계에서 10 µs 이상 떨어짐)이고 방향은 몸통이 맞춘다. *_press_view 는 누르기
+  # 사이클과 같은 정면 받침 각도(1500)로, 누르는 자세 바로 뒤 정렬점에서 버튼을 다시 본다.
+  view_poses:
+    parcel_view: [1500, 910, 2581, 1500]       # 바닥 택배(몸 앞 약 1 m)
+    pallet_view: [1500, 910, 2593, 1500]       # 팔레트 앞면(약 0.8 m, 화면 중심에서 13°)
+    hall_view: [1500, 1002, 2250, 1500]        # 호출 버튼(1 m 앞, 높이 0.68 m)
+    cabin_view: [1500, 1078, 2211, 1500]       # 캐빈 안 층 버튼(약 0.9 m)
+    hall_press_view: [1500, 1015, 2313, 1500]  # 호출 버튼 정렬점, 정면 고정
+    cabin_press_view: [1500, 989, 2326, 1500]  # 층 버튼 정렬점, 정면 고정
+    display_view: [1500, 1498, 1422, 1500]     # 문 위 층 표시(약 1.2 m, 높이 1.13 m)
+    source: "[제안값] 가정 팔 기하로 대표 거리의 대상을 화면 가운데에 두는 각도를 한 번 계산해 고정. 실제 팔은 Kim 티칭 자세(camera_views.json)로 바꿔야 함"
+  press_cycle: {call: 1, destination: 2, source: "메뉴 1/2 식별자는 유지. 2026-10-14 사용자 지시로 두 사이클 모두 yaw/roll 1500 고정, shoulder/elbow pitch만 이동"}
+  pwm_limits_us: [900, 2600]
+  pwm_limits_source: "src/robot_arm_pkg/robot_arm_pkg/servo_protocol.py PWM_LIMITS(네 서보 모두 900~2600, 2026-10-12 확인). 가정 대응으로 각도 -0.94~+1.6 rad"
   tolerance_rad: 0.05
   hold_friction_nm: 5.0
   collision: false
   collision_source: "[가정값] 팔 링크는 시각만(충돌 없음). LiDAR 가림 U-H05 와 버튼 실제 접촉은 모델하지 않는다"
+  # 팔 끝 카메라(--arm-sim --gui 실행만, robot_arm_cam.urdf). 카메라 센서는 화면(GL)이 있어야 렌더링된다.
+  camera:
+    xyz: [0.0, 0.0, 0.03]
+    rpy: [0.0, 1.6, 0.0]
+    hfov_rad: 1.13
+    width: 320
+    height: 240
+    update_rate_hz: 6
+    source: "[가정값] 사양서 '웹캠 2개 — 로봇팔 visual servoing'. 팔 끝 링크 위 3 cm 에 달려 팔 끝 축에서 아래로 약 92°(pitch 1.6 rad) 숙여 본다고 가정(2026-10-13, 사진: 팔을 세웠을 때 웹캠이 앞을 봄; 세운 팔로 바닥 택배·버튼·층 표시를 모두 보게). 실제 장착 위치·방향·화각(65° 가정)·해상도 아직 모름. 시연용 320×240·6 Hz(소프트웨어 렌더링 부하)"
 
 parcel:
   size_m: [0.30, 0.20, 0.20]
@@ -194,3 +247,159 @@ parcel:
   locker_slot_offset_m: [0.55, 0.0, 0.40]
   locker_source: "[가정값] f1_locker 정차 자세 기준 앞 0.55 m·높이 0.40 m 에 상자가 있다고 가정. 보관함 칸 치수·위치 아직 모름 U-E07"
   mode: "attach/detach mock (충돌·질량 없음, 캐리어 자세를 따라 옮김). 실제 접촉·파지·하중 검증 아님"
+  # --parcels 2|3: 첫 상자 위에 쌓아 함께 싣고 내리는 추가 상자(같은 attach/detach mock)
+  stack_items:
+    - size_m: [0.24, 0.18, 0.10]
+      yaw_rad: 0.12
+      color: [0.60, 0.44, 0.27]
+    - size_m: [0.18, 0.14, 0.08]
+      yaw_rad: -0.10
+      color: [0.71, 0.55, 0.36]
+  stack_source: "[가정값] --load box --parcels 시연용 추가 상자 규격·쌓는 방식. 실제 택배 규격·적재 방법 아직 모름"
+  # --load pallet (기본): 픽업 지점 바닥 팔레트(팔레트당 택배 1개). --parcels N 이면 팔레트 N개가 놓이고 로봇은
+  # 정차 자세 앞 첫 팔레트를 지게팔 캐리어로 포켓에 넣어 들어 운반·하역한다(attach/detach mock, 접촉·하중·정렬 검증 아님).
+  pallet:
+    size_m: [0.28, 0.40, 0.12]
+    pocket_height_m: 0.10
+    stringer_width_m: 0.04
+    deck_boards: 5
+    deck_thickness_m: 0.02
+    rear_gap_m: 0.005
+    fork_half_thickness_m: 0.025
+    color: [0.15, 0.45, 0.25]
+    pickup_right_m: 0.95
+    pickup_ahead_m: 0.0
+    parcel: {size_m: [0.26, 0.30, 0.20], xy: [0.0, 0.0], yaw_rad: 0.0, color: [0.66, 0.49, 0.30], source: "[가정값] 팔레트 위 택배 1개 규격(2026-10-13 깊이 0.30→0.26, 팔레트에 맞춤)"}
+    waiting_offsets_m: [[0.0, 0.65], [0.0, -0.65]]
+    attach_max_gap_m: 0.06
+    waiting_colors: [[0.60, 0.44, 0.27], [0.71, 0.55, 0.36]]
+    source: "[가정값] 2방향 초록 플라스틱 팔레트(양 끝 받침 2개, 가운데 포켓 폭 0.32 m·높이 0.10 m)를 캐리어(URDF 0.08×0.14×0.05 m)에 맞춘 시연 치수, 팔레트당 택배 1개(사용자 2026-10-12). 2026-10-13 깊이 0.40→0.28 m: 사진의 포크 길이(약 0.22 m)에 맞춤(팔레트를 실은 앞 끝 0.57→0.36 m). 위치: f1_locker 로 들어가는 방향 기준 오른쪽 0.95 m, 포켓은 f1_locker 쪽을 향함(사용자 2026-10-12). 대기 팔레트는 그 팔레트 기준 옆 0.65 m. 로봇은 카메라로 찾아 odom 으로 포켓 앞에 붙는다(perception). 실제 팔레트·택배 규격·위치 아직 모름"
+  color: [0.66, 0.49, 0.30]
+  look_source: "시각 표현만(골판지 색·테이프·송장). 충돌·질량 없음"
+
+# --dressed (building_dressed.world): 시연용 시각 장식. 모든 요소가 <visual> 뿐이고 <collision>이 없어
+# LiDAR(Gazebo ray 센서는 충돌체만 봄)·물리·판정 지표는 building.world 와 같다. 생성 때 두 월드의 충돌체가
+# 같은지 검사하고 다르면 멈춘다.
+dressing:
+  demo_buttons:
+    car_board_m: [0.205, 0.16]
+    car_caps: [["1", -0.049, 0.040], ["2", 0.049, 0.040], ["3", -0.049, -0.040], ["4", 0.049, -0.040]]
+    hall_board_m: [0.135, 0.205]
+    hall_caps: [["UP", 0.0, 0.025], ["DOWN", 0.0, -0.0595]]
+    cap_diameter_m: 0.055
+    cap_height_m: 0.02
+    board_thickness_m: 0.005
+    sim_mount_block_m: 0.03
+    source: "사용자 2026-10-13 시연 버튼 사진·치수: 층 버튼판 가로 20.5 x 세로 16 cm(위 1 2, 아래 3 4), 승하차 버튼판 가로 13.5 x 세로 20.5 cm(위 ▲, 아래 ▼). 검은 판·흰 원형 캡·검은 숫자/삼각형. 캡 위치 [오른쪽, 위](판을 마주 본 사람 기준, 판 중심에서 m)·지름 약 5.5 cm·높이 약 2 cm 는 사진 비율 [사진 추정]. 층 버튼판은 엘리베이터 내부 기준 왼쪽 벽, 승하차 버튼판은 승강장에서 볼 때 문 오른쪽"
+    height_source: "사용자 2026-10-13: 높이는 젯슨에 넣어 둔 버튼 각도로 누를 수 있는 위치. servo_protocol.py(6107e25, 젯슨 작업 트리 2026-09-13) 사이클의 누름 유지 자세를 가정 팔 기하로 정운동학해 층 버튼판은 1·2 줄, 승하차 버튼판은 로비 ▲·목표층 ▼ 캡 중심을 그 팔 끝 높이에 둔다(약 0.68 m). 가로 위치는 로봇이 그 사이클로 누르는 자세에서 캐빈 정지점과 같은 줄에 서도록. 가정 대응(U-H04)이 틀리면 높이도 틀림"
+  floor_display:
+    width_m: 0.30
+    height_m: 0.18
+    center_z_m: 1.13
+    source: "사용자 2026-10-12: 층수 확인 화면은 엘리베이터 입구 위. 높이·크기는 [가정값](시뮬 벽 1.0 m 위 문틀 위에 붙임). 숫자는 /elevator/state 의 층을 7-세그먼트로 표시"
+  hall_panel_offset_m: 0.25
+  hall_panel_side: {F1: right, F2: right, source: "사용자 2026-10-13: F2 잡음 제거·벽 평탄화 후 양 층 호출판 오른쪽 복원"}
+  hall_panel_source: "사용자 2026-10-13: 탈 때 누르는 호출 버튼은 엘리베이터 오른쪽(승강장에서 엘리베이터를 볼 때). 로비(F1)는 올라가기, 목표층(F2)은 내려가기. 문 가장자리에서 0.25 m 옆·높이는 [가정값]. 실제 위치·높이 아직 모름"
+  handrail_z_m: 0.85
+  handrail_source: "[가정값] 캐빈 뒷벽 손잡이. 실제 유무·높이 아직 모름"
+  cabin_region_radius_m: 1.7
+  cabin_region_source: "지도 기하. 캐빈 기준 waypoint 에서 자유 셀을 채워 바닥·벽 마감 위치를 정함(문 선 ±0.08 m 는 막음)"
+  pickup_marking_margin_m: 0.10
+  pickup_prior_source: "로봇이 아는 사전 정보(티칭값 가정): 택배 구역은 f1_locker 로 들어가는 방향 오른쪽. 정확한 위치는 카메라로 찾는다"
+  pickup_source: "[가정값] 보관함 대신 바닥 픽업 구역 표시(노란 테이프). 팔레트 둘레 0.10 m 여유"
+
+# --arm-sim 로봇 쪽 인식(perception.py)과 버튼·팔레트 동작(skills.py). 지면 진실은 평가에만 쓴다.
+perception:
+  hsv:
+    parcel: [[[8, 90, 50], [22, 200, 255]]]
+    pallet: [[[50, 90, 40], [85, 255, 255]]]
+    button: [[[0, 0, 110], [180, 70, 255]]]
+    board: [[[0, 0, 0], [180, 255, 45]]]
+    digit: [[[0, 150, 120], [6, 255, 255]], [[172, 150, 120], [180, 255, 255]]]
+    lamp: [[[10, 201, 150], [38, 255, 255]]]
+    source: "[제안값] OpenCV HSV(H 0~180). 골판지·테이프(채도 200 이하로 주황 캐리어·호박색 램프 제외, 노란 바닥 테이프 H 24 제외), 초록 팔레트, 흰 버튼 캡(검은 버튼판 안에서만 찾음, 흰 벽과 구분), 검은 버튼판, 빨간 7-세그먼트. 시뮬 색 약속이며 실제 인식기는 아님"
+  min_blob_px: 150
+  lamp_match_px: 10
+  button_min_px: 8
+  board_min_px: 150
+  digit_min_px: 15
+  digit_one_max_aspect: 0.4
+  parcel_mid_z_m: 0.22
+  pallet_face_width_m: [0.30, 0.50]
+  predock_m: 0.85
+  button_protrusion_m: 0.055
+  contact_radius_m: 0.025
+  contact_depth_m: [-0.004, 0.06]
+  source: "[제안값]/[가정값] 택배 높이 중간(팔레트 0.12+상자 절반 0.10), 팔레트 앞 0.85 m 에서 다시 보기. 버튼: 시뮬 캡 면은 LiDAR 평균 벽면에서 5.5 cm(받침대 3 cm(시뮬 전용: 지도 계단 벽 5 cm 셀을 덮음) + 판 0.5 cm + 캡 2 cm; 현장 설정은 2.5 cm), 접촉 판정 반경 2.5 cm(캡 반지름 2.75 cm 안). 팔 끝이 캡 면 0.4 cm 앞~6 cm 뒤에 있으면 눌림(면보다 더 밀면 실물은 판에 막혀 눌린 채 멈춤; 2026-10-13 벽 모양 때문에 깊이 추정이 약 2 cm 틀려 3.3 cm 밀었을 때 3 cm 상한이 누름을 놓침)"
+  # 공유 상태기계(tools/jetson_skill_tests) 시뮬 설정. 현장 값은 그 폴더 config/skill_tests.yaml
+  press_push_m: 0.01
+  press_height_tol_m: 0.10
+  front_stop_m: 0.02
+  reaim_m: 0.02
+  depth_adjust_max_m: 0.05
+  press_view: {call: hall_press_view, destination: cabin_press_view, source: "정렬점에서 다시 볼 때의 고정 자세(누르기 사이클과 같은 받침 각도)"}
+  recheck_max: [0.20, 0.10, 0.2]
+  confirm_by: {call: [lamp], destination: [lamp], source: "사용자 2026-10-13: 실물은 종이컵이지만 시뮬 버튼은 누르면 불이 켜진다고 가정. 요청 버튼 램프 영상만으로 누름 확인. 문/층 표시창은 누름 판정에서 제외"}
+  stance_source: "[제안값] 2026-10-13 누르기는 젯슨과 같은 티칭 사이클(arm.press_cycle). 정지 자세는 사이클 누름 자세의 팔 끝(정운동학)이 버튼 면을 1 cm 지나 벽에 수직으로 닿게. 팔 끝 착지 허용: 깊이 1.2 cm·옆 2 cm·방향 0.06 rad. 높이 확인 10 cm(1 m 거리 카메라 높이 추정이 보기 자세 관절 오차 0.05 rad 때문에 ±7 cm 흔들려 3·6 cm 는 정상 버튼도 거부, 2026-10-13) — 판을 크게 잘못 붙인 경우만 거름"
+  press_retries: 1
+  back_off_m: 0.30
+  line_up_m: 0.25
+  slow_v: 0.05
+  cabin_v: 0.08
+  button_view_m: 1.0
+  door_open_margin_m: 0.6
+  door_align_m: 0.7
+  door_through_m: 0.55
+  door_width_m: [0.7, 1.4]
+  door_lateral_tol_m: 0.12
+  door_jamb_range_diff_m: 0.35
+  door_match_m: 0.45
+  door_match_rad: 0.45
+  door_centre_tol_m: 0.03
+  press_envelope_m: [0.012, 0.02, 0.06]
+  floor_reconfirm_frames: 2
+  approach_tol_m: 0.30
+  scan_yaws_rad: [0.0, 0.35, -0.35]
+  view_margin_frac: 0.15
+  view_margin_source: "[제안값] 팔 카메라 자세 판정: 목표가 화면 가장자리에서 폭·높이의 15% 안쪽에 투영되면 본 것으로 함(정중앙 조준 아님). 2026-10-13 축 오차 기준(5°, 12°)은 가정 팔 기하(손목 roll 축)에서 장착점-목표 수평 0.8 m 미만이면 조준이 안 되어 실패(smoke 20261013_120120, 20261013_121143)"
+  look_back_steps: 2
+  look_back_m: 0.10
+  confirm_window_s: 12.0
+  door_confirm_margin_m: 0.3
+  display_ahead_m: 1.2
+  confirm_window_source: "[제안값] 누른 뒤 램프·문 열림(LiDAR)을 6 s 동안 0.5 s 간격으로 다시 확인. 호출 램프는 엘리베이터 도착 순간 꺼지고 문은 2.5 s 걸려 열리므로 한 번만 보면 그 사이에 걸릴 수 있음(smoke 20261013_121732 첫 누름 미확인)"
+  look_back_source: "[제안값] 버튼이 화면 밖이거나 못 찾으면 팔 접고 0.10 m 후진(뒤 LiDAR 검사) 뒤 다시 보기, 최대 2회"
+  safety:
+    odom_max_age_s: 0.5
+    scan_max_age_s: 0.6
+    front_m: 0.05
+    rear_m: 0.05
+    sweep_m: 0.03
+    source: "[제안값] Codex 검수(2026-10-13) 반영: 모든 주행 명령을 앞/뒤/회전 쓸림 여유로 검사, 오래된 odom·scan 이면 정지. 회전은 짐 포함 몸체 사각형이 앞으로 10° 쓸리는 영역만 본다"
+  door_timeout_s: 90
+  call_retries: 1
+  floor_confirm_frames: 3
+  floor_period_s: 0.5
+  floor_timeout_s: 120
+  scan_dist_m: 0.95
+  scan_z_m: 0.2
+  same_parcel_m: 0.25
+  face_looks: 2
+  face_z_m: 0.05
+  dock_v: 0.05
+  undock_m: 0.30  # [제안값] 적재 후 회전 전에 곧게 후진해 벽 여유를 확보
+  arm_clear_top_m: 0.60
+  unload_back_out_m: 0.45
+  machine_source: "[제안값] 버튼: 앞부분(팔레트 포함)과 벽 사이 0.05 m 까지 붙되 팔 장착점-버튼 0.48 m(가정 도달 0.43~0.60) 이상, 0.30 m 후진 뒤 카메라로 불 확인, 1회 재시도. 승강장: 버튼 1.0 m 앞에서 보기, 문 열림 = 정면 LiDAR 거리 > 문까지+0.6 m. 층수: 카메라 3회 연속(시뮬, 현장 기본 5). 택배: 오른쪽 90° 돈 뒤 0.95 m 앞을 좌·중·우로 훑음, 팔레트 앞 0.85 m 에서 두 번 다시 봄, 택배 윗면 0.60 m 이하(팔 장착 0.70 m). 실제 값 아직 모름"
+
+# 사용자 2026-10-13 승인: 이 영역만 정리. 원본 현장 지도는 불변.
+f2_cleanup:
+  enabled: true
+  center: [-11.925, -1.925]
+  axis_rad: 0.741948
+  along_m: [-2.5, 3.0]
+  normal_m: [-1.2, 1.9]
+  cabin_planes_m: [-0.90, 0.85, 1.65]
+  opening_m: 1.0
+  wall_thickness_m: 0.10
+  source: "지도 기하: 기존 문 축, raw 측벽 셀 중앙값 t=-0.897/+0.832·뒤벽 n=1.648 m를 5 cm 단위로 정리. 문폭 1.0 m 기존 제안값. 실제 치수 검증 아님. 이 영역 밖 셀 불변"

@@ -5,9 +5,9 @@ import numpy as np
 FOOTPRINT = np.array([[.033,.219],[.033,-.219],[-.327,-.219],[-.327,.219]])
 
 
-def polygon(x, y, yaw):
+def polygon(x, y, yaw, footprint=None):
     c, s = math.cos(yaw), math.sin(yaw)
-    return FOOTPRINT @ np.array([[c,s],[-s,c]]) + [x,y]
+    return np.asarray(FOOTPRINT if footprint is None else footprint) @ np.array([[c,s],[-s,c]]) + [x,y]
 
 
 def segment_distances(points, starts, ends):
@@ -16,7 +16,7 @@ def segment_distances(points, starts, ends):
     return np.linalg.norm(points-starts-fraction[...,None]*d, axis=-1)
 
 
-def minimum_clearance(boxes, x, y, yaw):
+def minimum_clearance(boxes, x, y, yaw, footprint=None):
     boxes = np.asarray(boxes)
     # A remote box cannot improve a local minimum < 2 m.
     delta = np.array([x,y])-boxes[:,:2]
@@ -25,14 +25,15 @@ def minimum_clearance(boxes, x, y, yaw):
     center_distance = np.linalg.norm(np.maximum(np.abs(local_delta)-boxes[:,2:4]/2,0),axis=1)
     # The farthest footprint vertex is < .4 m from the origin. Therefore any
     # wall > .8 m farther from the centre cannot beat the nearest centre wall.
-    nearby = boxes[center_distance <= center_distance.min()+.8]
+    radius = float(np.linalg.norm(FOOTPRINT if footprint is None else footprint, axis=1).max())
+    nearby = boxes[center_distance <= center_distance.min()+2*radius]
     signs = np.array([[-1,-1],[-1,1],[1,1],[1,-1]])
     local = signs[None,:,:]*nearby[:,None,2:4]/2
     c, s = np.cos(nearby[:,4]), np.sin(nearby[:,4])
     walls = np.empty_like(local)
     walls[:,:,0] = nearby[:,None,0]+c[:,None]*local[:,:,0]-s[:,None]*local[:,:,1]
     walls[:,:,1] = nearby[:,None,1]+s[:,None]*local[:,:,0]+c[:,None]*local[:,:,1]
-    body = polygon(x,y,yaw)
+    body = polygon(x,y,yaw,footprint)
     angles = np.unique(nearby[:,4])
     axes = np.array([[math.cos(a),math.sin(a)] for a in [yaw,*angles]] +
                     [[-math.sin(a),math.cos(a)] for a in [yaw,*angles]])

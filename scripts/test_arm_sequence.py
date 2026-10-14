@@ -74,13 +74,18 @@ def main():
         assert table[sp.HOME_POSE] is sp.HOME, f"POSES_{cid}: home 은 공용 HOME 이어야 함"
     assert set(sp.POSES_1) == {"home", "press_ready", "pre_press", "press", "retreat"}
     assert set(sp.POSES_2) == {"home", "press_ready", "pre_press2", "press2", "retreat2"}
-    tuned = {"press": {"000": 1500, "001": 2100, "002": 1800, "003": 1200}}
-    assert sp.pose_command("press", 1000, tuned) == "{#000P1500T1000!#001P2100T1000!#002P1800T1000!#003P1200T1000!}"
+    tuned = {"press": {"000": 1500, "001": 2100, "002": 1800, "003": 1500}}
+    assert sp.pose_command("press", 1000, tuned) == "{#000P1500T1000!#001P2100T1000!#002P1800T1000!#003P1500T1000!}"
+    # Custom poses cannot bypass the user's pitch-only policy.
+    for sid in ("000", "003"):
+        rotated = {"press": dict(tuned["press"], **{sid: 1600})}
+        expect_raise(sp.pose_command, "press", 1000, rotated)
     # 2·3번 표는 독립 튜닝 대상 — 값 자체는 고정하지 않고, 각 표의 모든 PWM 이 안전 범위인지만 본다
     for cid, table in sp.POSE_TABLES.items():
         for pose_name, pose in table.items():
             for servo_id, pwm in pose.items():
                 sp.check_pwm(servo_id, pwm)
+            assert pose["000"] == pose["003"] == 1500
     assert sp.homing_command() == sp.pose_command("home", sp.HOMING_DURATION_MS)
     assert sp.homing_command(3000) == "{#000P1500T3000!#001P1100T3000!#002P2400T3000!#003P1500T3000!}"
     assert sp.STOW is sp.HOME and sp.STOW_USER_CONFIRMED and not sp.STOW_PHYSICALLY_VERIFIED

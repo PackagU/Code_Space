@@ -6,6 +6,8 @@
 #   bash sim/real_maps/start_sim.sh --world building --floor F1 --spawn f1_initial_test   # two floors + elevator
 #   bash sim/real_maps/start_sim.sh --stop
 # Options: --name NAME --initial WAYPOINT --lidar-noise on|off --odom encoder|world --no-record --arm-sim
+#          --parcels 1..3 (with --arm-sim) --speed X ([시연용] real-time factor, physics step stays 1 ms)
+#          --world building_dressed (visual-only cabin/landing/locker dressing, same collisions as building)
 # Env: SIM_REBUILD=1 (force colcon build), SIM_REGENERATE=1 (force world generation)
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -19,7 +21,7 @@ while (($#)); do
     --spawn) SPAWN="$2"; shift 2 ;;
     --world) WORLD="$2"; shift 2 ;;
     --name) NAME="$2"; shift 2 ;;
-    --initial|--lidar-noise|--odom) EXTRA+=("$1" "$2"); shift 2 ;;
+    --initial|--lidar-noise|--odom|--speed|--parcels) EXTRA+=("$1" "$2"); shift 2 ;;
     --no-record|--arm-sim) EXTRA+=("$1"); shift ;;
     --gui) GUI=1; shift ;;
     --stop) STOP=1; shift ;;
@@ -81,6 +83,10 @@ PY
         GAZEBO_MODEL_DATABASE_URI= gzclient > logs/real_map_sim/$NAME/gzclient.log 2>&1"
       docker exec -d -w /ros2_ws "$CNAME" bash -c "source /opt/ros/humble/setup.bash && \
         rviz2 -d sim/real_maps/nav2_view.rviz --ros-args -p use_sim_time:=true > logs/real_map_sim/$NAME/rviz.log 2>&1"
+      for _ in $(seq 1 15); do   # Gazebo camera follows the robot (observation only)
+        docker exec "$CNAME" gz camera -c gzclient_camera -f packagu_sim >/dev/null 2>&1 && break; sleep 2
+      done
+      (python3 "$ROOT_DIR/sim/real_maps/arrange_gui.py" --container "$CNAME" --wait 120 >/dev/null 2>&1 &)
     fi
     echo "goal:  python3 sim/real_maps/sim_goal.py --name $NAME --to f1_locker"
     echo "stop:  bash sim/real_maps/start_sim.sh --stop"

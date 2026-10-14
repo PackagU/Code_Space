@@ -39,6 +39,7 @@ from nav2_msgs.action import NavigateToPose
 from sensor_msgs.msg import JointState, LaserScan
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Empty
+from rcl_interfaces.srv import SetParameters
 from rcl_interfaces.msg import Log
 from lifecycle_msgs.srv import GetState
 from tf2_ros import Buffer, TransformListener
@@ -58,7 +59,9 @@ WORLD = yaml.safe_load((HERE/'world_params.yaml').read_text())
 NAV_MAPS = {'F1': MAPS/'f1/f1_manual_clean_v3.yaml', 'F2': MAPS/'f2/f2_nav_unknown_v1.yaml'}
 BOXES = {'f1': {'F1': 'f1_boxes.json'}, 'f2': {'F2': 'f2_boxes.json'},
          'f2_door_open': {'F2': 'f2_door_open_boxes.json'},
-         'building': {'F1': 'f1_boxes.json', 'F2': 'f2_door_open_boxes.json'}}
+         'building': {'F1': 'f1_boxes.json', 'F2': 'f2_flat_boxes.json' if WORLD.get('f2_cleanup', {}).get('enabled') else 'f2_door_open_boxes.json'},
+         'building_dressed': {'F1': 'f1_boxes.json', 'F2': 'f2_flat_boxes.json' if WORLD.get('f2_cleanup', {}).get('enabled') else 'f2_door_open_boxes.json'}}
+TWO_FLOOR = ('building', 'building_dressed')   # building_dressed = same collisions + visual-only dressing
 CORNER, CORNER_RADIUS = (-12.95, -5.25), 3.0   # F2 user-designated wall-proximity corner
 NAV_NODES = ['map_server', 'amcl', 'controller_server', 'smoother_server', 'planner_server',
              'behavior_server', 'bt_navigator', 'waypoint_follower', 'velocity_smoother']
@@ -69,7 +72,7 @@ TOPICS = ['/clock', '/scan', '/odom', '/tf', '/tf_static', '/sim/ground_truth', 
           '/nav_safety/status', '/nav_safety/stopped', '/navigate_to_pose/_action/status', '/initialpose',
           '/map', '/elevator/state', '/floor_orchestrator/status', '/sim/elevator/command',
           '/sim/mission_stage', '/sim/payload_state', '/joint_states', '/sim/parcel/state', '/set_arm_trajectory',
-          '/set_lift_trajectory']
+          '/set_lift_trajectory', '/sim/ultrasonic_front']
 LOG_EVENTS = {'collision ahead': 'collision_ahead', 'starting point in lethal space': 'lethal_start',
               'control loop missed': 'controller_missed', 'running spin': 'recovery_spin',
               'running backup': 'recovery_backup', 'running wait': 'recovery_wait',
@@ -139,10 +142,10 @@ class Monitor(Node):
         self.set_parameters([Parameter('use_sim_time', value=True)])
         self.world = world
         # Floor offsets exist only in the two-floor world; single-floor worlds sit at the map origin.
-        self.offsets = {f: (WORLD['floors'][f]['world_offset'] if world == 'building' else [0.0, 0.0, 0.0])
+        self.offsets = {f: (WORLD['floors'][f]['world_offset'] if world in TWO_FLOOR else [0.0, 0.0, 0.0])
                         for f in BOXES[world]}
         self.boxes = {f: np.array(json.loads((HERE/'generated'/n).read_text())) for f, n in BOXES[world].items()}
-        self.doors = json.loads((HERE/'generated/doors.json').read_text()) if world == 'building' else {}
+        self.doors = json.loads((HERE/'generated/doors.json').read_text()) if world in TWO_FLOOR else {}
         self.extents = {}
         for f in self.offsets:
             cfg = yaml.safe_load(NAV_MAPS[f].read_text())
@@ -230,7 +233,8 @@ class Monitor(Node):
         leaves = self.leaf_boxes(floor)
         if leaves:
             boxes = np.vstack([boxes, np.array(leaves)])
-        return minimum_clearance(boxes, x, y, yaw)
+        footprint = Stack.footprint((self.parcel or {}).get('state') == 'attached') if getattr(self, 'arm_model', False) else None
+        return minimum_clearance(boxes, x, y, yaw, footprint)
 
     # ------------------------------------------------------------ callbacks
     def on_truth(self, msg):
@@ -413,33 +417,96 @@ class Stack:
     """One simulation run directory; owns or attaches to the simulation processes."""
 
     def __init__(self, name, world='f1', floor='F1', params='P0', spawn='f1_initial_test', initial=None,
-                 lidar_noise=True, odom='encoder', record=True, attach=False, arm=False):
+                 lidar_noise=True, odom='encoder', record=True, attach=False, arm=False, speed=1.0, parcels=1,
+                 gui=False, load='pallet', lift_stop=None, initial_elevator_floor=None, initial_load=False):
         if Path(name).name != name or not name:
             raise SystemExit('invalid run name')
         self.name, self.world, self.floor, self.params = name, world, floor, params
+        self.nav_maps = dict(NAV_MAPS)
+        self.floor_registry = HERE/'floor_maps_real.yaml'
+        if world in TWO_FLOOR and WORLD.get('f2_cleanup', {}).get('enabled'):
+            self.nav_maps['F2'] = HERE/'generated/f2_sim_flat.yaml'
+            self.floor_registry = HERE/'generated/floor_maps_sim_flat.yaml'
         self.dir = LOG/name
         if not attach and (self.dir/'bag').exists():
             raise SystemExit(f'existing bag in {self.dir}; choose a new --name (runs are never overwritten)')
         self.dir.mkdir(parents=True, exist_ok=True)
+        from sim_map_guard import pin_map
+        self.sim_map_pins = {f: pin_map(path) for f, path in self.nav_maps.items() if path != NAV_MAPS[f]}
+        if self.sim_map_pins:
+            (self.dir/'sim_map_pins.json').write_text(json.dumps(self.sim_map_pins, indent=2))
         self.spawn = resolve_pose(spawn)
         self.initial = resolve_pose(initial) if initial is not None else self.spawn
         if arm:
             if odom != 'encoder' or not lidar_noise:
                 raise SystemExit('--arm-sim uses robot_arm.urdf (encoder odom, LiDAR noise on) only')
-            self.robot = HERE/'generated/robot_arm.urdf'
+            # The arm-tip camera needs a display to render (no Xvfb in the image): GUI runs and --load pallet runs
+            # (camera-based pallet/button skills) use the X11-enabled container and robot_arm_cam.urdf.
+            self.robot = HERE/'generated'/('robot_arm_cam.urdf' if gui or load == 'pallet' else 'robot_arm.urdf')
         elif odom == 'world':
             self.robot = HERE/'generated/robot_world.urdf'
         else:
             self.robot = HERE/'generated'/('robot.urdf' if lidar_noise else 'robot_nonoise.urdf')
         self.record, self.odom_profile, self.lidar_noise, self.arm = record, odom, lidar_noise, arm
+        self.speed, self.parcels, self.gui, self.load = float(speed), int(parcels), gui, load
+        self.initial_elevator_floor, self.initial_load = initial_elevator_floor, initial_load
+        self.lift_stop = lift_stop or WORLD['lift']['carry']['mode']
         self.node = Monitor(world, 'real_map_sim_attach' if attach else 'real_map_sim_monitor')
+        self.node.arm_model = arm
         self.node.progress_path = self.dir/'progress.json'
+        self.nav_params_file = CONFIG/NAV_PARAMS[self.params]
+        if arm:
+            self.nav_params_file = self.dir/'nav2_sim_payload.yaml'
+            profile = yaml.safe_load((CONFIG/NAV_PARAMS[self.params]).read_text())
+            for costmap in ('local_costmap', 'global_costmap'):
+                profile[costmap][costmap]['ros__parameters']['footprint'] = json.dumps(self.footprint(False))
+                profile[costmap][costmap]['ros__parameters']['footprint_padding'] = .15
+            self.nav_params_file.write_text(yaml.safe_dump(profile))
         self.processes = Processes(self.dir)
         self.nav = self.recorder = None
         self.bag = self.dir/'bag'
         self.result = {'name': name, 'validation_scope': 'simulation', 'world': world, 'floor': floor,
                        'params': params, 'odometry': odom, 'lidar_noise': lidar_noise, 'arm_sim': arm,
+                       'sim_speed_target': 'max' if float(speed) == 0 else float(speed), 'parcels': int(parcels) if arm else 0,
+                       'load': load if arm else None,
+                       'lift_stop': (lift_stop or WORLD['lift']['carry']['mode']) if arm and load == 'pallet' else None,
+                       'dressed_visual_only': world == 'building_dressed',
                        'provisional_dimensions': True, 'error': None}
+
+    @staticmethod
+    def footprint(loaded):
+        fp = WORLD['robot']['footprint']
+        rear = min(p[0] for p in fp)
+        half = max(abs(p[1]) for p in fp)
+        front = max(max(p[0] for p in fp), float(WORLD['lift']['fork_tip_x_m']))
+        if loaded:
+            from dressing import pallet_center_ahead
+            pal = WORLD['parcel']['pallet']
+            front = max(front, pallet_center_ahead(pal)+pal['size_m'][0]/2)
+            half = max(half,pal['size_m'][1]/2)
+        return [[front,half],[front,-half],[rear,-half],[rear,half]]
+
+    def update_footprint(self, loaded):
+        if not self.arm or getattr(self, '_footprint_loaded', None) == bool(loaded):
+            return
+        value = json.dumps(self.footprint(loaded))
+        parameter = Parameter('footprint', value=value).to_parameter_msg()
+        for node_name in ('local_costmap/local_costmap', 'global_costmap/global_costmap'):
+            client = self.node.create_client(SetParameters, f'/{node_name}/set_parameters')
+            try:
+                if not client.wait_for_service(timeout_sec=5):
+                    raise RuntimeError(f'{node_name} footprint service unavailable')
+                future = client.call_async(SetParameters.Request(parameters=[parameter]))
+                if not self.node.wait(future.done, 10):
+                    raise RuntimeError(f'{node_name} footprint update timeout')
+                result = future.result()
+                if result is None or not all(r.successful for r in result.results):
+                    raise RuntimeError(f'{node_name} footprint rejected')
+            finally:
+                self.node.destroy_client(client)
+        self._footprint_loaded = bool(loaded)
+        self.node.pause(.5)
+        self.result.setdefault('payload_footprints',[]).append({'loaded': bool(loaded), 'outline': self.footprint(loaded)})
 
     @classmethod
     def attach(cls, name):
@@ -450,17 +517,24 @@ class Stack:
         return stack
 
     # ------------------------------------------------------------ bring-up
+    def guard_map(self, stage):
+        if self.floor in self.sim_map_pins:
+            from sim_map_guard import guard as generated_guard
+            generated_guard(self.sim_map_pins[self.floor], stage, self.dir)
+        else:
+            guard(self.floor, stage, self.dir)
+
     def config_hashes(self):
-        files = {'nav2_params': CONFIG/NAV_PARAMS[self.params], 'nav_safety': ROOT/'src/drive_pkg/config/nav_safety.yaml',
+        files = {'nav2_params': self.nav_params_file, 'nav_safety': ROOT/'src/drive_pkg/config/nav_safety.yaml',
                  'drive_calib': ROOT/'src/drive_pkg/config/drive_calib.yaml', 'waypoints': MAPS/'waypoints.json',
                  'map_pins': MAPS/'map_pins.json', 'world_params': HERE/'world_params.yaml', 'robot_urdf': self.robot}
-        files.update({f'map_{f}_yaml': NAV_MAPS[f] for f in self.node.offsets})
+        files.update({f'map_{f}_yaml': self.nav_maps[f] for f in self.node.offsets})
         for f in self.node.offsets:
-            image = yaml.safe_load(NAV_MAPS[f].read_text())['image']
-            files[f'map_{f}_pgm'] = NAV_MAPS[f].parent/image
+            image = yaml.safe_load(self.nav_maps[f].read_text())['image']
+            files[f'map_{f}_pgm'] = self.nav_maps[f].parent/image
         files['world'] = HERE/f'generated/{self.world}.world'
-        if self.world == 'building':
-            files['floor_maps_real'] = HERE/'floor_maps_real.yaml'
+        if self.world in TWO_FLOOR:
+            files['floor_maps_real'] = self.floor_registry
         self.config_files = files
         return {k: sha12(v) for k, v in files.items()}
 
@@ -469,7 +543,7 @@ class Stack:
         node = self.node
         self.result['config_sha256_12'] = self.config_hashes()
         self.result['provenance'] = provenance(self.dir, self.config_files)
-        guard(self.floor, 'pre-nav', self.dir)
+        self.guard_map('pre-nav')
         self.processes.start('gazebo', ['gzserver', '--verbose', str(HERE/f'generated/{self.world}.world'),
                                         '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so'])
         rsp = self.dir/'rsp.yaml'
@@ -485,6 +559,8 @@ class Stack:
         node.wait(lambda: (node.truth is not None and node.scan is not None) or spawn.poll() not in (None, 0), 120)
         if spawn.poll() not in (None, 0):
             raise RuntimeError('robot spawn failed; see spawn.log')
+        if self.gui:
+            self.start_gui()
         if node.truth is None or node.scan is None:
             raise RuntimeError('GROUND_TRUTH_OR_SCAN_UNAVAILABLE: user confirmation required')
         node.pause(2)
@@ -497,23 +573,70 @@ class Stack:
         if self.params == 'v012':
             gate += ['-p', 'max_linear_speed:=0.13']
         self.processes.start('gate', gate)
-        if self.world == 'building':
-            self.processes.start('elevator', [sys.executable, str(HERE/'elevator_sim_node.py'),
-                                              '--ros-args', '-p', 'use_sim_time:=true'])
+        if self.world in TWO_FLOOR:
+            self.elevator_process = self.processes.start('elevator', [sys.executable, str(HERE/'elevator_sim_node.py'),
+                                              '--ros-args', '-p', 'use_sim_time:=true',
+                                              '-p', f"indicators:={'true' if self.world == 'building_dressed' else 'false'}",
+                                              '-p', f"button_contact:={'true' if self.arm and self.load == 'pallet' else 'false'}",
+                                              '-p', f"require_arm_pause:={'true' if self.arm else 'false'}",
+                                              '-p', f'initial_floor:={self.initial_elevator_floor or WORLD["elevator"]["initial_floor"]}'])
             self.processes.start('floor_reader', [sys.executable, str(HERE/'fake_floor_reader.py'),
                                                   '--ros-args', '-p', 'use_sim_time:=true'])
             self.processes.start('orchestrator', ['ros2', 'run', 'auto_floor_orchestrator_pkg',
                 'auto_floor_orchestrator_node', '--ros-args', '-p', 'use_sim_time:=true',
-                '-p', f'floor_maps_yaml:={HERE/"floor_maps_real.yaml"}', '-p', 'dry_run_map_load:=false',
+                '-p', f'floor_maps_yaml:={self.floor_registry}', '-p', 'dry_run_map_load:=false',
                 '-p', f'current_floor:={self.floor}', '-p', 'target_floor:=F2'])
             if self.arm:
                 self.processes.start('parcel', [sys.executable, str(HERE/'parcel_mock.py'),
-                                                '--ros-args', '-p', 'use_sim_time:=true'])
+                                                '--ros-args', '-p', 'use_sim_time:=true',
+                                                '-p', f'stack_count:={self.parcels}', '-p', f'carry_mode:={self.load}', '-p', f'initial_attached:={str(self.initial_load).lower()}'])
         self.start_nav()
+        if self.speed != 1.0:
+            self.set_speed(self.speed)
         self.result['readiness'] = self.readiness()
         if not self.result['readiness']['ready']:
             raise RuntimeError('readiness check failed: '+json.dumps(self.result['readiness']['failed']))
+        if self.gui:
+            self.follow_camera()
         return self.result['readiness']
+
+    def start_gui(self):
+        """gzclient + RViz in this (GUI-enabled) container; observation only."""
+        self.processes.start('gzclient', ['gzclient'])
+        self.processes.start('rviz', ['rviz2', '-d', str(HERE/'nav2_view.rviz'), '--ros-args', '-p', 'use_sim_time:=true'])
+        if self.arm:
+            self.processes.start('arm_camera_view', ['ros2', 'run', 'rqt_image_view', 'rqt_image_view',
+                                                     '/arm_camera/image_raw'])
+
+    def follow_camera(self):
+        for _ in range(10):
+            done = subprocess.run(['gz', 'camera', '-c', 'gzclient_camera', '-f', 'packagu_sim'],
+                                  capture_output=True, text=True, timeout=20)
+            if done.returncode == 0:
+                return
+            self.node.pause(2)
+
+    def set_speed(self, target):
+        """[시연용] Target real-time factor. Only real_time_update_rate changes; max_step_size stays 0.001 s, so the
+        physics per simulated second is unchanged. Goal/elevator timeouts are in sim seconds already."""
+        if target == 0.0:
+            subprocess.run(['gz', 'physics', '-u', '0'], check=True, capture_output=True, timeout=20)
+            sim0, wall0 = self.node.now(), time.monotonic()
+            self.node.pause(2)
+            self.result['sim_speed'] = {'target': 'max', 'max_step_size_s': .001,
+                                       'update_rate_hz': 0, 'measured_rtf': (self.node.now()-sim0)/(time.monotonic()-wall0)}
+            return
+        rate, tuning = 1000.0*target*1.4, []
+        for _ in range(5):
+            subprocess.run(['gz', 'physics', '-u', str(int(rate))], capture_output=True, timeout=20)
+            sim0, wall0 = self.node.now(), time.monotonic()
+            self.node.pause(4)
+            rtf = (self.node.now()-sim0)/(time.monotonic()-wall0)
+            tuning.append({'update_rate_hz': int(rate), 'rtf': round(rtf, 3)})
+            if abs(rtf-target) <= .08*target:
+                break
+            rate = min(rate*target/max(rtf, .05), 1000.0*target*3)
+        self.result['sim_speed'] = {'target': target, 'max_step_size_s': 0.001, 'tuning': tuning}
 
     def start_recorder(self):
         if not self.record or self.recorder is not None:
@@ -541,7 +664,7 @@ class Stack:
         node = self.node
         node.amcl = None
         self.nav = self.processes.start(f'nav2_{attempt}', ['ros2', 'launch', 'slam_pkg', 'kku_navigation.launch.py',
-            f'map:={NAV_MAPS[self.floor]}', f'params_file:={CONFIG/NAV_PARAMS[self.params]}',
+            f'map:={self.nav_maps[self.floor]}', f'params_file:={self.nav_params_file}',
             'use_sim_time:=true', 'autostart:=false', 'rviz:=false'])
         self.start_recorder()
         lifecycle_start(node, 'localization')
@@ -560,16 +683,16 @@ class Stack:
         if not node.wait(lambda: node.client.server_is_ready(), 90):
             raise RuntimeError('Nav2 action server unavailable (initialization failed)')
         node.pause(2)
-        guard(self.floor, 'goal', self.dir)
+        self.guard_map('goal')
 
-    def publish_initial(self, pose, repeats=3):
+    def publish_initial(self, pose, repeats=3, xy_var=.25, yaw_sd=math.radians(15)):
         msg = PoseWithCovarianceStamped()
         msg.header.frame_id = 'map'
         msg.pose.pose.position.x, msg.pose.pose.position.y = pose[:2]
         msg.pose.pose.orientation.z, msg.pose.pose.orientation.w = quat_yaw(pose[2])
         # Same operator uncertainty as field_nav_cli pose-set (9/15 runner).
-        msg.pose.covariance[0] = msg.pose.covariance[7] = .25
-        msg.pose.covariance[35] = math.radians(15)**2
+        msg.pose.covariance[0] = msg.pose.covariance[7] = xy_var
+        msg.pose.covariance[35] = yaw_sd**2
         for _ in range(repeats):
             msg.header.stamp = self.node.get_clock().now().to_msg()
             self.node.initial.publish(msg)
@@ -631,7 +754,7 @@ class Stack:
     def navigate(self, point, timeout):
         """Send one NavigateToPose goal in the current floor's map frame. Returns final status string."""
         node = self.node
-        guard(self.floor, 'goal', self.dir)
+        self.guard_map('goal')
         self.resume()
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = 'map'
@@ -683,7 +806,7 @@ class Stack:
     def required_topics(self):
         topics = ['/scan', '/odom', '/tf', '/tf_static', '/sim/ground_truth', '/amcl_pose', '/plan',
                   '/cmd_vel_safe', '/rosout', '/navigate_to_pose/_action/status']
-        if self.world == 'building':
+        if self.world in TWO_FLOOR:
             topics += ['/elevator/state', '/floor_orchestrator/status', '/map']
         if self.arm:
             topics += ['/joint_states', '/sim/parcel/state']
@@ -760,11 +883,23 @@ class Stack:
         return self.result
 
 
+def parse_speed(value):
+    if str(value).lower() == 'max':
+        return 0.0  # Gazebo unlimited real-time update rate; physics step unchanged.
+    speed = float(value)
+    if not math.isfinite(speed) or speed <= 0:
+        raise argparse.ArgumentTypeError('--speed must be a positive factor or max')
+    return speed
+
+
 def add_common_args(parser):
     parser.add_argument('--params', default='P0', choices=sorted(NAV_PARAMS))
     parser.add_argument('--lidar-noise', default='on', choices=['on', 'off'])
     parser.add_argument('--odom', default='encoder', choices=['encoder', 'world'],
                         help='encoder (default, new runs) or world (9/15 reproduction only)')
+    parser.add_argument('--speed', type=parse_speed, default=1.0,
+                        help='[시연용] target real-time factor; physics step stays 1 ms (runs != 1 are kept apart '
+                             'from the 1x statistics)')
 
 
 def main():
@@ -776,6 +911,9 @@ def main():
     parser.add_argument('--initial', default=None, help='AMCL initial pose waypoint (default = spawn)')
     parser.add_argument('--no-record', action='store_true')
     parser.add_argument('--arm-sim', action='store_true', help='robot_arm.urdf + parcel mock (building world)')
+    parser.add_argument('--parcels', type=int, default=1, help='--arm-sim: parcels on the pallet / boxes stacked (1..3)')
+    parser.add_argument('--load', default='pallet', choices=['pallet', 'box'],
+                        help='--arm-sim: floor pallet picked by the lift carrier (default) or 10/8 shelf box')
     add_common_args(parser)
     args = parser.parse_args()
     world = args.world or args.floor.lower()
@@ -784,7 +922,8 @@ def main():
         raise SystemExit(f'spawn {args.spawn} is on {spawn[3]}, not {args.floor}')
     rclpy.init()
     stack = Stack(args.name, world, args.floor, args.params, args.spawn, args.initial,
-                  args.lidar_noise == 'on', args.odom, not args.no_record, arm=args.arm_sim)
+                  args.lidar_noise == 'on', args.odom, not args.no_record, arm=args.arm_sim, speed=args.speed,
+                  parcels=args.parcels, load=args.load)
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(1))
     code = 0

@@ -48,6 +48,13 @@ up() {
   if docker inspect "$NAME" >/dev/null 2>&1; then
     [[ "$(docker inspect -f '{{.State.Running}}' "$NAME")" == true ]] || docker rm -f "$NAME" >/dev/null
   fi
+  if (( gui )) && docker inspect "$NAME" >/dev/null 2>&1 \
+      && ! docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" | grep -q '^DISPLAY='; then
+    # Existing headless container: recreate with the X11 socket only when no simulation runs in it.
+    docker exec "$NAME" pgrep -x gzserver >/dev/null 2>&1 \
+      && die "$NAME runs a headless simulation; stop it first (bash sim/real_maps/start_sim.sh --stop)"
+    docker rm -f "$NAME" >/dev/null
+  fi
   if ! docker inspect "$NAME" >/dev/null 2>&1; then
     docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image $IMAGE not present; pull is a manual step (not done here)"
     local extra=()
@@ -59,6 +66,7 @@ up() {
     docker run -d --init --name "$NAME" --network "$NET" --shm-size 1g \
       --user "$(id -u):$(id -g)" -e HOME=/tmp/simhome -e USER=sim \
       -e ROS_DOMAIN_ID="$DOMAIN" -e ROS_LOCALHOST_ONLY=1 -e PACKAGU_SIM_ISOLATED=1 \
+      -v /etc/localtime:/etc/localtime:ro \
       -e GAZEBO_MODEL_DATABASE_URI= -e PYTHONDONTWRITEBYTECODE=1 \
       -e ROS_LOG_DIR="/ros2_ws/logs/real_map_sim/ros_logs/$NAME" \
       -e GAZEBO_LOG_PATH="/ros2_ws/logs/real_map_sim/gazebo_logs/$NAME" \
