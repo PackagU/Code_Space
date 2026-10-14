@@ -1,0 +1,750 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style><title>강의실 시연 시나리오</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: one to-scale floor plan is the stage; under it the player pairs the step card with the projector (arm camera) view */
+:root{
+  --bg:#F2F5F4; --surface:#FFFFFF; --ink:#16202A; --muted:#566370; --line:#D2DADD; --grid:#E2E8EA;
+  --tape:#C98E00; --tape-soft:rgba(201,142,0,.14); --robot:#2358C2; --robot-soft:rgba(35,88,194,.13);
+  --cam:#0A8A7B; --cam-soft:rgba(10,138,123,.17); --wall:#2A3440; --down:#A6481E; --down-soft:rgba(166,72,30,.12);
+  --pallet:#3D7A56; --box:#B88B5B; --box-line:#87623A; --panel:#101317; --led:#FF4B37; --led-off:#2B1916;
+  /* the projector view is a screen: one fixed look in both themes */
+  --scr-bg:#161B21; --scr-wall:#262E37; --scr-floor:#1D242B; --scr-hl:#3BE3C9; --scr-warn:#FFC23D; --scr-tx:#EEF2F5; --scr-mut:#9AA6B1;
+  --font-sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1419; --surface:#161E26; --ink:#E4EAF0; --muted:#92A0AD; --line:#2A3641; --grid:#1D2731;
+    --tape:#EDB02B; --tape-soft:rgba(237,176,43,.14); --robot:#6E9DFF; --robot-soft:rgba(110,157,255,.16);
+    --cam:#2FC5B1; --cam-soft:rgba(47,197,177,.17); --wall:#B9C5D0; --down:#F08A57; --down-soft:rgba(240,138,87,.14);
+    --pallet:#5BA57A; --box:#C79A69; --box-line:#E0B887; --panel:#07090B; --led:#FF5844; --led-off:#2A1714;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1419; --surface:#161E26; --ink:#E4EAF0; --muted:#92A0AD; --line:#2A3641; --grid:#1D2731;
+  --tape:#EDB02B; --tape-soft:rgba(237,176,43,.14); --robot:#6E9DFF; --robot-soft:rgba(110,157,255,.16);
+  --cam:#2FC5B1; --cam-soft:rgba(47,197,177,.17); --wall:#B9C5D0; --down:#F08A57; --down-soft:rgba(240,138,87,.14);
+  --pallet:#5BA57A; --box:#C79A69; --box-line:#E0B887; --panel:#07090B; --led:#FF5844; --led-off:#2A1714;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:15px;line-height:1.6;word-break:keep-all;overflow-wrap:break-word}
+.wrap{max-width:1160px;margin:0 auto;padding-inline:20px;padding-block:28px 56px;display:flex;flex-direction:column;gap:34px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.25}
+h1{font-size:clamp(26px,4vw,36px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:20px;font-weight:700}
+h3{font-size:15px;font-weight:700}
+p{margin:0}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+header{display:flex;flex-direction:column;gap:14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline}
+.meta .when{font-size:17px;font-weight:500}
+.dday{font-family:var(--font-mono);font-size:13px;padding:2px 8px;border:1.5px solid var(--tape);border-radius:3px;background:var(--tape-soft)}
+.deliver{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:4px}
+.deliver div{border-top:2px solid var(--line);padding-top:10px;min-width:0}
+.deliver div.on{border-top-color:var(--tape)}
+.deliver b{display:block;font-size:15px}
+.deliver span{font-size:13.5px;color:var(--muted)}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 14px 8px}
+.stage-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;align-items:baseline;padding:0 4px 6px}
+#plan{display:block;width:100%;min-width:700px;height:auto}
+#plan text,#scr text,#elev text{font-family:var(--font-sans)}
+#plan .t-mono,#scr .t-mono,#elev .t-mono{font-family:var(--font-mono)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted);padding:6px 4px 4px}
+.legend i{display:inline-block;width:18px;height:0;vertical-align:middle;margin-right:6px}
+
+.player{display:flex;flex-direction:column;gap:14px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;padding:7px 14px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible,.chip:focus-visible,select:focus-visible{outline:2px solid var(--robot);outline-offset:2px}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:108px;justify-content:center}
+select{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;padding:6px 8px}
+.ctl-group{display:inline-flex;gap:6px;align-items:center;margin-left:6px}
+.ctl-group label{font-size:13px;color:var(--muted)}
+.ctl-note{font-size:12.5px;color:var(--muted);margin-left:auto}
+.phases{display:grid;grid-template-columns:12fr 5fr;gap:6px;min-width:1060px}
+.phase{font-size:12px;font-family:var(--font-mono);letter-spacing:.04em;padding:2px 8px;border-left:3px solid var(--robot);color:var(--muted)}
+.phase.dn{border-left-color:var(--down)}
+.chips{display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:6px;min-width:1060px;margin-top:6px}
+.chip{font:inherit;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;padding:6px 7px 7px;cursor:pointer;display:flex;flex-direction:column;gap:1px;min-width:0}
+.chip .n{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.chip .t{font-size:12.5px;line-height:1.3}
+.chip.done{background:var(--bg)}
+.chip.on{border-color:var(--robot);box-shadow:inset 0 -3px 0 var(--robot)}
+.chip.dn.on{border-color:var(--down);box-shadow:inset 0 -3px 0 var(--down)}
+.chip.vis .n::after{content:" ◉";color:var(--cam);font-size:10px}
+
+.detail{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.detail{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px 20px;min-width:0}
+.card-top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;margin-bottom:12px}
+.step-no{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.pill{font-size:12px;padding:1px 8px;border-radius:3px;background:var(--robot-soft);color:var(--robot);font-weight:500}
+.pill.dn{background:var(--down-soft);color:var(--down)}
+#s-title{font-size:22px;margin-bottom:14px}
+dl{display:grid;grid-template-columns:7.2em minmax(0,1fr);gap:9px 14px;margin:0}
+dt{font-size:13px;color:var(--muted);padding-top:1px}
+dd{margin:0;min-width:0}
+dd.meaning{font-weight:500}
+.screen{min-width:0}
+.screen-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.screen-head span{font-size:12.5px;color:var(--muted)}
+.screen-frame{background:#0B0D10;border-radius:6px;padding:8px;box-shadow:0 0 0 1px var(--line)}
+#scr{display:block;width:100%;height:auto;border-radius:3px}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.status div{padding:10px 14px;border-right:1px solid var(--line);min-width:0}
+.status div:last-child{border-right:0}
+.status small{display:block;font-size:12px;color:var(--muted)}
+.status b{font-weight:500;font-size:14px}
+
+.setup{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:860px){.setup{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;min-width:540px;font-size:13.5px}
+th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;font-weight:500;color:var(--muted)}
+td.mono{white-space:nowrap}
+.elev svg{display:block;width:100%;height:auto}
+.note{font-size:13px;color:var(--muted)}
+.section-head{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+
+.rule{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:22px}
+.rule .r{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:12px 14px;display:flex;align-items:center;gap:12px;min-width:0}
+.rule .tag{font-family:var(--font-mono);font-weight:700;font-size:20px;background:#F4F4F2;color:#111;border:1px solid #CFCFCB;border-radius:3px;padding:0 8px;letter-spacing:.04em}
+.rule .tag i{font-style:normal;color:var(--tape)}
+.rule .arrow{color:var(--muted)}
+.rule b{font-size:15px}
+.rule small{display:block;font-size:12.5px;color:var(--muted)}
+.rule-notes{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:10px;font-size:13px;color:var(--muted)}
+
+.gantt{display:grid;grid-template-columns:172px repeat(22,minmax(26px,1fr));min-width:780px;font-size:12.5px;row-gap:5px}
+.gantt .hd{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.gantt .hd.we{color:var(--tape)}
+.gantt .hd.today{color:var(--ink);font-weight:500}
+.gantt .lane{grid-column:1;padding-right:8px;align-self:center;min-width:0;white-space:nowrap}
+.gantt .lane b{font-weight:500}
+.gantt .lane small{display:block;color:var(--muted);font-size:11.5px;line-height:1.25}
+.bar{height:20px;align-self:center;border-radius:3px;background:var(--robot-soft);border:1px solid var(--robot)}
+.bar.sim{background:var(--cam-soft);border-color:var(--cam)}
+.bar.vid{background:var(--tape-soft);border-color:var(--tape)}
+.bar.alt{border-style:dashed}
+.bar.real{background:var(--down-soft);border-color:var(--down)}
+.bar.common{background:var(--grid);border-color:var(--muted)}
+.ms{align-self:center;justify-self:center;width:14px;height:14px;transform:rotate(45deg);background:var(--ink)}
+.ms.final{background:var(--led)}
+.weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px}
+.weeks div{font-size:13.5px;min-width:0}
+.weeks b{display:block;font-family:var(--font-mono);font-size:12.5px;font-weight:500;color:var(--muted)}
+
+.decide{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 28px}
+.decide div{display:grid;grid-template-columns:1.8em minmax(0,1fr);gap:0 8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.decide .k{font-family:var(--font-mono);color:var(--muted);font-size:13px;padding-top:1px}
+.decide b{font-weight:500;display:block}
+.decide span{font-size:13.5px;color:var(--muted)}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">PackagU · 종설 6조 · 최종 시연</div>
+    <h1>강의실 시연 시나리오</h1>
+    <div class="meta">
+      <span class="when">2026년 11월 4일(수) 15:00</span>
+      <span class="dday">D-21 · 10/14 기준</span>
+      <span class="muted">시연 구역 5 × 2 m · A 택배 보관소 · B 엘리베이터</span>
+    </div>
+    <div class="deliver">
+      <div><b>1 · 신공학관 E2E 무편집 영상</b><span>택배 집기부터 엘리베이터 왕복, 복귀까지 한 테이크. 10/21~10/23 촬영 예정</span></div>
+      <div class="on"><b>2 · 강의실 현장 시연</b><span>송장을 읽어 목표층을 정하고 버튼을 누르는 과정을 팔 카메라 인식 화면과 함께 프로젝터로 보여줌</span></div>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="강의실 평면도">
+    <div class="stage-head">
+      <h2>평면도</h2>
+      <span class="muted" style="font-size:13px">위에서 본 축척 도면 · 격자 0.5 m · 위치·높이는 가정값</span>
+    </div>
+    <div class="scroll-x"><svg id="plan" viewBox="0 0 940 448" role="img" aria-label="5 m × 2 m 시연 구역 평면도와 로봇 위치"></svg></div>
+    <div class="legend">
+      <span><i style="border-top:2px dashed var(--tape)"></i>바닥 테이프</span>
+      <span><i style="border-top:3px solid var(--wall)"></i>벽·칸막이</span>
+      <span><i style="border-top:2px dashed var(--robot)"></i>지나온 경로</span>
+      <span><i style="border-top:8px solid var(--cam-soft)"></i>팔 카메라 시야</span>
+    </div>
+  </section>
+
+  <section class="player" aria-label="시나리오 재생">
+    <div class="controls">
+      <button class="btn" id="b-first" type="button">처음</button>
+      <button class="btn" id="b-prev" type="button">◀ 이전</button>
+      <button class="btn primary" id="b-play" type="button">▶ 재생</button>
+      <button class="btn" id="b-next" type="button">다음 ▶</button>
+      <span class="ctl-group"><label for="speed">속도</label>
+        <select id="speed"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></span>
+      <span class="ctl-group"><label for="label">P1 송장</label>
+        <select id="label"><option value="402" selected>402 → 4층</option><option value="301">301 → 3층</option><option value="205">205 → 2층</option></select></span>
+      <span class="ctl-note">단계를 누르면 그 동작만 재생 · ◉ 카메라 인식 단계 · ← → 스페이스</span>
+    </div>
+    <div class="scroll-x">
+      <div class="phases"><div class="phase">▲ 상행 · 택배 배달 (0~11)</div><div class="phase dn">▼ 하행 · 복귀 (12~16)</div></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="detail">
+      <article class="card" aria-live="polite">
+        <div class="card-top">
+          <span class="step-no" id="s-no">단계 0 / 16</span>
+          <span class="pill" id="s-phase">상행 · 택배 배달</span>
+        </div>
+        <h3 id="s-title">중앙 대기</h3>
+        <dl>
+          <dt>로봇 동작</dt><dd id="s-act"></dd>
+          <dt>인식·센서</dt><dd id="s-sense"></dd>
+          <dt>성공 조건</dt><dd id="s-ok"></dd>
+          <dt>엘리베이터</dt><dd class="meaning" id="s-mean"></dd>
+        </dl>
+      </article>
+      <div class="screen">
+        <div class="screen-head"><h3>프로젝터 화면</h3><span>팔 카메라 영상 + 인식 결과 · 발표 노트북 → HDMI</span></div>
+        <div class="screen-frame"><svg id="scr" viewBox="0 0 320 240" role="img" aria-label="팔 카메라 인식 화면 예시"></svg></div>
+      </div>
+    </div>
+    <div class="status" aria-label="로봇 상태">
+      <div><small>적재</small><b id="st-load">빈 상태</b></div>
+      <div><small>송장 판독</small><b id="st-label">미판독</b></div>
+      <div><small>팔</small><b id="st-arm">접힘</b></div>
+      <div><small>바라보는 쪽</small><b id="st-head">A쪽</b></div>
+      <div><small>층수 화면</small><b id="st-disp">1</b></div>
+      <div><small>가상 위치</small><b id="st-floor">1층</b></div>
+    </div>
+  </section>
+
+  <section aria-label="세팅 상세">
+    <div class="section-head">
+      <h2>세팅</h2>
+      <p class="muted">원점은 A쪽 아래 모서리입니다. x는 A에서 B로, y는 관객 쪽에서 안쪽으로 커집니다.</p>
+    </div>
+    <div class="setup">
+      <div class="scroll-x">
+        <table>
+          <thead><tr><th>항목</th><th>위치 (x, y) m</th><th>메모</th></tr></thead>
+          <tbody>
+            <tr><td>출발·종료점 S</td><td class="mono">2.5, 1.0</td><td>A쪽을 보고 시작하고 같은 방향으로 끝남</td></tr>
+            <tr><td>택배 P1 · P2</td><td class="mono">0.25, 1.35 · 0.25, 0.65</td><td>송장 P1 402 · P2 310(예시). 기존 규칙(가장 오른쪽)으로 P1을 집음</td></tr>
+            <tr><td>A 접근점</td><td class="mono">1.2, 1.0</td><td>A벽을 보고 도착. 팔레트가 0.95 m 앞</td></tr>
+            <tr><td>B 보기점</td><td class="mono">4.0, 1.45</td><td>호출 버튼판 1 m 앞</td></tr>
+            <tr><td>호출 버튼판 ▲▼</td><td class="mono">5.0, 1.45</td><td>B벽. 기존 승하차판 13.5 × 20.5 cm</td></tr>
+            <tr><td>층 버튼판 1~4</td><td class="mono">5.0, 1.0</td><td>B벽. 기존 층 버튼판 20.5 × 16 cm (위 1 2, 아래 3 4)</td></tr>
+            <tr><td>층수 화면</td><td class="mono">4.3, 0.1</td><td>로봇 쪽을 향함. 층 버튼을 누른 뒤 오른쪽 90° 돌면 약 0.9 m 정면</td></tr>
+            <tr><td>발표 노트북</td><td class="mono">구역 밖</td><td>관객 쪽. 인식 화면을 띄워 HDMI로 프로젝터 송출</td></tr>
+            <tr><td>층수 화면 운영자</td><td class="mono">구역 밖</td><td>로봇이 누른 층 숫자 키를 입력하면 화면이 한 층씩 바뀜</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="elev">
+        <h3 style="margin-bottom:6px">높이 기준</h3>
+        <svg id="elev" viewBox="0 0 440 300" role="img" aria-label="송장, 층수 화면, 버튼판 높이 비교"></svg>
+        <p class="note">윗줄(▲·1·2)과 아랫줄(▼·3·4)은 높이가 8 cm 정도 달라 줄마다 누르기 자세가 따로 필요합니다. 지금 티칭된 층 버튼은 1과 4입니다.</p>
+      </div>
+    </div>
+    <div class="rule" aria-label="송장 층수 규칙">
+      <div class="r"><span class="tag"><i>2</i>xx</span><span class="arrow">→</span><p><b>2층</b><small>층 버튼 2 · 2·3은 티칭 필요</small></p></div>
+      <div class="r"><span class="tag"><i>3</i>xx</span><span class="arrow">→</span><p><b>3층</b><small>층 버튼 3</small></p></div>
+      <div class="r"><span class="tag"><i>4</i>xx</span><span class="arrow">→</span><p><b>4층</b><small>층 버튼 4 · 기본 시연</small></p></div>
+    </div>
+    <div class="rule-notes">
+      <span>목표층 = 송장 첫 자리</span>
+      <span>같은 번호 3프레임 연속이면 확정</span>
+      <span>첫 자리가 2~4가 아니면 정지</span>
+      <span>복귀는 송장과 상관없이 1층</span>
+    </div>
+  </section>
+
+  <section aria-label="준비 일정">
+    <div class="section-head">
+      <h2>준비 일정</h2>
+      <p class="muted">10/14(수)부터 11/4(수)까지 3주. 주는 수요일에 시작합니다.</p>
+    </div>
+    <div class="scroll-x"><div class="gantt" id="gantt"></div></div>
+    <div class="weeks">
+      <div><b>1주 · 10/14~10/20</b>계획 확정, 강의실 답사, 시뮬 구축, 송장 판독기, 소품 제작. 끝: 시뮬 10회 연속 완주</div>
+      <div><b>2주 · 10/21~10/27</b>1번 영상 촬영, 인식 화면 완성, 층 버튼 2·3 티칭, 실기 단품 시험. 끝: 영상 원본 확보, 단품 전 항목 통과</div>
+      <div><b>3주 · 10/28~11/03</b>통합 리허설, 강의실 현장 리허설(프로젝터 포함). 끝: 모사 공간 3회 연속, 강의실 2회 완주</div>
+    </div>
+  </section>
+
+  <section aria-label="결정 필요 항목">
+    <div class="section-head">
+      <h2>회의에서 정할 것</h2>
+      <p class="muted">기본안으로 시뮬을 먼저 만들고, 결정이 바뀌면 설정값만 고칩니다.</p>
+    </div>
+    <div class="decide">
+      <div><span class="k">1</span><p><b>송장 라벨 규격</b><span>흰 바탕 검은 굵은 숫자 3자리, 글자 높이 4 cm 이상, 택배 앞면</span></p></div>
+      <div><span class="k">2</span><p><b>시연 송장 번호</b><span>P1 402, P2 310</span></p></div>
+      <div><span class="k">3</span><p><b>버튼판 배치</b><span>호출 버튼판 y 1.45 m, 층 버튼판 y 1.0 m (둘 다 B벽)</span></p></div>
+      <div><span class="k">4</span><p><b>층 버튼 2·3 티칭</b><span>티칭해서 2xx·3xx도 시연. 늦어지면 4xx 고정</span></p></div>
+      <div><span class="k">5</span><p><b>층수 화면 진행</b><span>운영자가 로봇이 누른 층 숫자 키 입력</span></p></div>
+      <div><span class="k">6</span><p><b>인식 화면 연결</b><span>Jetson–노트북 유선 LAN 직결</span></p></div>
+      <div><span class="k">7</span><p><b>집을 택배</b><span>기존 규칙(로봇 기준 가장 오른쪽 = P1) 유지</span></p></div>
+      <div><span class="k">8</span><p><b>주행 방식</b><span>강의실 리허설에서 지도 기반 Nav2와 odom 직선 중 선택</span></p></div>
+      <div><span class="k">9</span><p><b>강의실·반입 시각</b><span>답사 날짜와 당일 사용 가능 시각 확인</span></p></div>
+      <div><span class="k">10</span><p><b>1번 영상 배속</b><span>무편집 원본은 1배속, 발표용 배속본은 따로</span></p></div>
+    </div>
+  </section>
+
+  <footer>계획서: demo_20261104/plan.md · 로봇 외곽·팔레트·버튼판 치수는 sim/real_maps/world_params.yaml 값이며 실측 전 가정값입니다. 프로젝터 화면은 실제 인식 화면의 구성 예시입니다.</footer>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const S=140, OX=110, OY=62, RW=5, RH=2;           // px per metre, room origin in the plan svg
+const X=x=>OX+x*S, Y=y=>OY+(RH-y)*S, R=v=>v*S;
+const RM=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+
+/* ---------- seven-segment digit ---------- */
+const SEG={a:[[12,6],[48,6],[42,12],[18,12]],b:[[49,8],[49,46],[43,42],[43,14]],c:[[49,54],[49,92],[43,86],[43,58]],
+  d:[[12,94],[48,94],[42,88],[18,88]],e:[[11,54],[11,92],[17,86],[17,58]],f:[[11,8],[11,46],[17,42],[17,14]],
+  g:[[13,50],[19,45],[41,45],[47,50],[41,55],[19,55]]};
+const DIG={0:'abcdef',1:'bc',2:'abged',3:'abgcd',4:'fgbc',5:'afgcd',6:'afgedc',7:'abc',8:'abcdefg',9:'abcfgd'};
+function makeSeg(svg,ox,oy,sc){const g=el('g',{transform:`translate(${ox},${oy}) scale(${sc})`},svg);const m={};
+  for(const k in SEG)m[k]=el('polygon',{points:SEG[k].map(p=>p.join(',')).join(' '),fill:'var(--led-off)'},g);return m;}
+function setSeg(m,d){const on=DIG[d]||'';for(const k in m)m[k].setAttribute('fill',on.includes(k)?'var(--led)':'var(--led-off)');}
+
+/* ---------- layout constants (metres) ---------- */
+const CALL_Y=1.45, FLOOR_Y=1.0, P1=[0.25,1.35], P2=[0.25,0.65], DISP=[4.3,0.12];
+const btnY=d=>FLOOR_Y+((d===1||d===3)?.049:-.049);   // left column (1,3) is north of the board centre when facing B
+let LABEL='402', T=4;
+
+/* ---------- static plan ---------- */
+const plan=document.getElementById('plan');
+const gGrid=el('g',{},plan), gRoom=el('g',{},plan), gProps=el('g',{},plan), gTrail=el('g',{},plan),
+      gFov=el('g',{},plan), gRobot=el('g',{},plan), gTop=el('g',{},plan);
+for(let i=0;i<=RW*2;i++)el('line',{x1:X(i/2),y1:Y(0),x2:X(i/2),y2:Y(RH),stroke:'var(--grid)','stroke-width':i%2?1:1.4},gGrid);
+for(let j=0;j<=RH*2;j++)el('line',{x1:X(0),y1:Y(j/2),x2:X(RW),y2:Y(j/2),stroke:'var(--grid)','stroke-width':j%2?1:1.4},gGrid);
+el('line',{x1:X(0),y1:Y(RH),x2:X(RW),y2:Y(RH),stroke:'var(--tape)','stroke-width':2.5,'stroke-dasharray':'10 6'},gRoom);
+el('line',{x1:X(0),y1:Y(0),x2:X(RW),y2:Y(0),stroke:'var(--tape)','stroke-width':2.5,'stroke-dasharray':'10 6'},gRoom);
+el('rect',{x:X(0)-8,y:Y(RH)-6,width:8,height:RH*S+12,fill:'var(--wall)'},gRoom);
+el('rect',{x:X(RW),y:Y(RH)-6,width:8,height:RH*S+12,fill:'var(--wall)'},gRoom);
+const dy=Y(RH)-30;
+el('line',{x1:X(0),y1:dy,x2:X(RW),y2:dy,stroke:'var(--muted)'},gRoom);
+for(let i=0;i<=RW;i++){el('line',{x1:X(i),y1:dy-5,x2:X(i),y2:dy+5,stroke:'var(--muted)'},gRoom);
+  el('text',{x:X(i),y:dy-10,'text-anchor':'middle','font-size':12,fill:'var(--muted)',class:'t-mono'},gRoom,i===RW?'5 m':String(i));}
+const dx=X(0)-16;
+el('line',{x1:dx,y1:Y(0),x2:dx,y2:Y(RH),stroke:'var(--muted)'},gRoom);
+el('line',{x1:dx-5,y1:Y(0),x2:dx+5,y2:Y(0),stroke:'var(--muted)'},gRoom);
+el('line',{x1:dx-5,y1:Y(RH),x2:dx+5,y2:Y(RH),stroke:'var(--muted)'},gRoom);
+el('text',{x:dx-8,y:Y(1),'text-anchor':'middle','font-size':12,fill:'var(--muted)',class:'t-mono',transform:`rotate(-90 ${dx-8} ${Y(1)})`},gRoom,'2 m');
+function badge(cx,cy,letter){el('circle',{cx,cy,r:17,fill:'var(--ink)'},gRoom);
+  el('text',{x:cx,y:cy+6,'text-anchor':'middle','font-size':17,'font-weight':700,fill:'var(--bg)'},gRoom,letter);}
+badge(X(0)-74,Y(1.32),'A');
+['택배','보관소'].forEach((s,i)=>el('text',{x:X(0)-74,y:Y(1.32)+36+i*15,'text-anchor':'middle','font-size':12,fill:'var(--ink)'},gRoom,s));
+badge(X(RW)+40,Y(RH)-26,'B');
+el('text',{x:X(RW)+64,y:Y(RH)-21,'font-size':12,fill:'var(--ink)'},gRoom,'엘리베이터');
+el('text',{x:X(2.5),y:Y(0)+46,'text-anchor':'middle','font-size':13,fill:'var(--muted)'},gRoom,'▲ 관객 쪽 ▲');
+// presenter laptop -> projector (outside the area, audience side)
+const lx=X(0.05), ly=Y(0)+24;
+el('rect',{x:lx,y:ly,width:38,height:24,rx:2,fill:'var(--panel)'},gRoom);
+el('rect',{x:lx+3,y:ly+3,width:32,height:18,fill:'var(--cam-soft)',stroke:'var(--cam)'},gRoom);
+el('rect',{x:lx-5,y:ly+24,width:48,height:4,rx:1,fill:'var(--muted)'},gRoom);
+el('text',{x:lx+52,y:ly+11,'font-size':12,fill:'var(--ink)'},gRoom,'발표 노트북 → 프로젝터');
+el('text',{x:lx+52,y:ly+26,'font-size':11,fill:'var(--muted)'},gRoom,'팔 카메라 인식 화면');
+function tapeMark(x,y,label,dyL){el('line',{x1:X(x)-9,y1:Y(y),x2:X(x)+9,y2:Y(y),stroke:'var(--tape)','stroke-width':2.5},gRoom);
+  el('line',{x1:X(x),y1:Y(y)-9,x2:X(x),y2:Y(y)+9,stroke:'var(--tape)','stroke-width':2.5},gRoom);
+  el('text',{x:X(x),y:Y(y)+dyL,'font-size':12,fill:'var(--ink)','text-anchor':'middle'},gTop,label);}
+tapeMark(2.5,1.0,'S 출발·종료',40);
+tapeMark(1.2,1.0,'A 접근점',-28);
+tapeMark(4.0,CALL_Y,'B 보기점',-24);
+function pallet(cx,cy,parent,lab){const g=el('g',{},parent);
+  el('rect',{x:X(cx-.14),y:Y(cy+.20),width:.28*S,height:.40*S,fill:'var(--pallet)',rx:2},g);
+  el('rect',{x:X(cx-.13),y:Y(cy+.15),width:.26*S,height:.30*S,fill:'var(--box)',stroke:'var(--box-line)','stroke-width':1.2},g);
+  el('rect',{x:X(cx)-15,y:Y(cy)-8,width:30,height:16,fill:'#F4F4F2',stroke:'#9A9A95','stroke-width':.8},g);
+  const t=el('text',{x:X(cx),y:Y(cy)+4,'text-anchor':'middle','font-size':10.5,'font-weight':700,fill:'#111',class:'t-mono'},g,lab);
+  return {g,t};}
+[P1,P2].forEach(([x,y])=>el('rect',{x:X(x-.19),y:Y(y+.25),width:.38*S,height:.50*S,fill:'none',stroke:'var(--tape)','stroke-width':1.6,'stroke-dasharray':'5 4'},gRoom));
+const mP1=pallet(P1[0],P1[1],gProps,LABEL); pallet(P2[0],P2[1],gProps,'310');
+el('text',{x:X(0.55),y:Y(P1[1])+5,'font-size':13,'font-weight':700,fill:'var(--ink)'},gTop,'P1');
+el('text',{x:X(0.55),y:Y(P2[1])+5,'font-size':13,'font-weight':700,fill:'var(--ink)'},gTop,'P2');
+const ring=el('circle',{cx:X(P1[0]),cy:Y(P1[1]),r:40,fill:'none',stroke:'var(--cam)','stroke-width':2.5,'stroke-dasharray':'4 4',opacity:0},gTop);
+// call board + floor board on wall B (top view)
+el('rect',{x:X(RW)-5,y:Y(CALL_Y+.0675),width:5,height:.135*S,fill:'var(--panel)'},gProps);
+el('rect',{x:X(RW)-5,y:Y(FLOOR_Y+.1025),width:5,height:.205*S,fill:'var(--panel)'},gProps);
+// front-view callouts to the right of wall B
+const cbx=X(RW)+30, cby=Y(1.62);
+el('line',{x1:X(RW)+8,y1:Y(CALL_Y),x2:cbx,y2:cby+35,stroke:'var(--muted)','stroke-dasharray':'2 3'},gTop);
+el('rect',{x:cbx,y:cby,width:46,height:70,rx:3,fill:'var(--panel)'},gTop);
+const capUp=el('circle',{cx:cbx+23,cy:cby+21,r:11,fill:'#EDEFF1'},gTop);
+const capDn=el('circle',{cx:cbx+23,cy:cby+50,r:11,fill:'#EDEFF1'},gTop);
+el('path',{d:`M${cbx+23} ${cby+15} l6.5 10 h-13 z`,fill:'#111'},gTop);
+el('path',{d:`M${cbx+23} ${cby+56} l6.5 -10 h-13 z`,fill:'#111'},gTop);
+el('text',{x:cbx+54,y:cby+31,'font-size':12,fill:'var(--ink)'},gTop,'호출');
+el('text',{x:cbx+54,y:cby+46,'font-size':11,fill:'var(--muted)'},gTop,'▲▼');
+const fbx=X(RW)+30, fby=Y(0.86);
+el('line',{x1:X(RW)+8,y1:Y(FLOOR_Y),x2:fbx,y2:fby+28,stroke:'var(--muted)','stroke-dasharray':'2 3'},gTop);
+el('rect',{x:fbx,y:fby,width:64,height:56,rx:3,fill:'var(--panel)'},gTop);
+const fcap={};
+[[1,17,17],[2,47,17],[3,17,40],[4,47,40]].forEach(([d,cx,cy])=>{fcap[d]=el('circle',{cx:fbx+cx,cy:fby+cy,r:10,fill:'#EDEFF1'},gTop);
+  el('text',{x:fbx+cx,y:fby+cy+4.5,'text-anchor':'middle','font-size':12,'font-weight':700,fill:'#111',class:'t-mono'},gTop,String(d));});
+el('text',{x:fbx,y:fby+74,'font-size':12,fill:'var(--ink)'},gTop,'층 버튼');
+el('text',{x:fbx,y:fby+89,'font-size':11,fill:'var(--muted)'},gTop,'정면에서 본 모습');
+// floor display: stand in the plan + digit callout below the room
+el('rect',{x:X(4.15),y:Y(0.12),width:.30*S,height:.07*S,fill:'var(--panel)'},gProps);
+el('line',{x1:X(4.16),y1:Y(0.12),x2:X(4.44),y2:Y(0.12),stroke:'var(--led)','stroke-width':2.5},gProps);
+const dcx=X(4.3)-28, dcy=Y(0)+16;
+el('line',{x1:X(4.3),y1:Y(0.05),x2:X(4.3),y2:dcy,stroke:'var(--muted)','stroke-dasharray':'2 3'},gTop);
+el('rect',{x:dcx,y:dcy,width:56,height:62,rx:3,fill:'var(--panel)'},gTop);
+const segSmall=makeSeg(gTop,dcx+15,dcy+8,0.47);
+el('text',{x:dcx+66,y:dcy+24,'font-size':12,fill:'var(--ink)'},gTop,'층수 화면');
+el('text',{x:dcx+66,y:dcy+40,'font-size':11,fill:'var(--muted)'},gTop,'운영자가 숫자 키로 진행');
+
+/* ---------- robot (own frame: +x forward) ---------- */
+const robot=el('g',{},gRobot);
+el('rect',{x:R(-.327),y:R(-.219),width:R(.36),height:R(.438),rx:4,fill:'var(--robot-soft)',stroke:'var(--robot)','stroke-width':2},robot);
+el('circle',{cx:R(-.17),cy:0,r:R(.055),fill:'none',stroke:'var(--robot)','stroke-width':1.6},robot);
+el('rect',{x:R(-.02),y:R(-.16),width:R(.08),height:R(.32),fill:'var(--robot)',opacity:.55},robot);
+[-.1,.1].forEach(yy=>el('rect',{x:R(.02),y:R(yy-.018),width:R(.24),height:R(.036),fill:'var(--robot)'},robot));
+const load=el('g',{},robot);
+el('rect',{x:R(.08),y:R(-.20),width:R(.28),height:R(.40),fill:'var(--pallet)',rx:2},load);
+el('rect',{x:R(.09),y:R(-.15),width:R(.26),height:R(.30),fill:'var(--box)',stroke:'var(--box-line)','stroke-width':1.2},load);
+el('path',{d:`M${R(-.02)} 0 L${R(-.11)} ${R(.065)} L${R(-.11)} ${R(-.065)} Z`,fill:'var(--robot)'},robot);
+const arm=el('line',{x1:R(-.06),y1:0,x2:R(-.06),y2:0,stroke:'var(--ink)','stroke-width':4,'stroke-linecap':'round'},robot);
+const cam=el('circle',{cx:R(-.06),cy:0,r:4.5,fill:'var(--cam)',stroke:'var(--surface)','stroke-width':1.5},robot);
+const trail=el('polyline',{points:'',fill:'none',stroke:'var(--robot)','stroke-width':2,'stroke-dasharray':'5 5',opacity:.7},gTrail);
+const fov=el('polygon',{points:'',fill:'var(--cam-soft)',stroke:'var(--cam)','stroke-width':1,opacity:0},gFov);
+
+/* ---------- scenario (built from the P1 label) ---------- */
+const ARM_TIP={stow:-.06,view:.10,floor:.06,press:null};
+function build(L){
+  const t=+String(L)[0], yT=btnY(t), y1=btnY(1);
+  const up=[],dn=[];for(let f=2;f<=t;f++)up.push(f);for(let f=t-1;f>=1;f--)dn.push(f);
+  const h10=Math.atan2(P1[1]-yT,1.24-4.26)*180/Math.PI-360;
+  return [
+ {t:'중앙 대기',c:'대기',ph:0,scene:'idle',idle:'시작 명령 대기',act:'중앙 S에서 A쪽을 보고 정지. 팔은 접고 리프트는 0.',sense:'—',ok:'운영자가 시작 명령을 한 번 내림',mean:'출발점 대기',
+  k:[{wait:1}]},
+ {t:'A로 이동',c:'A 이동',ph:0,scene:'idle',idle:'A로 이동 중',act:'S에서 A 접근점(1.2, 1.0)까지 직진. A벽을 보고 도착.',sense:'LiDAR',ok:'접근점 도착',mean:'1층 택배 보관소로 이동',
+  k:[{x:1.2,y:1.0,th:180}]},
+ {t:'택배 찾기',c:'택배 찾기',ph:0,scene:'parcels',vis:1,act:'지게팔을 내리고 몸체를 좌·중·우로 돌려 택배를 찾음 → 가장 오른쪽 P1 선택',sense:'팔 카메라(택배)',ok:'택배 2개 검출, P1 선택',mean:'보관함에서 택배 찾기',
+  k:[{arm:'view',fov:'parcels',wait:.4},{th:200,fov:'parcels',arm:'view'},{th:160,fov:'parcels',arm:'view'},{th:180,fov:'parcels',arm:'view',hl:1,wait:.6}]},
+ {t:'송장 읽기',c:'송장 읽기',ph:0,scene:'label',vis:1,act:`P1 팔레트 0.85 m 앞에 정렬하며 송장 번호를 읽음 → 첫 자리로 목표층 결정 (${L} → ${t}층)`,sense:'팔 카메라(송장 숫자)',ok:'같은 번호를 새 프레임 3개 연속 판독, 첫 자리 2~4',mean:'배달할 층 확인',
+  k:[{x:1.24,y:1.35,th:180,fov:'label',arm:'view',hl:1},{fov:'label',arm:'view',hl:1,read:3,wait:.8}]},
+ {t:'택배 싣기',c:'싣기',ph:0,scene:'pocket',vis:1,act:'팔레트 앞면을 한 번 더 보고 정렬 → 지게팔을 포켓에 넣기 → 들기(초음파가 윗면을 보면 멈춤)',sense:'팔 카메라(팔레트 앞면), 초음파',ok:'택배를 실은 상태',mean:'택배 승차',
+  k:[{arm:'view',fov:'pocket',wait:.6},{arm:'stow',x:.47,y:1.35,th:180,slow:1},{load:'attach',wait:.7}]},
+ {t:'B로 이동',c:'B 이동',ph:0,scene:'idle',idle:'B로 이동 중',act:'후진해 포켓에서 빠진 뒤 돌아서 B 보기점(4.0, 1.45)까지 이동.',sense:'LiDAR',ok:'호출 버튼판 앞 도착',mean:'1층 승강장으로 이동',
+  k:[{x:1.24,y:1.35,th:180,slow:1},{th:2.07},{x:4.0,y:CALL_Y},{th:0}]},
+ {t:'▲ 호출 버튼',c:'▲ 호출',ph:0,scene:'call',btn:'UP',vis:1,act:'호출 버튼판에서 ▲ 찾기 → 0.25 m 앞 정렬점에서 다시 보기 → 접근 → 누르기 → 0.3 m 후진 → 다시 보기',sense:'팔 카메라(호출 버튼판)',ok:'▲ 재인식, 누름 위치 확인',mean:'엘리베이터 호출(위)',
+  k:[{arm:'view',fov:'call',wait:.6},{x:4.25,arm:'view',fov:'call',wait:.4},{arm:'stow',x:4.56,slow:1},{arm:'press',press:'UP',wait:.8},{arm:'stow',x:4.26,slow:1},{arm:'view',fov:'call',wait:.5}]},
+ {t:`층 버튼 ${t}`,c:`${t} 누르기`,ph:0,scene:'floorbtn',btn:t,vis:1,act:`층 버튼판 앞으로 비켜 섬 → 숫자 ${t} 찾기 → 접근 → 누르기 → 후진 → 다시 보기`,sense:'팔 카메라(층 버튼 숫자)',ok:`${t} 재인식, 누름 위치 확인`,mean:`탑승 후 ${t}층 선택`,
+  k:[{arm:'stow',th:-90},{y:yT},{th:0},{arm:'view',fov:'floorbtn',wait:.6},{arm:'stow',x:4.56,slow:1},{arm:'press',press:'F'+t,wait:.8},{arm:'stow',x:4.26,slow:1},{arm:'view',fov:'floorbtn',wait:.5}]},
+ {t:`${t}층 확인`,c:`${t}층 확인`,ph:0,scene:'display',btn:t,vis:1,act:`오른쪽 90° 돌아 층수 화면 정면 → 층수 보기 자세 → 화면 숫자 ${t} 나올 때까지 대기`,sense:'팔 카메라(층수 화면)',ok:`숫자 ${t} 표시를 새 프레임 5개 연속 확인`,mean:`${t}층 도착`,
+  k:[{arm:'stow',th:-90},{arm:'floor',fov:'display',disp:up},{arm:'floor',fov:'display',confirm:5,floor:`${t}층`,wait:.4}]},
+ {t:'하차',c:'하차',ph:0,scene:'idle',idle:'하차 회전',act:'팔을 접고 오른쪽 90° 더 돌아 A쪽을 봄.',sense:'—',ok:'회전 완료',mean:`${t}층 하차`,
+  k:[{arm:'stow',wait:.3},{th:-180}]},
+ {t:'A로 이동',c:'A 이동',ph:0,scene:'idle',idle:'A로 이동 중',act:'P1 원래 자리 앞 하역점까지 이동.',sense:'LiDAR',ok:'하역점 도착',mean:`${t}층 배달지로 이동`,
+  k:[{th:h10},{x:1.24,y:1.35},{th:-180},{x:.47,y:1.35,slow:1}]},
+ {t:'택배 내려놓기',c:'내리기',ph:0,scene:'drop',act:'리프트를 0으로 내리고 해제한 뒤 0.3 m 후진.',sense:'리프트 위치',ok:'P1 원래 자리 ±0.10 m',mean:'배달 완료',
+  k:[{load:'detach',wait:.6},{x:.77,y:1.35,th:-180,slow:1}]},
+ {t:'B로 이동',c:'B 이동',ph:1,scene:'idle',idle:'B로 이동 중',act:'돌아서 B 보기점까지 이동. 이제 빈 상태.',sense:'LiDAR',ok:'호출 버튼판 앞 도착',mean:`${t}층 승강장으로 이동`,
+  k:[{th:-358.23},{x:4.0,y:CALL_Y},{th:-360}]},
+ {t:'▼ 호출 버튼',c:'▼ 호출',ph:1,scene:'call',btn:'DOWN',vis:1,act:'6단계와 같은 순서로 ▼ 누름. 빈 상태라 버튼에 더 가까이 섬.',sense:'팔 카메라(호출 버튼판)',ok:'▼ 재인식, 누름 위치 확인',mean:'엘리베이터 호출(아래)',
+  k:[{arm:'view',fov:'call',wait:.6},{x:4.25,arm:'view',fov:'call',wait:.4},{arm:'stow',x:4.66,slow:1},{arm:'press',press:'DOWN',wait:.8},{arm:'stow',x:4.36,slow:1},{arm:'view',fov:'call',wait:.5}]},
+ {t:'층 버튼 1',c:'1 누르기',ph:1,scene:'floorbtn',btn:1,vis:1,act:'층 버튼판 앞으로 비켜 숫자 1 누름. 복귀층은 송장과 상관없이 1층.',sense:'팔 카메라(층 버튼 숫자)',ok:'1 재인식, 누름 위치 확인',mean:'1층 선택',
+  k:[{arm:'stow',th:-450},{y:y1},{th:-360},{arm:'view',fov:'floorbtn',wait:.6},{arm:'stow',x:4.66,slow:1},{arm:'press',press:'F1',wait:.8},{arm:'stow',x:4.36,slow:1},{arm:'view',fov:'floorbtn',wait:.5}]},
+ {t:'1층 확인',c:'1층 확인',ph:1,scene:'display',btn:1,vis:1,act:'오른쪽 90° 돌아 층수 화면 정면 → 층수 보기 자세 → 화면 숫자 1 나올 때까지 대기',sense:'팔 카메라(층수 화면)',ok:'숫자 1 표시를 새 프레임 5개 연속 확인',mean:'1층 도착',
+  k:[{arm:'stow',th:-450},{arm:'floor',fov:'display',disp:dn},{arm:'floor',fov:'display',confirm:5,floor:'1층',wait:.4}]},
+ {t:'하차·복귀',c:'복귀',ph:1,scene:'idle',idle:'중앙으로 복귀 중',act:'팔을 접고 오른쪽 90° 돌아 중앙 S로 이동한 뒤 정지.',sense:'LiDAR',ok:'S ±0.15 m 도착',mean:'출발점 복귀, 종료',
+  k:[{arm:'stow',wait:.3},{th:-540},{x:2.5,y:1.0,wait:.6}]}
+  ];
+}
+let STEPS=build(LABEL);
+
+function init(){return{x:2.5,y:1.0,th:180,load:false,disp:1,arm:'stow',fov:null,hl:0,called:null,fl:null,press:null,confirm:0,readN:0,target:null,floor:'1층',trail:[[2.5,1.0]]};}
+function applyFlags(s,f){s.fov=f.fov||null;s.hl=f.hl||0;s.press=f.press||null;if(f.arm)s.arm=f.arm;
+  if(f.press){if(f.press[0]==='F')s.fl=+f.press.slice(1);else s.called=f.press;}}
+function applyEnd(s,f){
+  if(f.load==='attach')s.load=true;
+  if(f.load==='detach')s.load=false;
+  if(f.disp&&f.disp.length)s.disp=f.disp[f.disp.length-1];
+  if(f.confirm){s.confirm=f.confirm;s.called=null;s.fl=null;}
+  if(f.read){s.readN=f.read;s.target=T;}
+  if(f.floor)s.floor=f.floor;
+}
+function stateAt(i){const s=init();for(let k=0;k<i;k++)for(const f of STEPS[k].k){applyFlags(s,f);
+  if(f.x!=null||f.y!=null){s.x=f.x??s.x;s.y=f.y??s.y;s.trail.push([s.x,s.y]);}
+  if(f.th!=null)s.th=f.th;applyEnd(s,f);}
+  s.fov=null;s.hl=0;s.press=null;s.confirm=0;s.readN=0;s.arm='stow';return s;}
+
+/* ---------- projector view (arm camera + overlays) ---------- */
+const scr=document.getElementById('scr');
+let lastKey='';
+function sx(tag,a,txt){return el(tag,a,scr,txt);}
+function wallFloor(yb){sx('rect',{x:0,y:0,width:320,height:yb,fill:'var(--scr-wall)'});sx('rect',{x:0,y:yb,width:320,height:240-yb,fill:'var(--scr-floor)'});}
+function tag(x,y,txt,warn){sx('text',{x,y,'font-size':11,'font-weight':500,fill:warn?'var(--scr-warn)':'var(--scr-hl)'},txt);}
+function drawScreen(){
+  const s=STEPS[cur];
+  const key=[cur,LABEL,st.hl,st.press||'',st.readN,st.target||'',st.confirm,st.disp,st.load?1:0,st.called||'',st.fl||''].join('|');
+  if(key===lastKey)return;lastKey=key;
+  while(scr.firstChild)scr.removeChild(scr.firstChild);
+  sx('rect',{x:0,y:0,width:320,height:240,fill:'var(--scr-bg)'});
+  let status='',warnStatus=false;
+  if(s.scene==='idle'){
+    sx('text',{x:160,y:112,'text-anchor':'middle','font-size':15,fill:'var(--scr-tx)'},s.idle);
+    sx('text',{x:160,y:134,'text-anchor':'middle','font-size':11.5,fill:'var(--scr-mut)'},'팔 접힘 · 카메라 인식 없음');
+    status=cur===0?'시작 명령을 기다리는 중':(cur===16&&st.x<2.6?'시연 종료':'LiDAR로 주행 중');
+  }else if(s.scene==='parcels'){
+    wallFloor(112);
+    const items=[{x:50,lab:'310',p:'P2'},{x:190,lab:LABEL,p:'P1'}];
+    items.forEach(it=>{sx('rect',{x:it.x,y:160,width:80,height:20,fill:'#3D7A56'});
+      sx('rect',{x:it.x+6,y:104,width:68,height:56,fill:'#B88B5B',stroke:'#87623A'});
+      sx('rect',{x:it.x+22,y:122,width:36,height:16,fill:'#F4F4F2'});
+      sx('text',{x:it.x+40,y:134,'text-anchor':'middle','font-size':10.5,'font-weight':700,fill:'#111',class:'t-mono'},it.lab);});
+    items.forEach(it=>{const sel=st.hl&&it.p==='P1';
+      sx('rect',{x:it.x-5,y:98,width:90,height:88,fill:'none',stroke:sel?'var(--scr-warn)':'var(--scr-hl)','stroke-width':sel?2.5:1.5});
+      tag(it.x-5,92,sel?'P1 · 가장 오른쪽 선택':'택배',sel);});
+    status=st.hl?'택배 2개 검출 · 가장 오른쪽 P1 선택':'택배 찾는 중';warnStatus=!!st.hl;
+  }else if(s.scene==='label'){
+    wallFloor(206);
+    sx('rect',{x:36,y:34,width:248,height:172,fill:'#B88B5B',stroke:'#87623A'});
+    sx('rect',{x:36,y:46,width:248,height:12,fill:'#CDA97D',opacity:.7});
+    sx('rect',{x:84,y:74,width:152,height:74,fill:'#F4F4F2'});
+    const xs=[114,160,206];
+    String(LABEL).split('').forEach((ch,i)=>sx('text',{x:xs[i],y:129,'text-anchor':'middle','font-size':48,'font-weight':700,fill:'#111',class:'t-mono'},ch));
+    sx('rect',{x:79,y:69,width:162,height:84,fill:'none',stroke:'var(--scr-hl)','stroke-width':1.5});
+    xs.forEach((x,i)=>{const first=i===0&&st.target;sx('rect',{x:x-20,y:84,width:40,height:56,fill:'none',stroke:first?'var(--scr-warn)':'var(--scr-hl)','stroke-width':first?2.5:1,'stroke-dasharray':first?'':'3 2'});});
+    tag(79,64,'송장 라벨');
+    if(st.target){sx('rect',{x:70,y:166,width:180,height:26,rx:3,fill:'rgba(0,0,0,.55)',stroke:'var(--scr-warn)'});
+      sx('text',{x:160,y:184,'text-anchor':'middle','font-size':13.5,'font-weight':700,fill:'var(--scr-warn)'},`첫 자리 ${String(LABEL)[0]} → 목표 ${T}층`);}
+    status=st.target?`송장 ${LABEL} 확정 · 층 버튼 ${T}을 누를 예정`:`송장 판독 중 · ${st.readN}/3 프레임 일치`;warnStatus=!!st.target;
+  }else if(s.scene==='pocket'){
+    wallFloor(184);
+    sx('rect',{x:70,y:28,width:180,height:96,fill:'#B88B5B',stroke:'#87623A'});
+    sx('rect',{x:140,y:66,width:40,height:18,fill:'#F4F4F2'});
+    sx('text',{x:160,y:79,'text-anchor':'middle','font-size':11,'font-weight':700,fill:'#111',class:'t-mono'},LABEL);
+    sx('rect',{x:46,y:124,width:228,height:56,fill:'#3D7A56'});
+    [[78,60],[182,60]].forEach(([x,w])=>{sx('rect',{x,y:136,width:w,height:34,fill:'#0B0E10'});
+      sx('rect',{x:x-3,y:133,width:w+6,height:40,fill:'none',stroke:'var(--scr-hl)','stroke-width':1.5});});
+    sx('line',{x1:160,y1:118,x2:160,y2:186,stroke:'var(--scr-warn)','stroke-width':1.5,'stroke-dasharray':'4 3'});
+    tag(75,128,'포켓');
+    status=st.load?'택배 실음 · 초음파로 들기 정지':'팔레트 포켓에 맞춰 정렬';warnStatus=st.load;
+  }else if(s.scene==='call'){
+    sx('rect',{x:0,y:0,width:320,height:240,fill:'var(--scr-wall)'});
+    sx('rect',{x:126,y:36,width:68,height:160,rx:4,fill:'#0D0F12'});
+    const caps={UP:86,DOWN:148};
+    for(const c in caps){const lit=st.called===c;sx('circle',{cx:160,cy:caps[c],r:24,fill:lit?'var(--scr-warn)':'#EEF0F2'});
+      sx('circle',{cx:160,cy:caps[c],r:29,fill:'none',stroke:'var(--scr-hl)','stroke-width':1});}
+    sx('path',{d:'M160 72 l12 21 h-24 z',fill:'#111'});sx('path',{d:'M160 162 l12 -21 h-24 z',fill:'#111'});
+    const cy=caps[s.btn];sx('rect',{x:124,y:cy-34,width:72,height:68,fill:'none',stroke:'var(--scr-warn)','stroke-width':2.5});
+    const g=s.btn==='UP'?'▲':'▼';tag(202,cy-22,`목표 ${g}`,true);
+    status=st.press?`${g} 누르는 중`:(st.called===s.btn?`${g} 누름 · 후진해 다시 확인`:`${g} 버튼 인식 · 정렬`);warnStatus=!!st.press;
+  }else if(s.scene==='floorbtn'){
+    sx('rect',{x:0,y:0,width:320,height:240,fill:'var(--scr-wall)'});
+    sx('rect',{x:84,y:50,width:152,height:140,rx:4,fill:'#0D0F12'});
+    const pos={1:[122,92],2:[198,92],3:[122,150],4:[198,150]};
+    for(const d in pos){const [cx,cy]=pos[d];const lit=st.fl===+d;
+      sx('circle',{cx,cy,r:23,fill:lit?'var(--scr-warn)':'#EEF0F2'});
+      sx('circle',{cx,cy,r:28,fill:'none',stroke:'var(--scr-hl)','stroke-width':1});
+      sx('text',{x:cx,y:cy+8,'text-anchor':'middle','font-size':23,'font-weight':700,fill:'#111',class:'t-mono'},d);}
+    const [tx,ty]=pos[s.btn];sx('rect',{x:tx-33,y:ty-33,width:66,height:66,fill:'none',stroke:'var(--scr-warn)','stroke-width':2.5});
+    tag(84,44,s.btn===1?'목표 1 · 복귀':`목표 ${s.btn} · 송장 ${LABEL}`,true);
+    status=st.press?`층 버튼 ${s.btn} 누르는 중`:(st.fl===s.btn?`층 버튼 ${s.btn} 누름 · 후진해 다시 확인`:`층 버튼 ${s.btn} 인식 · 정렬`);warnStatus=!!st.press;
+  }else if(s.scene==='display'){
+    sx('rect',{x:0,y:0,width:320,height:240,fill:'var(--scr-wall)'});
+    sx('rect',{x:102,y:32,width:116,height:168,rx:4,fill:'#050607'});
+    const m=makeSeg(scr,123,52,1.25);setSeg(m,st.disp);
+    const hit=st.disp===s.btn;
+    sx('rect',{x:114,y:44,width:92,height:144,fill:'none',stroke:hit?'var(--scr-warn)':'var(--scr-hl)','stroke-width':hit?2.5:1.5});
+    tag(226,60,`읽음 ${st.disp}`,hit);tag(226,76,`목표 ${s.btn}`,hit);
+    for(let i=0;i<5;i++)sx('circle',{cx:232+i*14,cy:184,r:5,fill:i<st.confirm?'var(--scr-warn)':'none',stroke:'var(--scr-mut)'});
+    status=st.confirm>=5?`${s.btn}층 확인 완료 (5/5)`:`층수 화면 ${st.disp} · 연속 확인 ${st.confirm}/5`;warnStatus=st.confirm>=5;
+  }else if(s.scene==='drop'){
+    wallFloor(120);
+    const lift=st.load?-14:0;
+    sx('rect',{x:80,y:168+lift,width:160,height:24,fill:'#3D7A56'});
+    sx('rect',{x:96,y:96+lift,width:128,height:72,fill:'#B88B5B',stroke:'#87623A'});
+    sx('rect',{x:140,y:124+lift,width:40,height:18,fill:'#F4F4F2'});
+    sx('text',{x:160,y:137+lift,'text-anchor':'middle','font-size':11,'font-weight':700,fill:'#111',class:'t-mono'},LABEL);
+    status=st.load?'리프트 내리는 중':'P1 자리에 내려놓음 · 후진';warnStatus=!st.load;
+  }
+  sx('rect',{x:0,y:0,width:320,height:20,fill:'rgba(0,0,0,.5)'});
+  sx('circle',{cx:11,cy:10,r:3.5,fill:'#FF4B37'});
+  sx('text',{x:20,y:14,'font-size':10.5,fill:'var(--scr-tx)'},'팔 카메라 · 인식 화면');
+  sx('text',{x:312,y:14,'text-anchor':'end','font-size':10.5,fill:'var(--scr-mut)',class:'t-mono'},`단계 ${cur} · ${s.c}`);
+  sx('rect',{x:0,y:212,width:320,height:28,fill:'rgba(0,0,0,.62)'});
+  sx('text',{x:10,y:231,'font-size':12.5,'font-weight':500,fill:warnStatus?'var(--scr-warn)':'var(--scr-tx)'},status);
+}
+
+/* ---------- render ---------- */
+let st=init(), cur=0, playing=false, tk={c:true,w:[]};
+function headName(th){const a=((th%360)+360)%360;if(a>135&&a<225)return'A쪽';if(a<45||a>315)return'B쪽 (버튼판)';if(a>=225&&a<=315)return'관객 쪽 (층수 화면)';return'안쪽';}
+function armName(a){return{stow:'접힘',view:'보기 자세',floor:'층수 보기 자세',press:'누르기 자세'}[a]||a;}
+function render(){
+  robot.setAttribute('transform',`translate(${X(st.x)},${Y(st.y)}) rotate(${-st.th})`);
+  load.style.display=st.load?'':'none';
+  mP1.g.style.display=st.load?'none':'';
+  let tip=ARM_TIP[st.arm];
+  if(st.arm==='press')tip=Math.max(.1,4.965-st.x);
+  arm.setAttribute('x2',R(tip));cam.setAttribute('cx',R(tip));
+  arm.style.display=st.arm==='stow'?'none':'';
+  if(st.fov){const rad=st.th*Math.PI/180,cx=st.x+Math.cos(rad)*tip,cy=st.y+Math.sin(rad)*tip;
+    let L=1.0;
+    if(st.fov==='label'||st.fov==='pocket')L=Math.hypot(P1[0]+.14-cx,P1[1]-cy);
+    else if(st.fov==='call'||st.fov==='floorbtn')L=4.97-cx;
+    else if(st.fov==='display')L=Math.hypot(DISP[0]-cx,DISP[1]-cy);
+    L=Math.max(.3,L);
+    const h=24*Math.PI/180,p=[[cx,cy],[cx+Math.cos(rad+h)*L,cy+Math.sin(rad+h)*L],[cx+Math.cos(rad-h)*L,cy+Math.sin(rad-h)*L]];
+    fov.setAttribute('points',p.map(q=>`${X(q[0])},${Y(q[1])}`).join(' '));fov.setAttribute('opacity',1);}
+  else fov.setAttribute('opacity',0);
+  ring.setAttribute('opacity',st.hl&&!st.load?1:0);
+  trail.setAttribute('points',st.trail.concat([[st.x,st.y]]).map(q=>`${X(q[0])},${Y(q[1])}`).join(' '));
+  capUp.setAttribute('fill',st.called==='UP'?'var(--tape)':'#EDEFF1');
+  capDn.setAttribute('fill',st.called==='DOWN'?'var(--tape)':'#EDEFF1');
+  for(const d in fcap)fcap[d].setAttribute('fill',st.fl===+d?'var(--tape)':'#EDEFF1');
+  setSeg(segSmall,st.disp);
+  document.getElementById('st-load').textContent=st.load?`택배 P1 실음 (${LABEL})`:'빈 상태';
+  document.getElementById('st-label').textContent=st.target?`${LABEL} → ${T}층`:(st.readN?`판독 중 ${st.readN}/3`:'미판독');
+  document.getElementById('st-arm').textContent=armName(st.arm);
+  document.getElementById('st-head').textContent=headName(st.th);
+  document.getElementById('st-disp').textContent=`${st.disp}층`;
+  document.getElementById('st-floor').textContent=st.floor;
+  drawScreen();
+}
+
+/* ---------- step UI ---------- */
+const chipsEl=document.getElementById('chips');
+let chips=[];
+function buildChips(){chipsEl.textContent='';chips=STEPS.map((s,i)=>{const b=document.createElement('button');b.type='button';
+  b.className='chip'+(s.ph?' dn':'')+(s.vis?' vis':'');
+  const n=document.createElement('span');n.className='n';n.textContent=i;const t=document.createElement('span');t.className='t';t.textContent=s.c;
+  b.append(n,t);b.addEventListener('click',()=>run(i,false));chipsEl.appendChild(b);return b;});}
+function card(){const s=STEPS[cur];
+  document.getElementById('s-no').textContent=`단계 ${cur} / ${STEPS.length-1}`;
+  const ph=document.getElementById('s-phase');ph.textContent=s.ph?'▼ 하행 · 복귀':'▲ 상행 · 택배 배달';ph.className='pill'+(s.ph?' dn':'');
+  document.getElementById('s-title').textContent=s.t;
+  document.getElementById('s-act').textContent=s.act;document.getElementById('s-sense').textContent=s.sense;
+  document.getElementById('s-ok').textContent=s.ok;document.getElementById('s-mean').textContent=s.mean;
+  chips.forEach((c,i)=>{c.classList.toggle('on',i===cur);c.classList.toggle('done',i<cur);c.setAttribute('aria-current',i===cur?'step':'false');});}
+const playBtn=document.getElementById('b-play');
+function ctl(){playBtn.textContent=playing?'❚❚ 일시정지':'▶ 재생';}
+function speed(){return parseFloat(document.getElementById('speed').value)||1;}
+function cancel(){tk.c=true;tk.w.forEach(f=>f());tk={c:false,w:[]};return tk;}
+function sleep(sec,t){return new Promise(res=>{const id=setTimeout(res,sec*1000);t.w.push(()=>{clearTimeout(id);res();});});}
+function tween(sec,fn,t){return new Promise(res=>{if(RM||sec<=0){fn(1);res();return;}const t0=performance.now();t.w.push(res);
+  function f(now){if(t.c){res();return;}const p=Math.min(1,(now-t0)/(sec*1000));fn(p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2);if(p<1)requestAnimationFrame(f);else res();}
+  requestAnimationFrame(f);});}
+async function runKF(f,t){
+  applyFlags(st,f);render();
+  const fx=st.x,fy=st.y,fth=st.th,tx=f.x??st.x,ty=f.y??st.y,tth=f.th??st.th;
+  const d=Math.hypot(tx-fx,ty-fy),a=Math.abs(tth-fth);
+  if(d>0||a>0){const sec=Math.max(d/(f.slow?.32:.9),a/140,.35)/speed();
+    await tween(sec,p=>{st.x=fx+(tx-fx)*p;st.y=fy+(ty-fy)*p;st.th=fth+(tth-fth)*p;render();},t);if(t.c)return;
+    if(d>0)st.trail.push([tx,ty]);}
+  if(f.read){for(let i=1;i<=f.read;i++){await sleep(.45/speed(),t);if(t.c)return;st.readN=i;render();}}
+  if(f.disp){for(const v of f.disp){await sleep(.9/speed(),t);if(t.c)return;st.disp=v;render();}}
+  if(f.confirm){for(let i=1;i<=f.confirm;i++){await sleep(.3/speed(),t);if(t.c)return;st.confirm=i;render();}}
+  applyEnd(st,f);render();
+  if(f.wait)await sleep(f.wait/speed(),t);
+}
+async function run(i,cont){
+  const t=cancel();cur=i;st=stateAt(i);playing=cont;ctl();card();render();
+  for(let k=i;k<STEPS.length;k++){
+    if(k!==i){cur=k;card();render();}
+    for(const f of STEPS[k].k){await runKF(f,t);if(t.c)return;}
+    st.fov=null;st.press=null;render();
+    if(!cont)break;
+    if(k<STEPS.length-1){await sleep(.6/speed(),t);if(t.c)return;}
+  }
+  playing=false;ctl();
+}
+function reset(){cancel();playing=false;ctl();cur=0;st=stateAt(0);card();render();}
+playBtn.addEventListener('click',()=>{if(playing){cancel();playing=false;ctl();}else run(cur>=STEPS.length-1?0:cur,true);});
+document.getElementById('b-next').addEventListener('click',()=>run(Math.min(cur+1,STEPS.length-1),playing));
+document.getElementById('b-prev').addEventListener('click',()=>run(Math.max(cur-1,0),playing));
+document.getElementById('b-first').addEventListener('click',reset);
+document.getElementById('label').addEventListener('change',e=>{LABEL=e.target.value;T=+LABEL[0];STEPS=build(LABEL);mP1.t.textContent=LABEL;buildChips();lastKey='';reset();});
+document.addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('select'))return;
+  if(e.key==='ArrowRight'){e.preventDefault();document.getElementById('b-next').click();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();document.getElementById('b-prev').click();}
+  else if(e.key===' '&&!(e.target.closest&&e.target.closest('button'))){e.preventDefault();playBtn.click();}});
+buildChips();card();render();
+
+/* ---------- elevation (heights) ---------- */
+(function(){
+  const sv=document.getElementById('elev'),E=165,FY=262,ey=h=>FY-h*E;
+  const g=el('g',{},sv);
+  el('line',{x1:44,y1:FY,x2:432,y2:FY,stroke:'var(--wall)','stroke-width':2},g);
+  for(let i=0;i<=7;i++){const h=i*.2;el('line',{x1:44,y1:ey(h),x2:50,y2:ey(h),stroke:'var(--muted)'},g);
+    el('text',{x:38,y:ey(h)+4,'text-anchor':'end','font-size':11,fill:'var(--muted)',class:'t-mono'},g,h.toFixed(1));
+    if(i>0)el('line',{x1:52,y1:ey(h),x2:432,y2:ey(h),stroke:'var(--grid)'},g);}
+  el('line',{x1:47,y1:FY,x2:47,y2:ey(1.4),stroke:'var(--muted)'},g);
+  el('text',{x:16,y:ey(1.4)-8,'font-size':11,fill:'var(--muted)',class:'t-mono'},g,'m');
+  // pallet + parcel with label on the face that looks at the robot
+  el('rect',{x:62,y:ey(.12),width:.40*E,height:.12*E,fill:'var(--pallet)'},g);
+  el('rect',{x:66,y:ey(.32),width:.30*E,height:.20*E,fill:'var(--box)',stroke:'var(--box-line)'},g);
+  el('rect',{x:74,y:ey(.255),width:34,height:15,fill:'#F4F4F2',stroke:'#9A9A95','stroke-width':.8},g);
+  el('text',{x:91,y:ey(.255)+11.5,'text-anchor':'middle','font-size':10,'font-weight':700,fill:'#111',class:'t-mono'},g,'402');
+  el('line',{x1:118,y1:ey(.22),x2:132,y2:ey(.22),stroke:'var(--cam)'},g);
+  el('text',{x:136,y:ey(.22)+4,'font-size':11.5,fill:'var(--ink)'},g,'송장 0.22 m');
+  el('text',{x:62,y:FY+18,'font-size':11.5,fill:'var(--muted)'},g,'A · 택배');
+  // floor display on a stand
+  const dxp=196,dw=.30*E,dc=1.13;
+  el('rect',{x:dxp+dw/2-3,y:ey(dc-.09),width:6,height:(dc-.09)*E,fill:'var(--muted)'},g);
+  el('rect',{x:dxp+dw/2-22,y:FY-4,width:44,height:4,fill:'var(--muted)'},g);
+  el('rect',{x:dxp,y:ey(dc+.09),width:dw,height:.18*E,rx:2,fill:'var(--panel)'},g);
+  const sm=makeSeg(g,dxp+dw/2-11,ey(dc+.09)+3,0.4);setSeg(sm,4);
+  el('line',{x1:dxp-4,y1:ey(dc),x2:dxp-16,y2:ey(dc),stroke:'var(--led)'},g);
+  el('text',{x:dxp-20,y:ey(dc)+4,'text-anchor':'end','font-size':11.5,fill:'var(--ink)'},g,'화면 중심 1.13 m');
+  el('text',{x:dxp+dw/2,y:FY+18,'text-anchor':'middle','font-size':11.5,fill:'var(--muted)'},g,'층수 화면');
+  // B wall boards: call board (▲ 0.68, ▼ 0.60) and floor board (rows 0.68 / 0.60)
+  const cb=330,fb=372,cw=.135*E,fw=.205*E;
+  el('rect',{x:cb,y:ey(.655+.1025),width:cw,height:.205*E,rx:2,fill:'var(--panel)'},g);
+  el('circle',{cx:cb+cw/2,cy:ey(.68),r:4.4,fill:'#EDEFF1'},g);
+  el('circle',{cx:cb+cw/2,cy:ey(.5955),r:4.4,fill:'#EDEFF1'},g);
+  el('rect',{x:fb,y:ey(.64+.08),width:fw,height:.16*E,rx:2,fill:'var(--panel)'},g);
+  [[.68,-.049],[.68,.049],[.60,-.049],[.60,.049]].forEach(([h,o])=>el('circle',{cx:fb+fw/2+o*E,cy:ey(h),r:4.4,fill:'#EDEFF1'},g));
+  [[.68,'윗줄 0.68 m'],[.60,'아랫줄 0.60 m']].forEach(([h,t])=>{el('line',{x1:cb-4,y1:ey(h),x2:cb-14,y2:ey(h),stroke:'var(--tape)'},g);
+    el('text',{x:cb-18,y:ey(h)+4,'text-anchor':'end','font-size':11.5,fill:'var(--ink)'},g,t);});
+  el('text',{x:cb+cw/2,y:FY+18,'text-anchor':'middle','font-size':11.5,fill:'var(--muted)'},g,'호출');
+  el('text',{x:fb+fw/2,y:FY+18,'text-anchor':'middle','font-size':11.5,fill:'var(--muted)'},g,'층 버튼');
+  el('text',{x:(cb+fb+fw)/2,y:ey(.92),'text-anchor':'middle','font-size':11.5,fill:'var(--ink)'},g,'B벽');
+})();
+
+/* ---------- schedule ---------- */
+(function(){
+  const G=document.getElementById('gantt');const start=new Date(2026,9,14);const days=22;
+  const idx=(m,d)=>Math.round((new Date(2026,m-1,d)-start)/864e5);
+  const add=(cls,style,kids)=>{const d=document.createElement('div');d.className=cls;if(style)d.style.cssText=style;(kids||[]).forEach(k=>d.appendChild(k));G.appendChild(d);return d;};
+  const txt=(tagName,t)=>{const e=document.createElement(tagName);e.textContent=t;return e;};
+  add('hd','grid-column:1');
+  for(let i=0;i<days;i++){const dt=new Date(start.getTime()+i*864e5);const wd=dt.getDay();
+    const lab=(i===0||dt.getDate()===1||wd===3)?`${dt.getMonth()+1}/${dt.getDate()}`:String(dt.getDate());
+    add('hd'+((wd===0||wd===6)?' we':'')+(i===0?' today':''),`grid-column:${i+2}`,[document.createTextNode(lab)]);}
+  const rows=[
+    ['공통','계획 확정·결정 회의',[['common',[10,14],[10,15]]]],
+    ['','강의실 확정·답사',[['common',[10,15],[10,17]]]],
+    ['시뮬','월드·소품·화면 노드',[['sim',[10,15],[10,18]]]],
+    ['','시나리오 러너·10회 연속',[['sim',[10,17],[10,20]],['ms',[10,20]]]],
+    ['인식','송장 라벨·판독기',[['',[10,15],[10,19]]]],
+    ['','인식 화면(프로젝터)',[['',[10,17],[10,22]]]],
+    ['팔','층 버튼 2·3 티칭',[['alt',[10,19],[10,23]]]],
+    ['1번 영상','촬영 · 예비일',[['vid',[10,21],[10,23]],['vid alt',[10,24],[10,25]]]],
+    ['실기','소품 제작',[['real',[10,15],[10,20]]]],
+    ['','단품 시험',[['real',[10,22],[10,27]]]],
+    ['','통합·강의실 리허설',[['real',[10,28],[11,1]],['real alt',[11,2],[11,3]]]],
+    ['시연','11/4(수) 15:00',[['ms final',[11,4]]]]
+  ];
+  rows.forEach((r,ri)=>{const row=ri+2;const kids=[];if(r[0])kids.push(txt('small',r[0]));kids.push(txt('b',r[1]));
+    add('lane',`grid-row:${row}`,kids);
+    r[2].forEach(b=>{if(b[0].startsWith('ms')){add(b[0],`grid-row:${row};grid-column:${idx(...b[1])+2}`);}
+      else add('bar '+b[0],`grid-row:${row};grid-column:${idx(...b[1])+2}/${idx(...b[2])+3}`);});});
+})();
+})();
+</script>
+</head></html>
