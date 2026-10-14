@@ -17,6 +17,9 @@ from .machine import Machine
 class ParcelPickup(Machine):
     name = 'parcel_pickup'
 
+    def before_dock(self, face):
+        """Hook at the predock stance after the pallet face is known (e.g. read the shipping label). No-op here."""
+
     def steps(self):
         io, c = self.io, self.cfg
         self.enter('PARCEL_PICKUP_STATE')
@@ -32,9 +35,14 @@ class ParcelPickup(Machine):
             self.enter('ARRIVE_PARCEL_AREA', error_m=round(err, 3))
             if err > c['approach_tol_m']:
                 self.drive(target)
-        self.enter('TURN_RIGHT_90', purpose='face the parcel area')
-        turn = io.base.turn_by(-math.pi/2)
-        self.require(turn.get('status') == 'REACHED', 'turn failed', result=turn)
+        # site layout: the parcel area is to the right of the approach (KKU locker, default -90 deg); a site where the
+        # robot arrives facing the parcels (classroom demo) sets turn_before_scan_rad 0
+        turn_rad = float(c.get('turn_before_scan_rad', -math.pi/2))
+        if abs(turn_rad) > 1e-6:
+            self.enter('TURN_RIGHT_90' if abs(turn_rad+math.pi/2) < 1e-6 else 'TURN_TO_PARCELS',
+                       purpose='face the parcel area', turn_rad=round(turn_rad, 4))
+            turn = io.base.turn_by(turn_rad)
+            self.require(turn.get('status') == 'REACHED', 'turn failed', result=turn)
         self.enter('LOWER_FORK')
         lowered = io.lift.lower()
         self.note(lift=lowered)
@@ -78,6 +86,7 @@ class ParcelPickup(Machine):
             face = {'centre': centre, 'normal': seen['normal'], 'dock': dock}
             self.note(face_width_m=round(seen['width_m'], 3), centre=[round(v, 3) for v in centre],
                       yaw=round(dock[2], 4))
+        self.before_dock(face)
         self.enter('DOCK', target=[round(v, 3) for v in face['dock']])
         self.stow()
         self.drive(face['dock'], max_v=c['dock_v'], tol=.01, yaw_tol=.015)
