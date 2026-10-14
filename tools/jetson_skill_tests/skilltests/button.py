@@ -110,7 +110,12 @@ class ButtonMixin:
                     c['press_envelope_m'][2]:
                 self.note(line_up='already there: planned from the sighting at the remembered line-up')
             else:
-                self.drive(line_up, reverse='auto', **lineup_drive)
+                # a few mrad of heading left at the line-up point are taken care of by the re-look below and the
+                # squaring/envelope check before the press (same as LINE_UP_AGAIN); a 0.0121 rad finish against the
+                # 0.012 rad arrival tolerance aborted a whole classroom run (2026-10-14)
+                lined = self.drive(line_up, reverse='auto', accept=('REACHED', 'YAW_ERROR'), **lineup_drive)
+                self.require(lined.get('status') == 'REACHED' or abs(lined.get('yaw_err_rad', 1.0)) <=
+                             c.get('lineup_yaw_slack_rad', .03), 'line-up heading error too large', result=lined)
                 # Look again from the line-up point: the estimate no longer carries the odometry drift of the turns on
                 # the way here. From the stance itself the arm-tip camera is too close to see the button. After a
                 # re-line-up look once more: its turns drift the odometry heading too (0.04 rad = 2 cm at the tip).
