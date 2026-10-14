@@ -846,7 +846,7 @@ class Stack:
         return out
 
     # ------------------------------------------------------------ teardown
-    def finish(self):
+    def finish(self, preserve_scene=False):
         node = self.node
         node.measure = False
         if getattr(self, 'attached', False):
@@ -856,6 +856,12 @@ class Stack:
             self.stop()
         except Exception:
             pass
+        if preserve_scene:
+            # Freeze physics only after the emergency stop; retain the failed pose for inspection.
+            preserve_scene = bool(node.call_empty('/pause_physics'))
+            self.result['scene_preserved'] = preserve_scene
+            if preserve_scene:
+                (self.dir/'SCENE_PRESERVED').write_text('Stopped robot; Gazebo physics paused. Close with sim_container.sh down.\n')
         if self.recorder is not None:
             self.processes.stop_one(self.recorder)
             self.result['bag'] = self.check_bag()
@@ -875,7 +881,8 @@ class Stack:
             writer.writerow(['sim_t', 'x', 'y', 'yaw', 'cov_xx', 'cov_yy', 'cov_yaw'])
             writer.writerows(node.amcl_hist)
         (self.dir/'rosout_warnings.txt').write_text('\n'.join(node.warnings)+'\n')
-        self.processes.cleanup()
+        if not preserve_scene:
+            self.processes.cleanup()
         (self.dir/'result.json').write_text(json.dumps(self.result, indent=2, default=str)+'\n')
         node.client.destroy()
         node.listener.unregister()

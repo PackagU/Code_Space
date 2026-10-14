@@ -756,7 +756,10 @@ def run_once(args, name):
                                        default=None)
         result['criteria'] = criteria(result)
         stack.result['e2e'] = result
-        stack.finish()
+        stack.finish(preserve_scene=args.gui and not result['completed'] and not args.close_on_failure)
+        result['scene_preserved'] = stack.result.get('scene_preserved', False)
+        if result['scene_preserved']:
+            print('SCENE_PRESERVED '+str(stack.dir), flush=True)
         result['bag_status'] = stack.result.get('bag', {}).get('status')
         summary = {k: result.get(k) for k in ('name', 'cabin_mode', 'params', 'odom', 'arm_sim', 'speed', 'load',
                                               'parcels', 'completed', 'failed_stage', 'sim_s', 'wall_s', 'min_wall_m', 'bag_status', 'error')}
@@ -793,6 +796,7 @@ def main():
     parser.add_argument('--load', default='pallet', choices=['pallet', 'box'],
                         help='--arm-sim: floor pallet picked by the lift carrier (default) or the 10/8 shelf box')
     parser.add_argument('--gui', action='store_true', help='gzclient (camera follows the robot) + RViz')
+    parser.add_argument('--close-on-failure', action='store_true', help='close failed GUI scene too (default: stop and retain it)')
     for key in ('position_error_max_m', 'yaw_error_max_rad', 'covariance_xy_max_m2', 'covariance_yaw_max_rad2',
                 'timeout_s'):
         parser.add_argument('--reloc-'+key.replace('_', '-'), dest='reloc_'+key, type=float, default=None)
@@ -814,6 +818,8 @@ def main():
                                  + (f'_x{args.speed:g}' if args.speed != 1.0 else ''))
             name = base if args.repeats == 1 and args.name else f'{base}_r{repeat}'
             results.append(run_once(args, name))
+            if results[-1].get('scene_preserved'):
+                break  # keep the failed scene; do not start another Gazebo over it
     finally:
         rclpy.try_shutdown()
     done = sum(r['completed'] for r in results)

@@ -241,6 +241,12 @@ class SimVision:
             rows = sorted(cands, key=lambda c: -c[2])
             row = sorted(rows[:2] if label in ('1', '2') else rows[2:4], key=lambda c: c[0]*rx+c[1]*ry)
             p = row[0] if label in ('1', '3') else row[1]
+            board = vc.floor_board_pose(self.per.buttons(bgr), self.P['dressing']['demo_buttons']['car_caps'],
+                                       label, self.per.size(), self.per.fx, pose, p, n)
+            if board is None:
+                return self.why('floor board image geometry disagrees with LiDAR', label=label)
+            p, n = board['xyz'], board['normal']
+            fit = dict(fit, camera_board_reprojection_px=board['reprojection_px'])
         return {'xyz': [float(v) for v in p], 'normal': [float(n[0]), float(n[1])], 'seen': len(cands),
                 'wall_fit': fit, 'label': label, 'kind': kind}
 

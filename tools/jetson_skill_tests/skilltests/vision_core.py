@@ -208,3 +208,44 @@ def button_light(bgr, pixel, hsv_ranges, radius=8, min_fraction=.3):
     r = int(radius)
     patch = bgr[max(0,v-r):v+r+1, max(0,u-r):u+r+1]
     return bool(patch.size and np.count_nonzero(mask(patch,hsv_ranges))/patch.shape[0]/patch.shape[1] >= min_fraction)
+
+
+def floor_board_pose(caps, layout, label, size, fx, pose, prior_xyz, wall_normal):
+    """Known cap spacing + existing camera image locate the board, checked against LiDAR.
+    A jagged wall's fitted normal must not move the planned tip off the actual cap.
+    Layout dimensions must be calibrated for the board used by the caller.
+    """
+    chosen = selected_cap(caps, 'car', label)
+    if chosen is None:
+        return None
+    group = [c for c in caps if c['board_bbox'] == chosen['board_bbox']]
+    slots = [selected_cap(group, 'car', str(item[0])) for item in layout]
+    if any(c is None for c in slots) or len(slots) != 4:
+        return None
+    objects = np.array([[r, -up, 0.] for _, r, up in layout], dtype=np.float64)
+    pixels = np.array([[c['u'], c['v']] for c in slots], dtype=np.float64)
+    K = np.array([[fx, 0., size[0]/2], [0., fx, size[1]/2], [0., 0., 1.]])
+    count, rotations, translations, _ = cv2.solvePnPGeneric(objects, pixels, K, None, flags=cv2.SOLVEPNP_IPPE)
+    cp, cR = pose
+    optical = np.array([[0., 0., 1.], [-1., 0., 0.], [0., -1., 0.]])
+    index = next(i for i, item in enumerate(layout) if str(item[0]) == str(label))
+    candidates = []
+    for rotation, translation in zip(rotations, translations):
+        R, _ = cv2.Rodrigues(rotation)
+        t = translation.reshape(3)
+        camera_points = objects@R.T+t
+        if np.min(camera_points[:, 2]) <= .02:
+            continue
+        xyz = cp+cR@optical@camera_points[index]
+        normal = -cR@optical@R[:, 2]
+        n = normal[:2]/np.linalg.norm(normal[:2])
+        angle = math.acos(float(np.clip(n@np.asarray(wall_normal), -1., 1.)))
+        distance = float(np.linalg.norm(xyz-np.asarray(prior_xyz)))
+        reproj, _ = cv2.projectPoints(objects, rotation, translation, K, None)
+        error = float(np.sqrt(np.mean((reproj.reshape(-1,2)-pixels)**2)))
+        if distance <= .08 and angle <= .15 and abs(normal[2]) <= .15 and error <= 1.5:
+            candidates.append((error+angle, xyz, n, error))
+    if not candidates:
+        return None
+    _, xyz, n, error = min(candidates, key=lambda item: item[0])
+    return {'xyz': xyz.tolist(), 'normal': n.tolist(), 'reprojection_px': error}

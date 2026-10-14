@@ -17,6 +17,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-10-14 Codex 후속: 사용자 실행 2번 버튼 접촉 실패를 네 캡 영상 자세 추정+LiDAR 교차 검사로 보완. `button_fix_20261014` 내부 버튼 첫 시도 접촉·점등 확인·중앙 복귀 69.5초 완료. 전체 왕복은 미실행. GUI 실패 시 비상 정지·물리 정지 뒤 화면 유지, `--close-on-failure`로 자동 종료 가능.
 - 2026-10-14 Codex: 독립 `cs_sim_e2e_codex_20261013`에서 요청 수정·보고서·로컬 session 정리. r10 전체 완료·안전 통과, 후속 r11/r12 전체와 r13/r14 복귀 실패를 보완. 최종 문 센서 포크/짐 반영은 단위 검사까지 통과, 추가 장시간 검증은 사용자 요청으로 종료. 최신 전체 완주 미확정. 다음: 최종 코드 전체 왕복 1회·F1 하차 재열림 확인. 보고서 `docs/sim_e2e_20261008/REPORT_CODEX_20261014.md`, session `docs/session_wiki/2026-10-14_codex_e2e/session.md`.
 - 2026-10-13 (Claude 192 데스크톱 시뮬, `lee/sim-e2e-20261008`): 엘리베이터·택배 자율 시퀀스(카메라로 찾고 팔 티칭 사이클로 누르고 지게팔로 집기)와 젯슨 현장 시험 폴더 `tools/jetson_skill_tests/`(입장·내부 버튼/하차·택배 승차, 기본 dry-run, `--floor F1|F2`). 사용자 사진 반영: 팔 오른쪽·상판 위, 시연 버튼판 치수·젯슨 각도 높이(0.68 m), 고정 각도 팔 자세. Codex 3회 검수 반영. 시뮬 검증일 뿐 실물 검증 아님. 현실 위험은 `docs/improvement_report.md` §1.29~§1.40, 결과는 `docs/sim_e2e_20261008/REPORT.md` 14절.
 - 2026-10-08 (Claude 192 데스크톱 시뮬): `lee/sim-e2e-20261008`에 실측 지도 E2E 시뮬(`sim/real_maps/`) 구성. 격리 컨테이너(--internal·LOCALHOST_ONLY·domain 77). 사전 시험 G1·G2·G3 전부 SUCCEEDED, G4에서 현장 스크립트 결함 3건 재현. 기본 왕복(캐빈 직접 주행) 3/3·팔 포함 1/1 완주, 안전 기준(최소 벽 0.15 m) 0회 통과, 전 구간 Nav2 1/3(F2 캐빈 진입 실패). 시뮬 검증일 뿐 실물 검증 아님. 결과: `docs/sim_e2e_20261008/REPORT.md`.
@@ -154,6 +155,7 @@ PR 마다 자동으로 코드 리뷰 코멘트를 다는 도구가 있음. 도�
 ---
 
 ## 메모
+- 2026-10-14 Codex 후속: 사용자 실행 2번 버튼 접촉 실패를 네 캡 영상 자세 추정+LiDAR 교차 검사로 보완. `button_fix_20261014` 내부 버튼 첫 시도 접촉·점등 확인·중앙 복귀 69.5초 완료. 전체 왕복은 미실행. GUI 실패 시 비상 정지·물리 정지 뒤 화면 유지, `--close-on-failure`로 자동 종료 가능.
 
 - ROS2 Domain ID: 0 (기본값 유지)
 - DISPLAY: `host.docker.internal:0.0` (VcXsrv)

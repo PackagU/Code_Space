@@ -7,7 +7,14 @@ export PACKAGU_SIM_CONTAINER="${PACKAGU_SIM_CONTAINER:-packagu_sim_codex_2026101
 SC="$ROOT_DIR/sim/real_maps/sim_container.sh"
 mkdir -p logs/real_map_sim
 RUN_NAME="codex_flat_wrist_$(date +%Y%m%d_%H%M%S)"
-trap 'bash "$SC" down' EXIT
+cleanup() {
+  if [[ -f "logs/real_map_sim/${RUN_NAME}_console.log" ]] && grep -q '^SCENE_PRESERVED ' "logs/real_map_sim/${RUN_NAME}_console.log"; then
+    echo "실패 화면 유지: 종료하려면 PACKAGU_SIM_CONTAINER=$PACKAGU_SIM_CONTAINER bash sim/real_maps/sim_container.sh down"
+  else
+    bash "$SC" down
+  fi
+}
+trap cleanup EXIT
 bash "$SC" up --gui  # X11 rendering is required for the existing wrist camera.
 if [[ ! -f install/setup.bash || "${SIM_REBUILD:-0}" == 1 ]]; then
   bash "$SC" exec bash -c 'colcon build --symlink-install --base-paths src test_workspace/elevator_auto_map_switch/src --packages-select common_pkg slam_pkg drive_pkg auto_floor_orchestrator_pkg' \
