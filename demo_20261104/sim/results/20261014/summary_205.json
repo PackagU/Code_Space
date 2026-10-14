@@ -1,0 +1,66 @@
+{
+ "run": "classroom_205_20261014_220027",
+ "validation_scope": "simulation (assumed dimensions)",
+ "label_arg": "205",
+ "speed": 1.0,
+ "readiness": {
+  "rtf": 0.9994165223267865,
+  "scan_rate_hz_sim": 7.575757575757576,
+  "scan_points": 1450,
+  "scan_valid_fraction": 1.0,
+  "tf_map_to_odom": 1,
+  "tf_odom_to_base_footprint": 1,
+  "tf_map_to_base_footprint": 1,
+  "amcl_pos_err_m": 0.05622633071404166,
+  "amcl_yaw_err_rad": 0.009657793889156241,
+  "lifecycle": {
+   "map_server": "active",
+   "amcl": "active",
+   "controller_server": "active",
+   "smoother_server": "active",
+   "planner_server": "active",
+   "behavior_server": "active",
+   "bt_navigator": "active",
+   "waypoint_follower": "active",
+   "velocity_smoother": "active"
+  },
+  "drive_ready": true,
+  "nav_safety_ready": true,
+  "failed": [],
+  "ready": true,
+  "truth_map_pose": [
+   "F1",
+   2.5116084128713903,
+   1.000106945400074,
+   -3.1388926620655986
+  ]
+ },
+ "steps_passed": 17,
+ "steps_total": 17,
+ "completed": true,
+ "label_expected": "205",
+ "label_read": "205",
+ "target_floor": 2,
+ "world_button_presses": [
+  "UP",
+  "2",
+  "DOWN",
+  "1"
+ ],
+ "expected_presses": [
+  "UP",
+  "2",
+  "DOWN",
+  "1"
+ ],
+ "display_final": 1,
+ "min_wall_m": 0.10722799893783456,
+ "sim_total_s": 628.0,
+ "wall_total_s": 628.7,
+ "low_row_cycles_sim_ik": {
+  "call": 3,
+  "destination": 4
+ },
+ "label_view": "pallet_view",
+ "wall_violations": []
+}

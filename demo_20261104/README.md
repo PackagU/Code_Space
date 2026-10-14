@@ -11,5 +11,6 @@
 | [scenario_viewer.html](./scenario_viewer.html) | 배치도와 시나리오 재생 페이지. 브라우저로 바로 연다 (인터넷 연결 시 글꼴만 추가로 받음) |
 | [images/classroom_layout.png](./images/classroom_layout.png) | 강의실 배치도 |
 | `sim/` | 강의실 시연 Gazebo 시뮬 (원커맨드 러너). 사용법은 `sim/README.md` |
+| `sim/results/20261014/` | 시뮬 검증 결과: 송장 402·310·205 각각 17/17 완주(1배속 약 10분 30초) |
 
 이 폴더는 `lee/sim-e2e-20261008` 브랜치의 `sim/real_maps`(격리 컨테이너, 시뮬 어댑터, 카메라 인식)와 `tools/jetson_skill_tests`(Jetson과 같은 상태기계)를 그대로 쓴다. 그래서 브랜치 `lee/demo-20261104`에서만 동작한다.
