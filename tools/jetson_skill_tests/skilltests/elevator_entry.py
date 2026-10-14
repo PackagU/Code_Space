@@ -20,10 +20,12 @@ class ElevatorEntry(ButtonMixin, Machine):
         self.enter('ELEVATOR_ENTRY_STATE', floor=c['floor'], call_button=c['call_label'])
         io.base.stop()
         for call in range(1+int(c['call_retries'])):
-            area = io.base.map_to_odom(tuple(c['button_view_pose_map']))
-            self.enter('GO_TO_BUTTON_AREA', call=call, target=[round(v, 3) for v in area])
-            self.stow()
-            self.drive(area, reverse='auto')            # back up if the spot is behind: less turning
+            # a remembered confirmed press: press_button drives straight to it instead of the general view spot
+            if not self.remembered_press('hall', c['call_label'], c['call_button_prior_map']):
+                area = io.base.map_to_odom(tuple(c['button_view_pose_map']))
+                self.enter('GO_TO_BUTTON_AREA', call=call, target=[round(v, 3) for v in area])
+                self.stow()
+                self.drive(area, reverse='auto')        # back up if the spot is behind: less turning
             self.press_button('hall', c['call_label'], c['call_button_prior_map'], 'hall_view')
             n, through, outside, cabin = self.door_path(c['door_centre_map'], c['cabin_centre_map'],
                                                         c.get('door_normal_map'))

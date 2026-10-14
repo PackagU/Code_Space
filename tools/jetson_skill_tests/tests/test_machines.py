@@ -47,6 +47,11 @@ class World:
         self.view_ok = True
         self.view_out = 0           # views that reach the posture but leave the target out of the picture
         self.doors = [((1.0, 1.0), (1.0, 0.0)), ((0.0, 1.0), (0.0, 1.0))]   # entry / ride test doors
+        self.door_close_at = None    # hold-open timer: the door closes again at this time
+
+    def door_is_open(self):
+        return (self.door_open_at is not None and self.t >= self.door_open_at
+                and (self.door_close_at is None or self.t < self.door_close_at))
 
 
 class Clock:
@@ -95,7 +100,7 @@ class Base:
     def scan(self):
         """Synthetic LiDAR: each test door is a wall line with a 1.0 m opening (open after door_open_at)."""
         x, y, yaw = self.w.pose
-        opened = self.w.door_open_at is not None and self.w.t >= self.w.door_open_at
+        opened = self.w.door_is_open()
         ranges = []
         for i in range(720):
             a = yaw-math.pi+2*math.pi*i/720
@@ -127,7 +132,7 @@ class Base:
     def range_at(self, bearing):
         if self.w.range_unknown:
             return None
-        return 3.0 if self.w.door_open_at is not None and self.w.t >= self.w.door_open_at else 1.0
+        return 3.0 if self.w.door_is_open() else 1.0
 
 
 class Arm:
@@ -305,6 +310,27 @@ class EntryTests(unittest.TestCase):
         self.assertIn((.31, .03, 0.0), w.drives)
         self.assertLess(s.index('LINE_UP_AGAIN'), s.index('PRESS_BUTTON'))
 
+    def test_after_lining_up_again_it_looks_again_before_driving_in(self):
+        # codex_flat_wrist_20261014_151831: the turn of the second line-up drifted the odometry heading by 0.04 rad
+        # after the last look -> the tip missed the cabin button by 3 cm. The press is planned from a look taken
+        # where the robot drives in from.
+        w = World()
+        io = io_for(w)
+        seen = iter([0.0, 0.03, 0.045])                  # the third look (after LINE_UP_AGAIN) sees the drift
+        last = [0.0]
+
+        def find_button(kind, label, prior, hint=None):
+            last[0] = next(seen, last[0])
+            return {'xyz': [1.0, last[0], .8], 'normal': [-1.0, 0.0], 'kind': kind, 'label': label}
+        io.vision.find_button = find_button
+        m = ElevatorEntry(io, self.cfg, echo=None)
+        m.run()
+        s = states(m)
+        first_press = s.index('PRESS_BUTTON')
+        self.assertEqual(s[:first_press].count('RECHECK_BUTTON'), 2)
+        self.assertGreater(s.index('RECHECK_BUTTON', s.index('LINE_UP_AGAIN')), s.index('LINE_UP_AGAIN'))
+        self.assertIn((.31, .045, 0.0), w.drives)                   # stance from the latest look
+
     def test_second_look_far_away_is_not_the_same_button(self):
         w = World()
         io = io_for(w)
@@ -383,6 +409,59 @@ class EntryTests(unittest.TestCase):
         self.assertEqual(saved, [candidates[1]])
         self.assertEqual(saved[0]['label'], 'UP')
         self.assertNotEqual(saved[0]['press_pose'], w.pose)
+
+    def remembered_io(self, w, press_pose, button_xyz=(1.0, 0.0, .8)):
+        io = io_for(w)
+        entry = {'floor': 'F1', 'kind': 'hall', 'label': 'UP', 'frame': 'map', 'source': 'arm_camera',
+                 'button_xyz': list(button_xyz), 'press_pose': list(press_pose), 'run': 'earlier'}
+        looked = []
+        io.press_memory = SimpleNamespace(lookup=lambda floor, kind, label: entry if (floor, kind, label) ==
+                                          ('F1', 'hall', 'UP') else None,
+                                          capture=lambda *a: dict(entry), commit=lambda e: None)
+        view = io.arm.view
+        io.arm.view = lambda name, target: looked.append(name) or view(name, target)
+        return io, looked
+
+    def test_remembered_press_goes_straight_to_its_line_up(self):
+        # stance for the fake button (x=1.0, facing -x) with tip 0.7 m ahead and 1 cm push: x=0.31
+        w = World()
+        io, looked = self.remembered_io(w, (0.31, 0.0, 0.0))
+        m = ElevatorEntry(io, self.cfg, echo=None)
+        m.run()
+        seq = states(m)
+        self.assertNotIn('GO_TO_BUTTON_AREA', seq)
+        self.assertNotIn('LOOK_FOR_BUTTON', seq)
+        self.assertNotIn('RECHECK_BUTTON', seq)          # the camera just looked from this very line-up
+        self.assertEqual(seq[1:4], ['GO_TO_REMEMBERED_LINE_UP', 'APPROACH_BUTTON', 'PRESS_BUTTON'])
+        self.assertEqual(w.drives[0], (0.06, 0.0, 0.0))  # 0.25 m behind the remembered press pose
+        self.assertEqual(looked[0], 'hall_press_view')
+        self.assertEqual(w.pressed, ['UP'])
+        self.assertEqual(seq[-1], 'DONE')
+
+    def test_remembered_press_falls_back_to_the_search_when_the_camera_misses(self):
+        w = World()
+        io, looked = self.remembered_io(w, (0.31, 0.0, 0.0))
+        found = io.vision.find_button
+        misses = [1]
+        def find_button(kind, label, prior, hint=None):
+            if misses:                                   # not seen from the remembered line-up
+                misses.pop()
+                return None
+            return found(kind, label, prior, hint)
+        io.vision.find_button = find_button
+        m = ElevatorEntry(io, self.cfg, echo=None)
+        m.run()
+        seq = states(m)
+        self.assertEqual(seq[1:3], ['GO_TO_REMEMBERED_LINE_UP', 'LOOK_FOR_BUTTON'])
+        self.assertIn('RECHECK_BUTTON', seq)
+        self.assertEqual(w.pressed, ['UP'])
+
+    def test_remembered_press_of_another_button_is_ignored(self):
+        w = World()
+        io, _ = self.remembered_io(w, (0.31, 0.0, 0.0), button_xyz=(3.0, 0.0, .8))   # 2 m from the taught prior
+        m = ElevatorEntry(io, self.cfg, echo=None)
+        m.run()
+        self.assertEqual(states(m)[1:3], ['GO_TO_BUTTON_AREA', 'LOOK_FOR_BUTTON'])
 
     def test_press_that_needs_the_front_past_the_wall_is_refused(self):
         tips = dict(TIPS, call=dict(TIPS['call'], xy=[0.5, 0.0]))   # tip 0.5 m ahead, fork front 0.6 m
@@ -515,6 +594,36 @@ class RideTests(unittest.TestCase):
         wait = next(e for e in m.events if e['state'] == 'WAIT_TARGET_FLOOR')
         self.assertEqual(wait['streak'], 3)
 
+    def test_door_closing_during_the_exit_line_up_is_not_driven_into(self):
+        # codex_flat_wrist_20261014_150631: 0.21 m off the opening's axis, the line-up onto it outlasted the hold-open
+        # time and the robot drove straight out into the closed door (front stop, 5 mm)
+        w = World()
+        w.floors = ['F2']*40
+        w.door_open_at = 0.0
+        w.pose = (0.2, 0.0, math.pi/2)
+        io = io_for(w)
+        def press(button):
+            w.pressed.append(button['label'])
+            w.door_open_at, w.door_close_at = w.t+2, None   # this floor's button reopens the door
+            return {'done': True}
+        io.arm.press = press
+        outs = []
+        go_to = io.base.go_to
+        def guarded(target, **kw):
+            if kw.get('min_front') is not None and target[1] > .5:
+                outs.append(w.door_is_open())                # every drive out through the door
+            result = go_to(target, **kw)
+            if 'EXIT_CABIN' in states(m) and not w.pressed and w.door_close_at is None:
+                w.door_close_at = w.t                        # the hold-open time ran out during the line-up
+            return result
+        io.base.go_to = guarded
+        m = ElevatorRide(io, self.cfg, echo=None)
+        m.run('exit')
+        self.assertTrue(outs)
+        self.assertTrue(all(outs), outs)
+        self.assertIn('REOPEN_DOOR', states(m))
+        self.assertEqual(states(m)[-1], 'DONE')
+
     def test_exit_reopens_closed_door(self):
         w = World()
         w.floors = ['F2']*20            # door closed until this floor's button is pressed again
@@ -618,8 +727,11 @@ class PressMemoryTests(unittest.TestCase):
 class ControllerTests(unittest.TestCase):
     """drive_to on a unicycle model."""
 
-    def run_drive(self, target, start=(0.0, 0.0, 0.0), check=None, stale_after=None, slip=0.0, **kw):
-        state = {'p': list(start), 't': 0.0, 'cmds': []}
+    def run_drive(self, target, start=(0.0, 0.0, 0.0), check=None, stale_after=None, slip=0.0, accel=None, delay=0.0,
+                  **kw):
+        """accel=(m/s^2, rad/s^2), delay=s: the wheels follow the command late (safety gate, bridge, MCU) and
+        acceleration-limited (max_wheel_accel_rpm_s), so the base coasts on after a zero command."""
+        state = {'p': list(start), 't': 0.0, 'cmds': [], 'av': 0.0, 'aw': 0.0, 'late': []}
 
         def pose():
             if stale_after is not None and state['t'] > stale_after:
@@ -632,6 +744,16 @@ class ControllerTests(unittest.TestCase):
 
         def sleep(dt):
             v, w = state.get('v', 0.0), state.get('w', 0.0)
+            if delay:
+                state['late'].append((state['t']+delay, v, w))
+                v, w = state.get('applied', (0.0, 0.0))
+                while state['late'] and state['late'][0][0] <= state['t']+1e-9:
+                    _, v, w = state['late'].pop(0)
+                state['applied'] = (v, w)
+            if accel is not None:
+                state['av'] += max(-accel[0]*dt, min(accel[0]*dt, v-state['av']))
+                state['aw'] += max(-accel[1]*dt, min(accel[1]*dt, w-state['aw']))
+                v, w = state['av'], state['aw']
             x, y, yaw = state['p']
             state['p'] = [x+v*math.cos(yaw)*dt, y+v*math.sin(yaw)*dt+slip*dt*abs(v), yaw+w*dt]
             state['t'] += dt
@@ -642,6 +764,16 @@ class ControllerTests(unittest.TestCase):
         result, _ = self.run_drive((1.0, 0.5, math.pi/2))
         self.assertEqual(result['status'], 'REACHED')
         self.assertLess(result['pos_err_m'], .03)
+
+    def test_coasting_past_a_tight_line_up_is_corrected(self):
+        # codex_flat_wrist_20261014_145133: the base coasted ~2.3 cm past the button line-up point while the final
+        # turn had already started -> POSITION_ERROR 3.2 cm against arrive_tol 1.5 cm
+        lineup = dict(max_v=.05, tol=.005, reaim_tol=.01, arrive_tol=.015, yaw_tol=.006, yaw_arrive_tol=.012)
+        for target in ((0.33, -0.05, -0.4), (0.30, 0.08, 0.35)):
+            for delay, accel in ((.6, (.05, .3)), (.8, (.1, .5)), (.2, (.1, .5))):
+                result, _ = self.run_drive(target, reverse='auto', accel=accel, delay=delay, **lineup)
+                self.assertEqual(result['status'], 'REACHED', (target, delay, result))
+                self.assertLessEqual(result['pos_err_m'], .015)
 
     def test_auto_reverse_backs_up_to_a_target_behind(self):
         # target 0.2 m behind-left: back up with a small turn instead of turning ~130 deg to face it

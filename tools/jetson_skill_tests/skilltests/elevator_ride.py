@@ -110,6 +110,10 @@ class ElevatorRide(ButtonMixin, Machine):
                     result = io.base.go_to((through[0], through[1], out_heading), max_v=c['slow_v'])
                     self.note(onto_axis=result, lateral_m=round(lateral, 3))
                     x, y, _ = io.base.pose()
+                    # the line-up takes a while: the hold-open time may have run out meanwhile. Never drive into a
+                    # closing door; a closed one is a blocked exit (reopen with this floor's button)
+                    if result.get('status') == 'REACHED' and self.door_from_scan(opened, door_o) is None:
+                        result = {'status': 'DOOR_CLOSED_AFTER_LINE_UP'}
                 if result.get('status') == 'REACHED':
                     # straight out along the robot's own track parallel to the door axis (no diagonal crossing)
                     ux, uy = math.cos(out_heading), math.sin(out_heading)

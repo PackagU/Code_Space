@@ -18,6 +18,7 @@ floor's cabin keeping its cabin-relative position AND yaw (cabin frame = *_eleva
 """
 import json
 import math
+import time
 from pathlib import Path
 
 import numpy as np
@@ -248,6 +249,7 @@ class Elevator(Node):
             off = self.offsets[dst]
             self.pending_carry = {'target': (nx+off[0],ny+off[1],z,nyaw), 'stable': 0,
                                   'future': None, 'attempts': 0, 'started': self.transfer_prepare_since, 'ack': False,
+                                  'wall_started': time.monotonic(),
                                   'record': {'from': src,'to':dst,'stamp':self.now(),'src_map_pose':[x,y,yaw],
                                              'cabin_relative':list(rel),'dst_map_pose':[nx,ny,nyaw]}}
         pending = self.pending_carry
@@ -277,7 +279,9 @@ class Elevator(Node):
             self.pending_carry = None
             self.transfer_prepare_since = None
             return True
-        if self.now()-pending['started'] > 5.0:
+        # 5 s of simulation time is under 1 s of wall time at --speed max: a Gazebo service busy for a moment is
+        # not a fault, so the deadline also needs 10 s of wall time
+        if self.now()-pending['started'] > 5.0 and time.monotonic()-pending['wall_started'] > 10.0:
             self.transfer_error = 'SetEntityState did not produce a stable destination pose'
             self.phase = 'fault'
             self.get_logger().error(self.transfer_error+' '+json.dumps({'attempts': pending['attempts'],

@@ -1,6 +1,9 @@
 """Find a wall button with the arm camera and press it with a TAUGHT press cycle (fixed servo angles, as on the
 Jetson): the robot stands so that the tip of the cycle's press pose lands on the button, square to the wall.
 
+With a remembered confirmed press of this button (press_memory): drive straight to its line-up point and look from
+there with the press posture; seen -> plan from that sighting and skip the separate line-up and second look, not
+seen -> the search below from where the robot stands. The camera always confirms the button before a press.
 Look (back off and look again if it is out of the picture) -> plan the stance from the cycle's press tip (robot
 frame xy, height, pointing direction; `press_tip` per button kind) -> drive to a line-up point square to the wall
 -> look again from there (the first estimate carries the odometry drift of the turns on the way; re-line-up if the
@@ -14,6 +17,12 @@ from .geometry import press_error, press_stance, rotate, to_frame, wall_gap
 
 
 class ButtonMixin:
+    def remembered_press(self, kind, label, prior_map_xyz, floor=None):
+        """The last confirmed press of this button (map frame), if one is near the taught prior."""
+        memory = getattr(self.io, 'press_memory', None)
+        entry = memory.lookup(floor or self.cfg.get('floor'), kind, label) if memory else None
+        return entry if entry and math.dist(entry['button_xyz'], prior_map_xyz) <= .6 else None
+
     def press_button(self, kind, label, prior_map_xyz, view, door_map=None, confirm_by=None, memory_floor=None):
         io, c = self.io, self.cfg
         door_odom = None if door_map is None else io.base.map_to_odom((door_map[0], door_map[1], 0.0))[:2]
@@ -22,8 +31,8 @@ class ButtonMixin:
         self.require(abs(tip['yaw']) <= .01, 'arm horizontal rotation is forbidden; teach a forward-only press')
         memory = getattr(io, 'press_memory', None)
         floor = memory_floor or c.get('floor')
-        remembered = memory.lookup(floor, kind, label) if memory else None
-        if remembered and math.dist(remembered['button_xyz'], prior_map_xyz) <= .6:
+        remembered = self.remembered_press(kind, label, prior_map_xyz, floor)
+        if remembered:
             prior_map_xyz = remembered['button_xyz']
             self.note(remembered_press=remembered, camera_recheck_required=True)
         px, py, _ = io.base.map_to_odom((prior_map_xyz[0], prior_map_xyz[1], 0.0))
@@ -31,9 +40,33 @@ class ButtonMixin:
         hint = {}
         if door_map is not None:
             hint['door_xy'] = io.base.map_to_odom((door_map[0], door_map[1], 0.0))[:2]
-        self.enter('LOOK_FOR_BUTTON', kind=kind, label=label, arm_view=view)
-        button, steps = None, int(c['look_back_steps'])
-        for step in range(steps+1):
+
+        def line_up_of(stance):
+            back = rotate((-c['line_up_m'], 0.0), stance[2])
+            return (stance[0]+back[0], stance[1]+back[1], stance[2])
+        lineup_drive = dict(max_v=c['slow_v'], tol=.005, reaim_tol=.01, arrive_tol=.015, yaw_tol=.006,
+                            yaw_arrive_tol=.012)
+        button = lined_up = None
+        if remembered:
+            # straight to where this button was last pressed and confirmed; the camera must find it again from there
+            target = line_up_of(io.base.map_to_odom(tuple(remembered['press_pose'])))
+            self.enter('GO_TO_REMEMBERED_LINE_UP', target=[round(v, 3) for v in target], run=remembered.get('run'))
+            self.stow()
+            result = io.base.go_to(target, reverse='auto', **lineup_drive)
+            self.note(drive=result)
+            if result.get('status') in ('REACHED', 'POSITION_ERROR', 'YAW_ERROR'):   # near enough to look
+                seen = io.arm.view(c['press_view'][key], prior)
+                if seen.get('reached'):
+                    self.current_view = c['press_view'][key]
+                    button = io.vision.find_button(kind, label, prior, hint)
+                elif seen.get('in_view') is not False:   # the posture itself failed: never drive on
+                    self.require(False, 'arm view posture not reached', view=c['press_view'][key], arm=seen)
+            lined_up = io.base.pose() if button is not None else None
+            self.note(seen=button is not None)
+        steps = int(c['look_back_steps'])
+        for step in range(steps+1 if button is None else 0):
+            if step == 0:
+                self.enter('LOOK_FOR_BUTTON', kind=kind, label=label, arm_view=view)
             seen = io.arm.view(view, prior)
             if seen.get('reached'):
                 self.current_view = view
@@ -65,48 +98,54 @@ class ButtonMixin:
             self.require(gap >= c['front_stop_m'], 'the taught press needs the robot closer to the wall than the '
                          'front stop allows', gap_m=round(gap, 3), front_stop_m=c['front_stop_m'])
             return stance, gap
-
-        def line_up_of(stance):
-            back = rotate((-c['line_up_m'], 0.0), stance[2])
-            return (stance[0]+back[0], stance[1]+back[1], stance[2])
         stance, gap = plan(button)
         for attempt in range(1+int(c['press_retries'])):
             line_up = line_up_of(stance)
             self.enter('APPROACH_BUTTON', attempt=attempt, stance=[round(v, 3) for v in stance], wall_gap_m=round(gap, 3),
                        cycle_tip=tip)
             self.stow()
-            self.drive(line_up, reverse='auto', max_v=c['slow_v'], tol=.005, reaim_tol=.01,
-                       arrive_tol=.015, yaw_tol=.006, yaw_arrive_tol=.012)
-            # Look again from the line-up point: the estimate no longer carries the odometry drift of the turns on
-            # the way here. From the stance itself the arm-tip camera is too close to see the button.
-            self.enter('RECHECK_BUTTON', attempt=attempt)
-            again_view = c['press_view'][key]               # fixed posture along the press direction
-            seen = io.arm.view(again_view, tuple(button['xyz']))
-            again = io.vision.find_button(kind, label, tuple(button['xyz']), hint) if seen.get('reached') else None
-            if again is not None:
-                shift = math.hypot(again['xyz'][0]-button['xyz'][0], again['xyz'][1]-button['xyz'][1])
-                turn = math.acos(max(-1.0, min(1.0, again['normal'][0]*button['normal'][0]
-                                               + again['normal'][1]*button['normal'][1])))
-                self.note(shift_m=round(shift, 3), turn_rad=round(turn, 3), xyz=[round(v, 3) for v in again['xyz']])
-                lim = c['recheck_max']
-                if shift > lim[0] or abs(again['xyz'][2]-button['xyz'][2]) > lim[1] or turn > lim[2]:
-                    self.note(rejected='not the same button (moved too far)')   # keep the first estimate
-                    again = None
-            if again is not None:
-                button = again
-                stance, gap = plan(button)
-                moved = line_up_of(stance)
-                if math.hypot(moved[0]-line_up[0], moved[1]-line_up[1]) > c['reaim_m'] or \
-                        abs(math.atan2(math.sin(moved[2]-line_up[2]), math.cos(moved[2]-line_up[2]))) > \
-                        c['press_envelope_m'][2]:
+            here = lined_up if attempt == 0 else None
+            if here is not None and math.hypot(here[0]-line_up[0], here[1]-line_up[1]) <= c['reaim_m'] and \
+                    abs(math.atan2(math.sin(here[2]-line_up[2]), math.cos(here[2]-line_up[2]))) <= \
+                    c['press_envelope_m'][2]:
+                self.note(line_up='already there: planned from the sighting at the remembered line-up')
+            else:
+                self.drive(line_up, reverse='auto', **lineup_drive)
+                # Look again from the line-up point: the estimate no longer carries the odometry drift of the turns on
+                # the way here. From the stance itself the arm-tip camera is too close to see the button. After a
+                # re-line-up look once more: its turns drift the odometry heading too (0.04 rad = 2 cm at the tip).
+                for look in range(3):
+                    self.enter('RECHECK_BUTTON', attempt=attempt, look=look)
+                    again_view = c['press_view'][key]               # fixed posture along the press direction
+                    seen = io.arm.view(again_view, tuple(button['xyz']))
+                    again = io.vision.find_button(kind, label, tuple(button['xyz']), hint) if seen.get('reached') \
+                        else None
+                    if again is not None:
+                        shift = math.hypot(again['xyz'][0]-button['xyz'][0], again['xyz'][1]-button['xyz'][1])
+                        turn = math.acos(max(-1.0, min(1.0, again['normal'][0]*button['normal'][0]
+                                                       + again['normal'][1]*button['normal'][1])))
+                        self.note(shift_m=round(shift, 3), turn_rad=round(turn, 3),
+                                  xyz=[round(v, 3) for v in again['xyz']])
+                        lim = c['recheck_max']
+                        if shift > lim[0] or abs(again['xyz'][2]-button['xyz'][2]) > lim[1] or turn > lim[2]:
+                            self.note(rejected='not the same button (moved too far)')   # keep the last estimate
+                            again = None
+                    if again is None:
+                        self.note(seen=False, arm=seen)   # keep the last estimate; the envelope check still applies
+                        break
+                    button = again
+                    stance, gap = plan(button)
+                    moved = line_up_of(stance)
+                    if (math.hypot(moved[0]-line_up[0], moved[1]-line_up[1]) <= c['reaim_m'] and
+                            abs(math.atan2(math.sin(moved[2]-line_up[2]), math.cos(moved[2]-line_up[2]))) <=
+                            c['press_envelope_m'][2]) or look == 2:
+                        break
                     self.enter('LINE_UP_AGAIN', attempt=attempt, line_up=[round(v, 3) for v in moved])
                     self.stow()
-                    # turns happen here, away from the wall; a blocked last few degrees are left to the envelope check
+                    # turns happen here, away from the wall; a blocked last few deg are left to the envelope check
                     self.note(drive=self.drive(moved, reverse='auto', accept=('REACHED', 'SWEEP_STOP'),
-                              max_v=c['slow_v'], tol=.005, reaim_tol=.01, arrive_tol=.015,
-                              yaw_tol=.006, yaw_arrive_tol=.012))
-            else:
-                self.note(seen=False, arm=seen)       # keep the first estimate; the envelope check still applies
+                                               **lineup_drive))
+                    line_up = moved
             self.stow()
             self.drive(stance, accept=('REACHED', 'FRONT_STOP', 'SWEEP_STOP'), max_v=c['slow_v'],
                        max_w=.08, tol=.003, reaim_tol=.006, arrive_tol=.01, final_yaw=False,
