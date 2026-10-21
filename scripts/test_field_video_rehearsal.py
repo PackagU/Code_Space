@@ -14,18 +14,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from field_video import backends, runner  # noqa: E402
-from field_video import ros_straight_move  # noqa: E402
+from field_video import ros_map_switch, ros_nav_idle, ros_straight_move  # noqa: E402
 
 SCENARIO = HERE / "field_video" / "scenario.json"
 REGISTRY = HERE.parent / "src" / "slam_pkg" / "maps" / "field" / "waypoints.json"
 
 
-def make(answers=None, failures=None, ultrasonic=None, nav_restart=False, auto=True, **field_kwargs):
+def make(answers=None, failures=None, ultrasonic=None, nav_restart=False, auto=True, ros_arm=False, **field_kwargs):
     scenario = runner.load_scenario(SCENARIO)
     tmp = tempfile.mkdtemp(prefix="fv_test_")
     out = []
     field = backends.FakeField(failures, **field_kwargs)
-    web = backends.FakeWeb(failures)
+    web = backends.FakeWeb(failures, ros_arm=ros_arm)
     lift = backends.FakeLift(failures)
     ui = runner.ConsoleUI(answers=answers, auto=auto, out=out.append)
     log = runner.RunLog(tmp, "test")
@@ -69,7 +69,7 @@ class FullRunTest(unittest.TestCase):
         for index, call in enumerate(calls):
             if call[0] in ("goal", "teleop", "straight", "straight_until"):
                 self.assertEqual(calls[index - 1], ("resume",), call)
-                self.assertEqual(calls[index - 2], ("cancel",), call)
+                self.assertEqual(calls[index - 2], ("idle",), call)
                 self.assertEqual(calls[index + 1], ("stop",), call)
             if call[0] == "teleop":
                 self.assertEqual(call[1], "released")
@@ -89,7 +89,8 @@ class FailurePathTest(unittest.TestCase):
     def test_goal_failure_is_retried_automatically_once(self):
         rehearsal, scenario, field, *_ = make(failures={"goal:f1_locker": 1})
         meta = run(rehearsal, scenario)
-        self.assertEqual(meta["retries"], 0)
+        self.assertEqual(meta["retries"], 1)  # 자동 재시도도 판정에 들어간다 (Codex #11)
+        self.assertFalse(meta["verdict"].startswith("한 번에"))
         locker = next(r for r in rehearsal.results if r["id"] == "S02")
         self.assertIn("자동 재시도 1회", locker["detail"])
         self.assertIn(("clear",), field.calls)
@@ -99,7 +100,7 @@ class FailurePathTest(unittest.TestCase):
         meta = run(rehearsal, scenario, only=["S02"])
         result = rehearsal.results[0]
         self.assertEqual((result["status"], result["attempts"]), ("OK", 2))
-        self.assertEqual(meta["retries"], 1)
+        self.assertEqual(meta["retries"], 2)
         self.assertFalse(meta["verdict"].startswith("한 번에"))
 
     def test_lamp_not_lit_retries_press(self):
@@ -142,6 +143,92 @@ class FailurePathTest(unittest.TestCase):
         run(rehearsal, scenario, only=["S07"])
         self.assertEqual(rehearsal.results[0]["adjusts"], 1)
         self.assertIn(("teleop", "released"), field.calls)
+
+
+class CodexReviewRegressionTest(unittest.TestCase):
+    """2026-10-21 Codex 검토 지적 재발 방지."""
+
+    def test_idle_check_failure_blocks_motion(self):  # 1
+        rehearsal, scenario, field, *_ = make(failures={"idle": 1}, answers=["", "", "q"])
+        run(rehearsal, scenario, only=["S02"])
+        names = [c[0] for c in field.calls]
+        self.assertNotIn("goal", names)
+        first_idle = names.index("idle")
+        self.assertNotIn("resume", names[:first_idle + 1])
+
+    def test_prep_stops_and_checks_idle_before_map_or_pose(self):  # 2
+        rehearsal, scenario, field, *_ = make(loaded="F1")
+        run(rehearsal, scenario, start="S14", end="S14")
+        names = [c[0] for c in field.calls]
+        self.assertLess(names.index("stop"), names.index("load_map"))
+        self.assertLess(names.index("idle"), names.index("load_map"))
+        self.assertLess(names.index("idle"), names.index("pose"))
+
+    def test_failed_teleop_blocks_auto_map_switch(self):  # 4
+        rehearsal, scenario, field, *_ = make(teleop_rc=127, answers=["", "q"])
+        meta = run(rehearsal, scenario, start="S12", end="S13")
+        self.assertTrue(meta["verdict"].startswith("중단"))
+        self.assertNotIn("load_map", [c[0] for c in field.calls])
+
+    def test_operator_must_confirm_exit_marker(self):  # 4
+        rehearsal, scenario, field, *_ = make(answers=["", "", "r", "r", ""])
+        run(rehearsal, scenario, start="S12", end="S13")
+        teleops = [c for c in field.calls if c[0] == "teleop"]
+        self.assertEqual(len(teleops), 2)
+        self.assertEqual(rehearsal.results[0]["attempts"], 2)
+
+    def test_lift_failure_sends_bang(self):  # 5
+        rehearsal, scenario, _, _, lift, _ = make(failures={"move:up": 1}, answers=["", "", "q"])
+        run(rehearsal, scenario, only=["S04"])
+        self.assertIn(("estop",), lift.calls)
+
+    def test_ros_arm_with_nav_off_aborts_with_order(self):  # 8
+        rehearsal, scenario, field, *_ = make(ros_arm=True, nav_running=False)
+        meta = run(rehearsal, scenario)
+        self.assertIn("--ros-arm", meta["verdict"])
+        self.assertNotIn("start", [c[0] for c in field.calls])
+
+    def test_nav_restart_with_ros_arm_is_refused(self):  # 8
+        rehearsal, scenario, *_ = make(ros_arm=True, nav_restart=True)
+        meta = run(rehearsal, scenario)
+        self.assertIn("--nav-restart", meta["verdict"])
+
+    def test_lift_reply_with_distance_is_kept(self):  # 10
+        sensor = backends.Ultrasonic()
+        lift = backends.LiftUno("/dev/null", output=lambda _l: None, line_hook=sensor.feed)
+        for line in ("UP complete position_pulses=166400 distance_cm=14",
+                     "BOTTOM_REFERENCE_CONFIRMED position_pulses=0 distance_cm=14"):
+            lift._append(line)
+        self.assertEqual([l for _, l in lift.lines][-2:],
+                         ["UP complete position_pulses=166400 distance_cm=14",
+                          "BOTTOM_REFERENCE_CONFIRMED position_pulses=0 distance_cm=14"])
+        self.assertTrue(backends.is_ultrasonic_only("US distance_cm=3"))
+        self.assertFalse(backends.is_ultrasonic_only("UP complete"))
+
+    def test_unexpected_error_still_stops_and_writes_summary(self):
+        rehearsal, scenario, field, *_ = make()
+
+        def boom(*_a):
+            raise ZeroDivisionError("bug")
+
+        rehearsal.do_wait = boom
+        meta = run(rehearsal, scenario, only=["S08"])
+        self.assertIn("ZeroDivisionError", meta["verdict"])
+        self.assertIn(("stop",), field.calls)
+        self.assertTrue((rehearsal.log.dir / "summary.md").exists())
+
+    def test_helper_pure_functions(self):
+        class S:
+            def __init__(self, status):
+                self.status = status
+                self.goal_info = type("I", (), {"goal_id": type("U", (), {"uuid": [1, 2]})()})()
+        array = type("A", (), {"status_list": [S(2), S(4), S(6)]})()
+        self.assertEqual(ros_nav_idle.active_goals(array), ["0102"])
+        self.assertEqual(ros_nav_idle.active_goals(None), [])
+        self.assertEqual(ros_nav_idle.foreign_publishers({"velocity_smoother", "packagu_field_web_ui"}),
+                         ["packagu_field_web_ui"])
+        self.assertTrue(ros_map_switch.same_size((10.0, 5.0), (10.1, 4.95)))
+        self.assertFalse(ros_map_switch.same_size((10.0, 5.0), (20.0, 5.0)))
 
 
 class UltrasonicTest(unittest.TestCase):
@@ -261,6 +348,20 @@ class LiftUnoTest(unittest.TestCase):
         with self.assertRaises(backends.BackendError):
             lift.move("up", 0.3)
         self.assertEqual(lift.conn.written[-1], "!")
+        lift.close()
+
+
+class LiftSerialErrorTest(unittest.TestCase):
+    def test_serial_error_during_move_sends_bang(self):  # 5
+        lift = backends.LiftUno("/dev/null", output=lambda _l: None)
+        lift.conn = FakeUnoConn(complete=False)
+        threading.Thread(target=lift._reader, daemon=True).start()
+        lift.set_reference("bottom")
+        threading.Timer(0.2, lambda: lift._append("SERIAL_ERROR device disconnected")).start()
+        with self.assertRaises(backends.BackendError):
+            lift.move("up", 5.0)
+        self.assertEqual(lift.conn.written[-1], "!")
+        self.assertFalse(lift.moving)
         lift.close()
 
 

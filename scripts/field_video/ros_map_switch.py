@@ -2,6 +2,8 @@
 """촬영 리허설용 층 지도 교체 (ROS 컨테이너 안에서 실행).
 
 Nav2 를 끄지 않고 /map_server/load_map 으로 지도만 바꾼 뒤 costmap 을 비운다.
+새 /map 과 전역 costmap 의 크기(m)가 같아질 때까지 기다려 정적 지도 반영을 확인한다.
+costmap 비우기나 반영 확인이 실패하면 실패로 끝낸다(다음 goal 금지).
 Nav2 재시작(약 수십 초)과 팔 노드 충돌(start_field_navigation.sh 가 팔 노드를
 거부)을 피하기 위해서다. 지도 버전 확인은 호출하는 쪽이 field_map_guard 로 한다.
 
@@ -12,6 +14,7 @@ import argparse
 import json
 import re
 import sys
+import time
 
 YAML_RE = re.compile(r"^/ros2_ws/maps/[A-Za-z0-9_./-]+\.yaml$")
 CLEAR_SERVICES = (
@@ -22,6 +25,14 @@ CLEAR_SERVICES = (
 
 def emit(**fields):
     print("MAP_SWITCH_RESULT " + json.dumps(fields, ensure_ascii=False, sort_keys=True), flush=True)
+
+
+def size_m(grid):
+    return grid.info.width * grid.info.resolution, grid.info.height * grid.info.resolution
+
+
+def same_size(a, b, tolerance=0.15):
+    return abs(a[0] - b[0]) <= tolerance and abs(a[1] - b[1]) <= tolerance
 
 
 def call(rclpy, node, client, request, timeout):
@@ -46,9 +57,13 @@ def main(argv=None):
 
     import rclpy
     from nav2_msgs.srv import ClearEntireCostmap, LoadMap
+    from nav_msgs.msg import OccupancyGrid
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
     rclpy.init()
     node = rclpy.create_node("packagu_field_video_map_switch")
+    grids = {"map": None, "costmap": None}
+    latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
     result = {"ok": False, "map_yaml": args.map_yaml or None, "cleared": []}
     try:
         if not args.clear_only:
@@ -67,9 +82,25 @@ def main(argv=None):
             _, error = call(rclpy, node, node.create_client(ClearEntireCostmap, service),
                             ClearEntireCostmap.Request(), 5.0)
             if error:
-                result.setdefault("warnings", []).append(f"{service}: {error}")
+                result["reason"] = f"{service}: {error}"
+                return 1
+            result["cleared"].append(service)
+        if not args.clear_only:
+            node.create_subscription(OccupancyGrid, "/map", lambda m: grids.__setitem__("map", m), latched)
+            node.create_subscription(OccupancyGrid, "/global_costmap/costmap",
+                                     lambda m: grids.__setitem__("costmap", m), latched)
+            deadline = time.monotonic() + args.timeout
+            while time.monotonic() < deadline:
+                rclpy.spin_once(node, timeout_sec=0.1)
+                if grids["map"] is not None and grids["costmap"] is not None and \
+                        same_size(size_m(grids["map"]), size_m(grids["costmap"])):
+                    break
             else:
-                result["cleared"].append(service)
+                result["reason"] = "global costmap did not take the new map size within timeout"
+                result["map_size_m"] = grids["map"] and [round(v, 2) for v in size_m(grids["map"])]
+                result["costmap_size_m"] = grids["costmap"] and [round(v, 2) for v in size_m(grids["costmap"])]
+                return 1
+            result["map_size_m"] = [round(v, 2) for v in size_m(grids["map"])]
         result["ok"] = True
         return 0
     finally:

@@ -187,8 +187,8 @@ class Rehearsal:
             self.say(f"  !! {exc}")
 
     def _with_motion(self, action):
-        """goal 없음 확인 → resume → 동작 → 무조건 stop."""
-        self.field.cancel_all()
+        """정지 유지 상태에서 goal 없음·/cmd_vel 단독 확인 → resume → 동작 → 무조건 stop."""
+        self.field.ensure_idle()
         self.field.resume()
         try:
             return action()
@@ -215,15 +215,23 @@ class Rehearsal:
             ok, status = self._with_motion(lambda: self.field.goal(step["waypoint"], wp["floor"]))
             self.log.event("goal", step=step["id"], waypoint=step["waypoint"], attempt=attempt + 1, status=status)
             if ok:
+                self._auto_retries += attempt
                 return "OK", f"{step['waypoint']} {status}" + (f" (자동 재시도 {attempt}회)" if attempt else "")
             if attempt < retries:
                 self.say(f"  ↻ goal {status}: costmap 을 비우고 자동으로 한 번 더 보냅니다")
                 self.field.clear_costmaps()
+        self._auto_retries += retries
         raise StepFailed(f"goal {step['waypoint']} {status}")
 
     def do_teleop(self, step):
         self.say("  키보드 조종: w/s/a/d 이동 · k 또는 Space 정지 · z 감속 · 끝나면 Ctrl+C")
-        self._with_motion(self.field.teleop)
+        rc = self._with_motion(self.field.teleop)
+        if rc not in (0, 130):
+            raise StepFailed(f"keyboard teleop exited with code {rc} (조종이 열리지 않았거나 비정상 종료)")
+        if step.get("confirm"):
+            answer = self.ui.ask(f"  {step['confirm']}  [Enter=예 · r=다시 조종] ")
+            if answer == "r":
+                raise StepFailed("operator: not at the target yet")
         return "OK", "manual drive"
 
     def do_move(self, step):
@@ -375,6 +383,8 @@ class Rehearsal:
 
     # -- per-step loop
     def menu_text(self, step, failed):
+        if failed and step["type"] in ("teleop", "wait"):
+            return "  r=다시  q=중단 > "
         if failed:
             return "  r=다시  t=위치 수동 보정 후 다시  s=사람이 대신함  q=중단 > "
         kind = step["type"]
@@ -410,6 +420,7 @@ class Rehearsal:
         handler = getattr(self, "do_" + step["type"])
         started = time.monotonic()
         attempts, adjusts, failed, detail = 0, 0, False, ""
+        self._auto_retries = 0
         self.banner(step, index, total)
         while True:
             if failed or not step.get("auto"):
@@ -444,7 +455,8 @@ class Rehearsal:
     def _result(self, step, status, attempts, adjusts, started, detail):
         seconds = time.monotonic() - started
         result = {"id": step["id"], "title": step["title"], "type": step["type"], "status": status,
-                  "attempts": attempts, "adjusts": adjusts, "seconds": seconds, "detail": detail}
+                  "attempts": attempts, "adjusts": adjusts, "seconds": seconds, "detail": detail,
+                  "auto_retries": getattr(self, "_auto_retries", 0)}
         self.results.append(result)
         self.log.event("step_done", **result)
         mark = {"OK": "✓", "MANUAL": "✋", "SKIPPED": "–"}.get(status, "?")
@@ -461,10 +473,9 @@ class Rehearsal:
                  f"포크 {'위 끝' if start['lift'] == 'top' else '아래 끝'}, 마지막 위치 {start['waypoint'] or '-'}")
         if not self.field.container_running():
             raise Abort("ROS container is not running")
+        web_state = self._prep_button_web() if "button" in types else None
         if types & set(NAV_TYPES):
-            self._prep_navigation(start["floor"])
-        if "button" in types:
-            self._prep_button_web()
+            self._prep_navigation(start["floor"], web_state)
         if "lift" in types or (types & {"approach"} and self.ultrasonic is not None and not self.ultrasonic.port):
             self._prep_lift(start["lift"])
         if "approach" in types:
@@ -481,8 +492,19 @@ class Rehearsal:
         self.field.stop()
         self.log.event("prep_done", start=start)
 
-    def _prep_navigation(self, floor):
+    def _prep_navigation(self, floor, web_state=None):
         status = self.field.status()
+        ros_arm = bool(web_state and web_state.get("ros_arm"))
+        if self.nav_restart and ros_arm:
+            raise Abort("--nav-restart cannot be used with the --ros-arm button web "
+                        "(start_field_navigation.sh refuses to start while the arm node runs)")
+        if status.get("navigation") == "running":
+            # 이전 실행의 goal 이 남아 있을 수 있다: 지도·pose·질문보다 먼저 멈추고 goal 이 없는지 확인
+            self.field.stop()
+            self.field.ensure_idle()
+        elif ros_arm:
+            raise Abort("Nav2 is off but the button web runs with --ros-arm. Order: base → Nav2(F1) → arm node "
+                        "→ website, then rerun (start_field_navigation.sh refuses while the arm node runs)")
         if status.get("base") != "running":
             if self.ui.ask("  base 가 꺼져 있습니다. 바퀴 구동 포함으로 켤까요? [Enter=켜기 · q=중단] ") == "q":
                 raise Abort("base not running")
@@ -495,6 +517,7 @@ class Rehearsal:
                 try:
                     self.field.start_background(f"nav_{floor}", ["nav", "start", floor],
                                                 r"Managed nodes are active", 150, self.log.dir)
+                    self.field.stop()
                     break
                 except BackendError as exc:
                     if attempt == 2:
@@ -518,6 +541,7 @@ class Rehearsal:
             raise Abort("button web is in preview mode (arm will not move). Start it with --execute or --ros-arm")
         if state.get("busy"):
             raise Abort("arm is busy on the button web; wait or press 중지")
+        return state
 
     def _prep_lift(self, expected):
         self.lift.open()
@@ -561,7 +585,7 @@ class Rehearsal:
         if self.ultrasonic_open:
             self.ultrasonic.close()
         manual = sum(1 for r in self.results if r["status"] == "MANUAL")
-        retries = sum(max(0, r["attempts"] - 1) for r in self.results)
+        retries = sum(max(0, r["attempts"] - 1) + r.get("auto_retries", 0) for r in self.results)
         adjusts = sum(r["adjusts"] for r in self.results)
         if aborted:
             verdict = f"중단 ({aborted})"
@@ -592,7 +616,9 @@ class Rehearsal:
         except KeyboardInterrupt:
             aborted = "Ctrl+C"
             self.safe_stop("Ctrl+C")
-        except BackendError as exc:
-            aborted = str(exc)
+        except Exception as exc:  # noqa: BLE001 — 어떤 오류든 정지·기록은 남긴다
+            aborted = f"{type(exc).__name__}: {exc}"
             self.safe_stop(f"error: {aborted}")
-        return self.finish(aborted)
+        finally:
+            meta = self.finish(aborted)
+        return meta

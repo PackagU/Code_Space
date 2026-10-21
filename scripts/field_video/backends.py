@@ -60,11 +60,21 @@ class FieldStack:
                     proc.send_signal(signal.SIGINT)
             return proc.wait(), lines
         except KeyboardInterrupt:
+            self.emergency_gate_stop()
             try:
-                proc.wait(timeout=15)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.terminate()
             raise
+
+    def emergency_gate_stop(self):
+        """Ctrl+C 직후 다른 경로로 gate 정지를 먼저 건다. 새 세션이라 다음 Ctrl+C 에 끊기지 않는다."""
+        self.output("  ■ Ctrl+C — gate 정지 요청 먼저 보냄")
+        try:
+            subprocess.run([self.fieldctl, "stop"], env=self.env, cwd=str(self.root), timeout=20,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except (subprocess.TimeoutExpired, OSError):
+            self.output("  !! gate 정지 확인 실패 — 물리 비상정지를 누르세요")
 
     def ctl(self, *args, timeout=None):
         rc, lines = self._stream([self.fieldctl, *[str(a) for a in args]], timeout=timeout)
@@ -135,6 +145,13 @@ class FieldStack:
 
     def cancel_all(self):
         self.ctl("cancel", "--all")
+
+    def ensure_idle(self):
+        """살아 있는 Nav2 goal 이 없고(있으면 취소 완료까지 대기) /cmd_vel 에 다른 발행자가 없음을 확인."""
+        data = self._run_helper("ros_nav_idle.py", [], "NAV_IDLE_RESULT ")
+        if not data.get("ok"):
+            raise BackendError(f"not safe to drive directly: {data.get('reason')}")
+        return data
 
     def goal(self, name, floor):
         rc, lines = self.ctl("goal", name, floor)
@@ -360,9 +377,21 @@ class LiftUno:
     def open(self):
         import serial  # pyserial (Jetson 호스트에 이미 있음: lift_uno_position_terminal.py 와 같음)
 
+        import fcntl
+
         if not os.path.exists(self.port):
             raise BackendError(f"lift port not found: {self.port}")
-        self.conn = serial.Serial(self.port, 115200, timeout=0.2)
+        # lift_uno_adapter.py 와 같은 잠금 파일 + 포트 독점: 지게팔 터미널·진행기 중복 실행 거부
+        self._lock = open("/tmp/packagu_lift_uno.lock", "w", encoding="ascii")
+        try:
+            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self._lock.close()
+            raise BackendError("another lift serial owner is active (lift terminal or second rehearsal)")
+        try:
+            self.conn = serial.Serial(self.port, 115200, timeout=0.2, exclusive=True)
+        except Exception as exc:  # noqa: BLE001 — busy port or permission
+            raise BackendError(f"cannot open lift port {self.port}: {exc}")
         time.sleep(2.0)  # Uno reset after open
         self.conn.reset_input_buffer()
         threading.Thread(target=self._reader, daemon=True).start()
@@ -378,9 +407,10 @@ class LiftUno:
                 self._append(raw.decode("utf-8", errors="replace").strip())
 
     def _append(self, line):
-        consumed = self.line_hook(line) if self.line_hook else False
-        if consumed and not line.startswith("STATUS"):
-            return  # 초음파 전용 줄은 화면·응답 목록에 넣지 않는다. STATUS 는 지게팔 응답이라 남긴다
+        if self.line_hook:
+            self.line_hook(line)
+            if is_ultrasonic_only(line):
+                return  # 순수 초음파 줄만 숨긴다. 완료·기준·거부·STATUS 줄은 거리값이 있어도 남긴다
         with self.lock:
             self.lines.append((time.monotonic(), line))
         self.output("  │ UNO> " + line)
@@ -388,8 +418,11 @@ class LiftUno:
     def _send(self, command):
         if self.conn is None:
             raise BackendError("lift port is not open")
-        self.conn.write(command.encode("ascii") + b"\n")
-        self.conn.flush()
+        try:
+            self.conn.write(command.encode("ascii") + b"\n")
+            self.conn.flush()
+        except Exception as exc:  # noqa: BLE001 — serial errors become operator-visible failures
+            raise BackendError(f"lift serial write failed: {exc}")
 
     def _wait_for(self, since, predicate, timeout):
         deadline = time.monotonic() + timeout
@@ -429,14 +462,14 @@ class LiftUno:
                                       or "REJECT" in l.upper() or "SERIAL_ERROR" in l, 1.0)
                 if line:
                     if "COMPLETE" not in line.upper():
-                        raise BackendError(f"lift {action} rejected: {line}")
+                        raise BackendError(f"lift {action} failed: {line}")
                     break
                 if progress:
                     progress(time.monotonic() - started)
             else:
-                self.emergency_stop()
                 raise BackendError(f"lift {action} did not complete within {timeout} s (stopped with '!')")
-        except KeyboardInterrupt:
+        except BaseException:
+            # 이동 명령을 보낸 뒤의 모든 실패(시간 초과·거부·시리얼 오류·Ctrl+C)는 '!' 를 먼저 보낸다
             self.emergency_stop()
             raise
         finally:
@@ -457,10 +490,20 @@ class LiftUno:
         self._stop.set()
         if self.conn is not None:
             self.conn.close()
+        if getattr(self, "_lock", None) is not None:
+            self._lock.close()
 
 
 # ---------------------------------------------------------------- ultrasonic
 US_RE = re.compile(r"(?:\bUS\b|ultra\w*|sonar|dist(?:ance)?(?:_cm)?)\s*[=:]?\s*(-?\d+(?:\.\d+)?)", re.I)
+
+
+ULTRASONIC_ONLY_RE = re.compile(r"^(?:US|DIST(?:ANCE)?|ULTRA\w*|SONAR)\b", re.I)
+
+
+def is_ultrasonic_only(line):
+    """초음파 전용 줄(US/DIST/ULTRASONIC/SONAR 로 시작)인지. 지게팔 응답 줄은 False."""
+    return bool(ULTRASONIC_ONLY_RE.match(line.strip()))
 
 
 def parse_ultrasonic(line):
@@ -553,8 +596,9 @@ class _FailPlan:
 
 
 class FakeField:
-    def __init__(self, failures=None, base_running=True, nav_running=True, loaded="F1"):
+    def __init__(self, failures=None, base_running=True, nav_running=True, loaded="F1", teleop_rc=0):
         self.calls = []
+        self.teleop_rc = teleop_rc
         self.fail = _FailPlan(failures)
         self.base_running, self.nav_running, self.loaded = base_running, nav_running, loaded
         self.stopped = True
@@ -597,6 +641,12 @@ class FakeField:
 
     def cancel_all(self):
         self._log("cancel")
+
+    def ensure_idle(self):
+        self._log("idle")
+        if self.fail.hit("idle"):
+            raise BackendError("not safe to drive directly: 1 Nav2 goal(s) still active after cancel")
+        return {"ok": True}
 
     def goal(self, name, floor):
         self._log("goal", name, floor)
@@ -657,7 +707,7 @@ class FakeField:
 
     def teleop(self):
         self._log("teleop", "stopped" if self.stopped else "released")
-        return 0
+        return self.teleop_rc
 
     def start_background(self, key, args, ready_pattern, timeout, log_dir):
         self._log("start", key, *args)
@@ -675,8 +725,9 @@ class FakeField:
 class FakeWeb:
     MISSIONS = {("hall", "up"): "UP", ("hall", "down"): "DOWN", ("car", "up"): "4", ("car", "down"): "1"}
 
-    def __init__(self, failures=None, physical=True):
+    def __init__(self, failures=None, physical=True, ros_arm=False):
         self.calls = []
+        self.ros_arm = ros_arm
         self.fail = _FailPlan(failures)
         self.target = "UP"
         self.physical = physical
@@ -693,7 +744,7 @@ class FakeWeb:
         if busy:
             self.busy_polls -= 1
         message = self.last_error or ("버튼 %s 누르기 완료" % self.target)
-        return {"error": None, "frames": 100, "execute": self.physical, "mode": "fake",
+        return {"error": None, "frames": 100, "execute": self.physical, "mode": "fake", "ros_arm": self.ros_arm,
                 "target": self.target, "ready": None if busy else ready, "token": None if busy else token,
                 "busy": busy, "message": message, "floor": {"floor": "4", "score": 0.9}}
 
@@ -736,7 +787,8 @@ class FakeLift:
     def move(self, action, timeout, progress=None):
         self.calls.append(("move", action))
         if self.fail.hit("move:" + action):
-            raise BackendError(f"lift {action} rejected: fake")
+            self.emergency_stop()
+            raise BackendError(f"lift {action} failed: fake")
         self.position = self.move_size if action == "up" else 0
         return self.status()
 
