@@ -76,7 +76,15 @@ def run_terminal(device):
         )
     print(f"Opening {device} at 115200 baud. Opening USB may reset the Uno.")
     print("Commands: t=set top, b=set bottom, u=up, d=down, s=status, !=stop pulses, h=help, q=quit")
-    with serial.Serial(device, 115200, timeout=0.2) as connection:
+    # 2026-10-21: 촬영 리허설 진행기·lift_uno_adapter.py 와 같은 잠금. 같은 Uno 를 두 프로그램이 열지 않는다.
+    import fcntl
+    lock = open("/tmp/packagu_lift_uno.lock", "w", encoding="ascii")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.close()
+        raise RuntimeError("Another lift serial owner is active (rehearsal runner or adapter). Close it first.")
+    with lock, serial.Serial(device, 115200, timeout=0.2, exclusive=True) as connection:
         time.sleep(2.0)
         connection.reset_input_buffer()
         finished = threading.Event()

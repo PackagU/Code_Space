@@ -179,8 +179,9 @@ class Rehearsal:
     def safe_stop(self, why):
         self.say(f"  ■ 정지: {why}")
         self.log.event("safe_stop", why=why)
-        if self.lift_open and getattr(self.lift, "moving", False):
-            self.lift.emergency_stop()
+        if self.lift_open and (getattr(self.lift, "moving", False) or getattr(self.lift, "stop_unconfirmed", False)):
+            if hasattr(self.lift, "stop_and_confirm") and not self.lift.stop_and_confirm():
+                self.say("  !! 지게팔 정지 확인 실패 — 물리 비상정지를 누르세요")
         try:
             self.field.stop()
         except BackendError as exc:
@@ -219,7 +220,10 @@ class Rehearsal:
                 return "OK", f"{step['waypoint']} {status}" + (f" (자동 재시도 {attempt}회)" if attempt else "")
             if attempt < retries:
                 self.say(f"  ↻ goal {status}: costmap 을 비우고 자동으로 한 번 더 보냅니다")
-                self.field.clear_costmaps()
+                cleared, data = self.field.clear_costmaps()
+                if not cleared:
+                    self._auto_retries += attempt + 1
+                    raise StepFailed(f"goal {step['waypoint']} {status}; costmap clear failed: {data.get('reason')}")
         self._auto_retries += retries
         raise StepFailed(f"goal {step['waypoint']} {status}")
 
@@ -228,10 +232,14 @@ class Rehearsal:
         rc = self._with_motion(self.field.teleop)
         if rc not in (0, 130):
             raise StepFailed(f"keyboard teleop exited with code {rc} (조종이 열리지 않았거나 비정상 종료)")
-        if step.get("confirm"):
-            answer = self.ui.ask(f"  {step['confirm']}  [Enter=예 · r=다시 조종] ")
+        while step.get("confirm"):
+            answer = self.ui.ask(f"  {step['confirm']}  [Enter=예 · r=다시 조종 · q=중단] ")
+            if answer == "":
+                break
             if answer == "r":
                 raise StepFailed("operator: not at the target yet")
+            if answer == "q":
+                raise Abort(step["id"])
         return "OK", "manual drive"
 
     def do_move(self, step):
@@ -283,6 +291,9 @@ class Rehearsal:
 
     def do_lift(self, step):
         self.field.stop()
+        if getattr(self.lift, "stop_unconfirmed", False):
+            if not self.lift.stop_and_confirm():
+                raise StepFailed("lift stop is still unconfirmed — 지게팔 상태를 눈으로 확인하고 진행기를 다시 시작")
         action = step["action"]
         state = self.lift.status()
         if state.get("reference") != "CONFIRMED":
@@ -367,6 +378,8 @@ class Rehearsal:
             raise StepFailed(f"{step['waypoint']} is on {wp['floor']}, not {floor}")
         self.field.stop()
         if self.nav_restart:
+            if self.field.arm_node_running():
+                raise StepFailed("ROS arm node is running: Nav2 restart would be refused — use load_map mode")
             self.field.stop_navigation()
             self.field.start_background(f"nav_{floor}", ["nav", "start", floor], r"Managed nodes are active",
                                         150, self.log.dir)
@@ -378,7 +391,9 @@ class Rehearsal:
         if not self.field.map_guard(floor):
             raise StepFailed(f"{floor} map guard failed after switch")
         self.field.pose_set(wp["x"], wp["y"], wp["yaw"])
-        self.field.clear_costmaps()
+        cleared, data = self.field.clear_costmaps()
+        if not cleared:
+            raise StepFailed(f"costmap clear after pose failed: {data.get('reason')}")
         return "OK", f"{floor} map + pose {step['waypoint']}"
 
     # -- per-step loop
@@ -473,9 +488,16 @@ class Rehearsal:
                  f"포크 {'위 끝' if start['lift'] == 'top' else '아래 끝'}, 마지막 위치 {start['waypoint'] or '-'}")
         if not self.field.container_running():
             raise Abort("ROS container is not running")
+        status = self.field.status()
+        if status.get("base") == "running":
+            # 단계 종류와 관계없이 맨 먼저 멈춘다(이전 실행의 goal 이 살아 있을 수 있음)
+            self.field.stop()
+            if status.get("navigation") == "running":
+                self.field.ensure_idle()
         web_state = self._prep_button_web() if "button" in types else None
         if types & set(NAV_TYPES):
-            self._prep_navigation(start["floor"], web_state)
+            self._prep_navigation(start["floor"], status, web_state,
+                                  restart_needed=any(s["type"] == "map" for s in selected))
         if "lift" in types or (types & {"approach"} and self.ultrasonic is not None and not self.ultrasonic.port):
             self._prep_lift(start["lift"])
         if "approach" in types:
@@ -492,16 +514,13 @@ class Rehearsal:
         self.field.stop()
         self.log.event("prep_done", start=start)
 
-    def _prep_navigation(self, floor, web_state=None):
-        status = self.field.status()
-        ros_arm = bool(web_state and web_state.get("ros_arm"))
-        if self.nav_restart and ros_arm:
-            raise Abort("--nav-restart cannot be used with the --ros-arm button web "
+    def _prep_navigation(self, floor, status, web_state=None, restart_needed=False):
+        ros_arm = bool(web_state and web_state.get("ros_arm")) or self.field.arm_node_running()
+        if self.nav_restart and restart_needed and ros_arm:
+            raise Abort("--nav-restart cannot be used while the ROS arm node runs "
                         "(start_field_navigation.sh refuses to start while the arm node runs)")
         if status.get("navigation") == "running":
-            # 이전 실행의 goal 이 남아 있을 수 있다: 지도·pose·질문보다 먼저 멈추고 goal 이 없는지 확인
-            self.field.stop()
-            self.field.ensure_idle()
+            pass  # prep() 에서 이미 stop + ensure_idle
         elif ros_arm:
             raise Abort("Nav2 is off but the button web runs with --ros-arm. Order: base → Nav2(F1) → arm node "
                         "→ website, then rerun (start_field_navigation.sh refuses while the arm node runs)")
@@ -568,22 +587,26 @@ class Rehearsal:
             raise Abort("no fresh ultrasonic reading within 3 s — 아두이노가 'US distance_cm=<값>' 줄을 내보내는지 확인")
         self.say(f"  초음파: {self.us_text()} (포트 {self.ultrasonic.port or '지게팔 Uno 와 공유'})")
 
-    def finish(self, aborted=None):
+    def _cleanup(self, label, action):
         try:
-            self.field.stop()
-        except BackendError as exc:
-            self.say(f"  !! {exc}")
+            action()
+        except BaseException as exc:  # noqa: BLE001 — 한 정리가 실패해도 나머지는 한다
+            self.say(f"  !! 정리 실패 ({label}): {exc}")
+            self.log.event("cleanup_error", what=label, error=str(exc))
+
+    def _lift_final(self):
+        state = self.lift.status()
+        self.say(f"  지게팔 최종 위치 {state.get('position_pulses')} pulses")
+
+    def finish(self, aborted=None):
+        self._cleanup("stop", self.field.stop)
         if self.recording:
-            self.field.record_stop()
+            self._cleanup("record stop", self.field.record_stop)
         if self.lift_open:
-            try:
-                state = self.lift.status()
-                self.say(f"  지게팔 최종 위치 {state.get('position_pulses')} pulses")
-            except BackendError:
-                pass
-            self.lift.close()
+            self._cleanup("lift status", self._lift_final)
+            self._cleanup("lift close", self.lift.close)
         if self.ultrasonic_open:
-            self.ultrasonic.close()
+            self._cleanup("ultrasonic close", self.ultrasonic.close)
         manual = sum(1 for r in self.results if r["status"] == "MANUAL")
         retries = sum(max(0, r["attempts"] - 1) + r.get("auto_retries", 0) for r in self.results)
         adjusts = sum(r["adjusts"] for r in self.results)

@@ -218,17 +218,89 @@ class CodexReviewRegressionTest(unittest.TestCase):
         self.assertTrue((rehearsal.log.dir / "summary.md").exists())
 
     def test_helper_pure_functions(self):
+        def info(uuid):
+            return type("I", (), {"goal_id": type("U", (), {"uuid": uuid})()})()
+
         class S:
-            def __init__(self, status):
-                self.status = status
-                self.goal_info = type("I", (), {"goal_id": type("U", (), {"uuid": [1, 2]})()})()
-        array = type("A", (), {"status_list": [S(2), S(4), S(6)]})()
-        self.assertEqual(ros_nav_idle.active_goals(array), ["0102"])
-        self.assertEqual(ros_nav_idle.active_goals(None), [])
+            def __init__(self, uuid, status):
+                self.status, self.goal_info = status, info(uuid)
+        array = type("A", (), {"status_list": [S([1], 2), S([2], 5)]})()
+        self.assertEqual(ros_nav_idle.unfinished(["01", "02"], array), ["01"])  # 01 still executing
+        self.assertEqual(ros_nav_idle.unfinished(["01"], None), ["01"])  # no status = unconfirmed (2nd #1)
         self.assertEqual(ros_nav_idle.foreign_publishers({"velocity_smoother", "packagu_field_web_ui"}),
                          ["packagu_field_web_ui"])
         self.assertTrue(ros_map_switch.same_size((10.0, 5.0), (10.1, 4.95)))
         self.assertFalse(ros_map_switch.same_size((10.0, 5.0), (20.0, 5.0)))
+
+
+class CodexSecondReviewTest(unittest.TestCase):
+    """2026-10-21 Codex 2차 검토 지적 재발 방지."""
+
+    def test_lift_only_run_stops_before_opening_lift(self):  # 2
+        rehearsal, scenario, field, _, lift, _ = make()
+        original = lift.open
+        lift.open = lambda: (field.calls.append(("lift_open",)), original())
+        run(rehearsal, scenario, only=["S04"])
+        names = [c[0] for c in field.calls]
+        self.assertLess(names.index("stop"), names.index("lift_open"))
+        self.assertLess(names.index("idle"), names.index("lift_open"))
+
+    def test_unconfirmed_lift_stop_is_retried_by_safe_stop(self):  # 3
+        rehearsal, scenario, _, _, lift, _ = make(failures={"move:up": 1, "stopconfirm": 1}, answers=["", "", "q"])
+        run(rehearsal, scenario, only=["S04"])
+        self.assertIn(("stop_confirm",), lift.calls)
+
+    def test_clear_failure_after_pose_fails_map_step(self):  # 5
+        rehearsal, scenario, field, *_ = make(failures={"clear": 1}, answers=["q"])
+        meta = run(rehearsal, scenario, only=["S13"])
+        self.assertTrue(meta["verdict"].startswith("중단"))
+        self.assertEqual(rehearsal.results, [])
+
+    def test_confirm_quit_aborts_before_map_switch(self):  # 8
+        rehearsal, scenario, field, *_ = make(answers=["", "", "q"])
+        meta = run(rehearsal, scenario, start="S12", end="S13")
+        self.assertTrue(meta["verdict"].startswith("중단"))
+        self.assertNotIn("load_map", [c[0] for c in field.calls])
+
+    def test_confirm_other_input_asks_again(self):  # 8
+        rehearsal, scenario, field, *_ = make(answers=["", "", "x", ""])
+        run(rehearsal, scenario, only=["S12"])
+        self.assertEqual(rehearsal.results[0]["status"], "OK")
+
+    def test_nav_restart_refused_when_arm_node_runs_without_button_steps(self):  # 9
+        rehearsal, scenario, field, *_ = make(nav_restart=True, arm_node=True)
+        meta = run(rehearsal, scenario, only=["S13"])
+        self.assertIn("--nav-restart", meta["verdict"])
+        self.assertNotIn("nav_stop", [c[0] for c in field.calls])
+
+    def test_cleanup_continues_when_record_stop_fails(self):  # 10
+        rehearsal, scenario, field, _, lift, _ = make()
+
+        def broken():
+            raise RuntimeError("recorder hung")
+
+        field.record_stop = broken
+        meta = run(rehearsal, scenario, only=["S04"])
+        self.assertIn(("close",), lift.calls)
+        self.assertTrue((rehearsal.log.dir / "summary.md").exists())
+        self.assertIn("verdict", meta)
+
+    def test_real_lift_keeps_moving_flag_when_stop_cannot_be_sent(self):  # 3
+        lift = backends.LiftUno("/dev/null", output=lambda _l: None)
+        lift.conn = FakeUnoConn(complete=False)
+        threading.Thread(target=lift._reader, daemon=True).start()
+        lift.set_reference("bottom")
+
+        def failing_write(data):
+            raise OSError("write failed")
+
+        threading.Timer(0.2, lambda: (setattr(lift.conn, "write", failing_write),
+                                      lift._append("SERIAL_ERROR device disconnected"))).start()
+        with self.assertRaises(backends.BackendError):
+            lift.move("up", 5.0)
+        self.assertTrue(lift.moving)
+        self.assertTrue(lift.stop_unconfirmed)
+        lift.close()
 
 
 class UltrasonicTest(unittest.TestCase):
@@ -347,7 +419,9 @@ class LiftUnoTest(unittest.TestCase):
         lift.set_reference("bottom")
         with self.assertRaises(backends.BackendError):
             lift.move("up", 0.3)
-        self.assertEqual(lift.conn.written[-1], "!")
+        self.assertEqual(lift.conn.written[-2:], ["!", "s"])  # '!' 뒤 STATUS 로 정지 확인
+        self.assertFalse(lift.moving)
+        self.assertFalse(lift.stop_unconfirmed)
         lift.close()
 
 
@@ -360,7 +434,7 @@ class LiftSerialErrorTest(unittest.TestCase):
         threading.Timer(0.2, lambda: lift._append("SERIAL_ERROR device disconnected")).start()
         with self.assertRaises(backends.BackendError):
             lift.move("up", 5.0)
-        self.assertEqual(lift.conn.written[-1], "!")
+        self.assertEqual(lift.conn.written[-2:], ["!", "s"])
         self.assertFalse(lift.moving)
         lift.close()
 

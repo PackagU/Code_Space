@@ -128,6 +128,9 @@ class FieldStack:
         info["raw"] = done.stdout
         return info
 
+    def arm_node_running(self):
+        return bool(self.node_list() & {"/arm_sequence", "/packagu_arm_sequence"})
+
     def node_list(self):
         rc, out = self.exec_capture("ros2 node list", timeout=20)
         return set(out.split()) if rc == 0 else set()
@@ -244,8 +247,12 @@ class FieldStack:
                 self.output("  │ " + line)
             proc.wait()
         except KeyboardInterrupt:
+            self.emergency_gate_stop()  # 다른 경로로 gate 정지를 먼저
             send_stop()
-            proc.wait(timeout=10)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
             raise
         finally:
             done.set()
@@ -372,6 +379,7 @@ class LiftUno:
         self.lines = []
         self.lock = threading.Lock()
         self.moving = False
+        self.stop_unconfirmed = False  # '!' 를 보냈지만 STATUS moving=0 을 못 봤다 → 지게팔 동작 금지
         self._stop = threading.Event()
 
     def open(self):
@@ -469,11 +477,11 @@ class LiftUno:
             else:
                 raise BackendError(f"lift {action} did not complete within {timeout} s (stopped with '!')")
         except BaseException:
-            # 이동 명령을 보낸 뒤의 모든 실패(시간 초과·거부·시리얼 오류·Ctrl+C)는 '!' 를 먼저 보낸다
-            self.emergency_stop()
+            # 이동 명령을 보낸 뒤의 모든 실패(시간 초과·거부·시리얼 오류·Ctrl+C)는 '!' 를 먼저 보내고 정지를 확인한다
+            if not self.stop_and_confirm():
+                self.output("  !! 지게팔 정지 확인 실패 — 물리 비상정지를 누르세요")
             raise
-        finally:
-            self.moving = False
+        self.moving = False
         state = self.status()
         expected = self.move_size if action == "up" else 0
         if int(state.get("position_pulses", -1)) != expected:
@@ -481,10 +489,26 @@ class LiftUno:
         return state
 
     def emergency_stop(self):
-        try:
-            self._send("!")
-        except Exception:  # noqa: BLE001
-            pass
+        """'!' 를 최대 3번 보낸다. 보냈으면 True."""
+        for _ in range(3):
+            try:
+                self._send("!")
+                return True
+            except Exception:  # noqa: BLE001
+                time.sleep(0.1)
+        return False
+
+    def stop_and_confirm(self):
+        """'!' 전송 + STATUS moving=0 확인. 확인 못 하면 moving 을 유지하고 이후 지게팔 동작을 막는다."""
+        confirmed = False
+        if self.emergency_stop():
+            try:
+                confirmed = self.status().get("moving") == "0"
+            except BackendError:
+                confirmed = False
+        self.moving = not confirmed
+        self.stop_unconfirmed = not confirmed
+        return confirmed
 
     def close(self):
         self._stop.set()
@@ -596,8 +620,10 @@ class _FailPlan:
 
 
 class FakeField:
-    def __init__(self, failures=None, base_running=True, nav_running=True, loaded="F1", teleop_rc=0):
+    def __init__(self, failures=None, base_running=True, nav_running=True, loaded="F1", teleop_rc=0,
+                 arm_node=False):
         self.calls = []
+        self.arm_node = arm_node
         self.teleop_rc = teleop_rc
         self.fail = _FailPlan(failures)
         self.base_running, self.nav_running, self.loaded = base_running, nav_running, loaded
@@ -617,6 +643,9 @@ class FakeField:
 
     def container_running(self):
         return True
+
+    def arm_node_running(self):
+        return self.arm_node
 
     def waypoint(self, name):
         if name not in self.waypoints:
@@ -703,6 +732,8 @@ class FakeField:
 
     def clear_costmaps(self):
         self._log("clear")
+        if self.fail.hit("clear"):
+            return False, {"reason": "clear service unavailable"}
         return True, {}
 
     def teleop(self):
@@ -771,6 +802,7 @@ class FakeLift:
         self.move_size = move_size
         self.position = None
         self.moving = False
+        self.stop_unconfirmed = False
 
     def open(self):
         self.calls.append(("open",))
@@ -788,12 +820,20 @@ class FakeLift:
         self.calls.append(("move", action))
         if self.fail.hit("move:" + action):
             self.emergency_stop()
+            if self.fail.hit("stopconfirm"):
+                self.moving, self.stop_unconfirmed = True, True
             raise BackendError(f"lift {action} failed: fake")
         self.position = self.move_size if action == "up" else 0
         return self.status()
 
     def emergency_stop(self):
         self.calls.append(("estop",))
+        return True
+
+    def stop_and_confirm(self):
+        self.calls.append(("stop_confirm",))
+        self.moving = self.stop_unconfirmed = False
+        return True
 
     def close(self):
         self.calls.append(("close",))
