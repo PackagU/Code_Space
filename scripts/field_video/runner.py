@@ -591,7 +591,9 @@ class Rehearsal:
         try:
             action()
         except BaseException as exc:  # noqa: BLE001 — 한 정리가 실패해도 나머지는 한다
-            self.say(f"  !! 정리 실패 ({label}): {exc}")
+            message = f"{label}: {type(exc).__name__} {exc}".strip()
+            self.cleanup_errors.append(message)
+            self.say(f"  !! 정리 실패 ({message})")
             self.log.event("cleanup_error", what=label, error=str(exc))
 
     def _lift_final(self):
@@ -599,6 +601,7 @@ class Rehearsal:
         self.say(f"  지게팔 최종 위치 {state.get('position_pulses')} pulses")
 
     def finish(self, aborted=None):
+        self.cleanup_errors = []
         self._cleanup("stop", self.field.stop)
         if self.recording:
             self._cleanup("record stop", self.field.record_stop)
@@ -612,13 +615,15 @@ class Rehearsal:
         adjusts = sum(r["adjusts"] for r in self.results)
         if aborted:
             verdict = f"중단 ({aborted})"
+        elif self.cleanup_errors:
+            verdict = "정리 실패 — 정지·녹화·지게팔 상태를 확인할 것 (" + "; ".join(self.cleanup_errors) + ")"
         elif manual == 0 and retries == 0 and adjusts == 0:
             verdict = "한 번에 통과 — 이 순서 그대로 촬영 가능"
         else:
             verdict = "완주했지만 개입 있음 — 표의 재시도·보정 단계를 먼저 손볼 것"
         meta = {"label": self.label, "started_kst": self.started_kst,
                 "total_seconds": self.elapsed(), "verdict": verdict, "manual": manual, "retries": retries,
-                "adjusts": adjusts, "mode": "nav restart" if self.nav_restart else "nav persistent (load_map)"}
+                "adjusts": adjusts, "cleanup_errors": list(self.cleanup_errors), "mode": "nav restart" if self.nav_restart else "nav persistent (load_map)"}
         text = self.log.write_results(self.results, meta)
         self.log.event("finish", **meta)
         self.say("━" * 64)

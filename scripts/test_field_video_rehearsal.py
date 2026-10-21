@@ -227,9 +227,25 @@ class CodexReviewRegressionTest(unittest.TestCase):
         array = type("A", (), {"status_list": [S([1], 2), S([2], 5)]})()
         self.assertEqual(ros_nav_idle.unfinished(["01", "02"], array), ["01"])  # 01 still executing
         self.assertEqual(ros_nav_idle.unfinished(["01"], None), ["01"])  # no status = unconfirmed (2nd #1)
+        canceling = type("A", (), {"status_list": [S([3], 3), S([4], 4)]})()
+        self.assertEqual(ros_nav_idle.active_in(canceling), ["03"])  # already CANCELING is still waited for (3rd #1)
+        self.assertEqual(ros_nav_idle.active_in(None), [])
         self.assertEqual(ros_nav_idle.foreign_publishers({"velocity_smoother", "packagu_field_web_ui"}),
                          ["packagu_field_web_ui"])
         self.assertTrue(ros_map_switch.same_size((10.0, 5.0), (10.1, 4.95)))
+
+        def pose(x, y):
+            return type("P", (), {"position": type("Q", (), {"x": x, "y": y})()})()
+        grid = type("G", (), {"info": type("I", (), {"width": 4, "height": 2, "resolution": 0.05,
+                                                     "origin": pose(-1.0, -2.0)})(),
+                              "data": [0, 100, 0, 100, -1, 0, 100, 0]})()
+        meta = type("M", (), {"size_x": 4, "size_y": 2, "resolution": 0.05, "origin": pose(-1.0, -2.0)})()
+        fresh = [0, 254, 0, 254, 255, 0, 254, 0]
+        stale = [0, 0, 254, 0, 255, 0, 0, 0]
+        self.assertEqual(ros_map_switch.costmap_matches_map(meta, fresh, grid), (True, 1.0))
+        self.assertEqual(ros_map_switch.costmap_matches_map(meta, stale, grid), (False, 0.0))
+        other = type("M", (), {"size_x": 8, "size_y": 2, "resolution": 0.05, "origin": pose(-1.0, -2.0)})()
+        self.assertEqual(ros_map_switch.costmap_matches_map(other, fresh, grid), (False, None))
         self.assertFalse(ros_map_switch.same_size((10.0, 5.0), (20.0, 5.0)))
 
 
@@ -283,7 +299,8 @@ class CodexSecondReviewTest(unittest.TestCase):
         meta = run(rehearsal, scenario, only=["S04"])
         self.assertIn(("close",), lift.calls)
         self.assertTrue((rehearsal.log.dir / "summary.md").exists())
-        self.assertIn("verdict", meta)
+        self.assertTrue(meta["verdict"].startswith("정리 실패"), meta["verdict"])  # 3차 #3
+        self.assertEqual(len(meta["cleanup_errors"]), 1)
 
     def test_real_lift_keeps_moving_flag_when_stop_cannot_be_sent(self):  # 3
         lift = backends.LiftUno("/dev/null", output=lambda _l: None)
