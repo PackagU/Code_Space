@@ -17,6 +17,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-10-21 (Claude, 신공학관 E2E 촬영 리허설): 브랜치 `lee/field-video-20261021`(기준 `2026-10-06`). `python3 scripts/field_video_rehearsal.py` 한 명령으로 26단계 진행(사람 Enter 시작 신호, 탑승·하차만 수동, 4층=F2 지도, 캐빈 4/1). Nav2 계속 켜 둠 + load_map 층 전환, 지게팔 포트 상시 소유, 버튼은 8091 웹사이트 API, 초음파(지게팔 Uno 공유 또는 별도 포트) 정지 접근. 오프라인 28개 3회·dry-run 26단계·컨테이너 부분 검증·이식성 PASS. 실물 리허설 전. 문서 `docs/deployment/09_field_video_rehearsal.md`, 위험 §1.29.
 - 2026-10-09 (Codex 카메라 배송 통합): 기존 지도·Nav2·배송 좌표 유지, 8091 단일 웹캠/웹사이트 버튼·층수 인식, ROS 단일 팔 소유/수동 시험, 웹 보정 자세 자동 버튼 누르기, 실제 F4→기존 F2 지도→정면→하차→배송 연결. 새 원커맨드 실행/검사와 카메라 Compose overlay 추가. 순수 회귀 60개·팔 계약·개발 ROS 가짜 장치 전체 미션·관련 5패키지 빌드·기존 현장 web UI/workflow PASS. 전체 회귀 기존 실패는 개선보고서 1.28에 기록. 실물 Jetson 통합 주행·버튼 접촉·내부/출구 실측 확인 대기. 절차: `docs/deployment/08_elevator_camera_mission.md`.
 - 2026-10-07 (Codex 인식기 시작 오류): HTTP 포트를 먼저 확보한 뒤 카메라를 열도록 수정하여 중복 실행의 카메라 접근·잘못된 시작 안내를 방지. USB 장치 경로는 V4L2로 지정. 실제 점유 포트에서 카메라 미시작·USB backend 검증 포함 인식기 6개, 판정 probe 12개·미션 13개 및 이식성 검사 PASS. Jetson 8765 점유 프로세스·영상 상태 확인 대기.
 - 2026-10-07 (Codex 4층 판정 시험): `floor_arrival_probe.py --target 4` 추가. 실제 미션의 새 프레임 5개 연속 조건을 HTTP 영상 상태로 검사하며 주행·팔 명령은 발행하지 않는다. 다른 층·UNKNOWN·중복/오래된 프레임·연결 실패를 검증. probe 12개·미션 13개·인식기 4개, 이식성·셸 문법 검사 PASS. Jetson 웹캠 실물 판정 결과 확인 대기.
