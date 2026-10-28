@@ -15,6 +15,7 @@
 - **Code_Space 공개(public) 전환 여부** — Learning&Sharing 활동계획서에 https://github.com/PackagU 링크를 넣지만 조직 저장소 4개가 전부 private 이라 외부 심사자에게는 빈 페이지로 보임. 공개 시 사전 정리: `scripts/fastdds_lan_peers.xml` LAN IP(10.42.0.x/192.168.0.x) 익명화 여부, repo description `SLAMSLAM` 교체, GHCR 이미지 private 유지 안내. (2026-08-22 제기)
 
 ## 메모
+- 2026-10-28 (Codex 강의실 연습 준비): `docs/classroom_rehearsal/index.html` 작성. 실물 SLAM과 기존 강의실 Gazebo 지도 생성 구분, 매핑 전후 소품 배치, 단계별 배치도·정적 지도 자국 비교, 코드 준비표·설계 YAML·기존 전체 시뮬 명령·체크 저장 포함. 브라우저 13개 확인 PASS(오프라인·모바일·체크 저장 포함), 이식성 114개 PASS. 기존 시뮬/실물은 구동하지 않음. 개선보고서 §1.28(지도/작업 좌표 분리), §1.29(A5 명칭/실제 라벨 치수 불일치) 추가. `git pull --ff-only origin dev`는 현재 feature 브랜치와 분기되어 중단됨(자동 merge 안 함). 남은 일: 실제 공간 고정물·접근점·적재 시야·소품 치수 확인 후 단계별 리허설.
 - 2026-10-14 (Codex 발표용 캡처): 전용 격리 시뮬레이션에서 층 표시 숫자 2의 팔 카메라 원본(1280×960)과 접힘/확인 자세 비교 PNG 4장 저장. 로컬 경로 `logs/presentation_capture_20261014/`, 파일 안내 `README.md`. 전용 컨테이너만 정리했으며 다른 세션 소스·컨테이너 및 PPT 원본은 수정하지 않음. 이식성 검사 114개 PASS.
 - 2026-09-08 (로봇팔 최종 업로드): `dev`의 시뮬레이션 최종 스택을 기준으로 `kim/arm-final` 브랜치 분리. Kim 실측 homing + 버튼 위치별 press cycle 3종 + host 직결 원커맨드 `scripts/run_arm_press.py`를 통합하고 오프라인 29/29, 이식성 114개, `robot_arm_pkg` colcon build PASS 확인.
 - 2026-08-22 (L&S 제출 준비): **README 외부 독자용 개편**(히어로 이미지 `assets/readme/sim_nav2_gazebo_f1.png`, 현재 상태표·로드맵 진행·검증 원커맨드·저장소 안내) + 로컬 전용 폴더 gitignore(`Learning_Sharing/`, `_workspace/`, node_modules, `verification/dist_*`) + PR #5(lee/hw-design-review→dev) 머지·dev→main 머지로 기본 브랜치 최신화. 오프라인 28/28 PASS·portability 112 PASS 재확인.

@@ -2,6 +2,27 @@
 
 ## Active Improvements
 
+### 1.28 🟡 강의실 실물 리허설 — 이동물 없는 지도와 작업 좌표 분리 검증 필요
+
+> 상태: 신규 발견 · 담당: Lee/Han/Kim 협의 필요 · 업데이트: 2026-10-28
+> 진척: 기존 강의실 시뮬은 고정 충돌체 기반 지도 자동 생성, 택배 별도 생성임을 확인. 실물 SLAM 전후 배치·접근점·적재 외곽 확인 절차를 로컬 HTML에 정리했으며 현물 시험은 수행하지 않음.
+
+- 발견 근거: `cs_classroom_demo/demo_20261104/sim/generate_classroom.py`, `classroom_nodes.py`, `classroom.yaml` 및 시연 계획을 확인. 실물에서 이동할 택배·팔레트를 스캔면에 둔 채 저장하면 정적 지도에 남을 수 있다. 실제 재현된 결함이 아니라 실물 준비 단계의 검증 과제다.
+- 실시간 costmap 초기화는 원본 PGM의 장애물을 삭제하지 않는다. 고정 구조만 매핑한 뒤 이동물을 배치하고, 제거 후 빈자리 접근·내려놓기를 확인한다.
+- 바닥 테이프는 카메라 표식이며 LiDAR 위치 추정용 벽이 아니다. 낮은 팔레트·케이블은 스캔면 밖일 수 있으므로 실측한다.
+- 시뮬 설계 좌표를 실물 map 좌표로 직접 복사하지 않는다. 지도 재로딩·위치 추정 후 보기점과 yaw를 등록하고 지도 버전과 함께 보관한다.
+- 완료 기준: 빈 차체 A↔B, 택배 배치 후 접근, 적재 상태 회전·센서 시야, 내려놓기 후 복귀를 현장에서 확인하고 지도·설정·로그로 증거를 남김.
+- 준비 자료: [강의실 리허설 HTML](./classroom_rehearsal/index.html). Nav2 개념 근거: [Static Layer](https://docs.nav2.org/rolling/configuration_and_development/configuration_guide/core_servers/costmap_2d/costmap_plugins/static/), [Obstacle Layer](https://docs.nav2.org/rolling/configuration_and_development/configuration_guide/core_servers/costmap_2d/costmap_plugins/obstacle/).
+
+### 1.29 🟡 송장 인쇄 규격 — A5 명칭과 28 × 18 cm 치수 불일치
+
+> 상태: 신규 발견 · 담당: 시연 소품 담당자 협의 필요 · 업데이트: 2026-10-28
+> 진척: 기존 시연 계획의 “A5(28 × 18 cm)”와 시뮬 YAML의 size_m [0.28, 0.18] 불일치를 확인. 리허설 HTML에 실제 인쇄 치수·판독 시험 확인 사항을 기재. 기존 시뮬 설정과 소품은 변경하지 않음.
+
+- A5 규격은 21 × 14.8 cm이며, 기존 시뮬 라벨은 28 × 18 cm다. “A5” 이름만 보고 축소 출력하면 숫자·여백 크기가 바뀐다.
+- 근거: `cs_classroom_demo/demo_20261104/plan.md` 송장 규격, `sim/classroom.yaml` label.size_m/glyph_m.
+- 완료 기준: 실제 택배 앞면·출력 크기·숫자 크기·여백을 하나의 치수로 확정하고 원본 계획과 YAML의 명칭을 일치시킨 뒤, 현장 카메라의 새 프레임 3개 연속 판독을 확인한다.
+
 ### 1.1 🟡 [20%] F2 Room Waypoint Reachability
 
 > 상태: 🔄 in-progress · 담당: Lee · 업데이트: 2026-06-25
