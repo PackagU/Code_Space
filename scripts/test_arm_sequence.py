@@ -120,7 +120,9 @@ def main():
     for cid, cycle in sp.PRESS_CYCLES.items():
         assert cycle[-1][0] == sp.HOME_POSE, f"cycle {cid}: 마지막 스텝이 home 이 아님"
         for pose, dur, send in cycle:
-            sp.pose_command(pose, dur, sp.get_poses(cid))  # 그 사이클 표에 포즈 존재 + PWM 범위 + 0~9999ms
+            payload = sp.pose_command(pose, dur, sp.get_poses(cid))
+            if cid == 1:
+                assert payload.startswith("{#000P1500T"), f"cycle 1: {pose} must command servo 000 to 1500"
     assert [step[0] for step in sp.PRESS_CYCLE_2] == [
         "press_ready", "pre_press2", "press2", "press2",
         "retreat2", "press_ready", "home",
@@ -138,6 +140,8 @@ def main():
         ticks = int(sp.cycle_duration_ms(cycle) / tick_ms) + 1
         for i in range(1, ticks):
             cur = sp.interpolate_pwm(i * tick_ms, cycle, poses=poses)
+            if cid == 1:
+                assert cur["000"] == 1500, "cycle 1 must keep servo 000 at 1500 throughout transitions"
             max_step = max(max_step, max(abs(cur[s] - prev[s]) for s in sp.SERVO_IDS))
             for servo_id in sp.SERVO_IDS:
                 sp.check_pwm(servo_id, cur[servo_id])  # 보간 전 구간이 안전 범위 안
